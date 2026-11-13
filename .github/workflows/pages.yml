@@ -1,0 +1,51 @@
+name: Ligar ou desligar o site
+
+# Roda só quando você manda: Actions → "Ligar ou desligar o site" → Run workflow.
+#   ligar    publica o portfólio e os dois jogos.
+#   desligar publica só uma página "fora do ar"; os jogos saem do ar.
+# Pré-requisito (uma vez): Settings → Pages → Source: "GitHub Actions".
+on:
+  workflow_dispatch:
+    inputs:
+      estado:
+        description: "O que fazer com o site?"
+        type: choice
+        options:
+          - ligar
+          - desligar
+        default: desligar
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      ESTADO: ${{ inputs.estado }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Montar o que vai ao ar
+        run: |
+          mkdir _site
+          if [ "$ESTADO" = "ligar" ]; then
+            cp -r index.html assets fonts jogos _site/
+          else
+            cp fora-do-ar.html _site/index.html
+          fi
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

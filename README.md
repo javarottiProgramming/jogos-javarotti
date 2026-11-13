@@ -18,8 +18,18 @@ Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a vers�
 2. `assets/<id>.jpg` com a capa (960×540).
 3. Um `<article class="game">` novo no `index.html` (copie um dos dois) e uma linha no objeto `GAMES` do script.
 
-## Publicação
-GitHub Pages, fonte: branch `main`, pasta `/ (root)`. Sem build.
+## Ligar e desligar o link
+O site só vai ao ar quando você manda, pelo workflow **Ligar ou desligar o site**:
+
+1. Uma vez só: Settings → Pages → Source: **GitHub Actions**.
+2. Aba **Actions** → *Ligar ou desligar o site* → **Run workflow** → escolha `ligar` ou `desligar`.
+   Funciona também pelo app do GitHub no celular.
+
+`ligar` publica o portfólio e os jogos. `desligar` publica só `fora-do-ar.html`, e os jogos saem do ar em 1 ou 2 minutos
+(cópias em cache podem durar um pouco mais). Mudar o conteúdo do repositório **não** liga o site sozinho.
+
+Atenção: o repositório é público, então os arquivos dos jogos continuam visíveis em `jogos/` mesmo com o link desligado.
+Só um repositório privado esconderia isso.
 
 ## Fontes
 `fonts/` guarda Permanent Marker, Lilita One e Nunito (todas SIL OFL), servidas pelo próprio site, sem depender do Google Fonts.
