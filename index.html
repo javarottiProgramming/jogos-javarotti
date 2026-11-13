@@ -37,17 +37,16 @@
   :focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:6px}
 
   /* ---------- página ---------- */
-  .page{position:relative;max-width:1120px;margin:0 auto;padding:0 20px 0 20px}
+  .page{position:relative;max-width:1120px;margin:0 auto;padding:0 20px clamp(28px,5vw,56px) 20px}
   @media (min-width:820px){
     .page{padding-left:76px;padding-right:32px}
     .page::before{content:"";position:absolute;left:44px;top:0;bottom:0;width:2px;background:var(--margin);opacity:.75}
   }
 
-  .top{display:flex;justify-content:space-between;align-items:baseline;padding:22px 0 0;gap:16px}
+  .top{display:flex;justify-content:flex-end;align-items:baseline;padding:22px 0 0;gap:16px}
   .top a{font-weight:800;text-decoration:none;font-size:.98rem}
   .top nav{display:flex;gap:22px}
   .top a:hover{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px;text-decoration-color:var(--blue)}
-  .sig{font-family:var(--marker);font-size:1.25rem;font-weight:400}
 
   /* ---------- hero ---------- */
   .hero{padding:clamp(28px,6vw,64px) 0 clamp(28px,5vw,48px)}
@@ -104,7 +103,8 @@
   .btn:hover{transform:translate(-1px,-2px);box-shadow:6px 8px 0 var(--ink)}
   .btn:active{transform:translate(4px,5px);box-shadow:1px 1px 0 var(--ink)}
   .btn:focus-visible{outline:3px solid var(--blue);outline-offset:4px}
-  .alone{display:inline-block;margin-left:14px;font-weight:800;font-size:.95rem;color:var(--ink-soft)}
+  .actions{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px}
+  .alone{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:800;font-size:.95rem;color:var(--ink-soft)}
 
   /* ---------- seções de texto ---------- */
   section.s{padding:clamp(32px,5vw,56px) 0;border-top:3px solid var(--ink)}
@@ -120,12 +120,19 @@
   dl.rows dt{font-weight:900}
   dl.rows dd{margin:0}
   @media (min-width:640px){dl.rows>div{grid-template-columns:minmax(150px,230px) 1fr}}
-  .wide dl.rows{max-width:880px}
 
-  footer{border-top:3px solid var(--ink);padding:28px 0 56px;font-size:.98rem}
-  footer p{margin:0 0 .35em}
-  footer .credits{font-weight:800}
-  footer .small{color:var(--ink-soft);font-size:.88rem;margin-top:14px}
+
+
+  /* ---------- motor JGK: o único bloco em destaque ---------- */
+  .jgk{display:grid;gap:clamp(14px,3vw,36px);align-items:center;background:#ffd23f;border:3px solid var(--ink);border-radius:22px;
+    box-shadow:8px 9px 0 var(--ink);padding:clamp(22px,4vw,44px)}
+  @media (min-width:820px){.jgk{grid-template-columns:auto 1fr}}
+  .jgk-mark{font-family:var(--marker);line-height:.9;font-size:clamp(4.6rem,15vw,8.4rem);color:var(--red);
+    -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;text-shadow:.05em .06em 0 var(--ink);padding-right:.08em}
+  .jgk .t{margin-bottom:10px}
+  .jgk-lead{font-size:clamp(1.15rem,2.2vw,1.35rem);font-weight:800;line-height:1.4;margin:0 0 .8em!important}
+  .jgk p{margin:0 0 .9em;max-width:38em}
+  .jgk p:last-child{margin-bottom:0}
 
   /* ---------- entrada: os adesivos colam na página, uma vez ---------- */
   @media (prefers-reduced-motion:no-preference){
@@ -150,6 +157,14 @@
   }
   .bar button:hover,.bar a:hover{background:var(--yellow);border-color:var(--yellow)}
   .bar .name{font-family:var(--marker);font-size:1.15rem;margin:0 auto 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar button,.bar a{flex:0 0 auto}
+  .bar .name{min-width:0}
+  @media (max-width:560px){
+    .bar{gap:8px}
+    .bar .lbl{display:none}
+    .bar button,.bar a{min-width:44px;height:36px;padding:0 10px;justify-content:center;font-size:1.1rem}
+    .bar .name{flex:1 1 0;margin:0 0 0 2px;font-size:1.05rem}
+  }
   #frame{flex:1 1 auto;width:100%;border:0;background:#000;min-height:0}
   @media (max-height:520px) and (orientation:landscape){
     .bar{position:absolute;top:6px;left:50%;transform:translateX(-50%);height:auto;padding:4px;border:2px solid var(--paper);border-radius:12px;opacity:.55;gap:6px;z-index:2}
@@ -163,11 +178,10 @@
 
 <div class="page" id="home">
   <div class="top">
-    <span class="sig">Javarotti</span>
     <nav aria-label="Seções">
       <a href="#jogos">Jogos</a>
       <a href="#quem-faz">Quem faz</a>
-      <a href="#como">Como se faz</a>
+      <a href="#motor">Motor JGK</a>
     </nav>
   </div>
 
@@ -191,7 +205,7 @@
           <dt>Feito por</dt><dd>Gerente Fable e 10 agentes Opus.</dd>
           <dt>Salva</dt><dd>O progresso, neste navegador.</dd>
         </dl>
-        <div>
+        <div class="actions">
           <button class="btn" type="button" data-play="kuku">Jogar Kuku</button>
           <a class="alone" href="jogos/kuku/">abrir em página própria</a>
         </div>
@@ -200,16 +214,16 @@
       <article class="game pedrada">
         <button class="poster" type="button" data-play="pedrada" aria-label="Jogar Pedrada de Palito">
           <img src="assets/pedrada.jpg" width="960" height="540" alt="Tela inicial do Pedrada de Palito: título em marcador sobre folha de caderno quadriculado, com bonecos de palito ao redor do botão Jogar">
-          <span class="ver" aria-hidden="true">v1.0.7</span>
+          <span class="ver" aria-hidden="true">v1.0.8</span>
         </button>
         <h2>Pedrada de Palito</h2>
         <p>Tiro em primeira pessoa no estilo Doom em que a única arma é um estilingue. Puxe o elástico, solte, e derrube a turma de palitos de papel recortado. São 3 fases, cada uma com chefe.</p>
         <dl class="ficha">
-          <dt>Controles</dt><dd>WASD anda, mouse mira, segure o clique para puxar e solte para atirar. No celular, analógico à esquerda e arrastar à direita.</dd>
+          <dt>Controles</dt><dd>WASD anda, mouse mira, segure o clique para puxar e solte para atirar. No celular, analógico à esquerda e o lado direito da tela é o estilingue: segure para puxar, arraste para mirar, solte para atirar.</dd>
           <dt>Feito por</dt><dd>Gerente Sonnet (esforço alto) e 11 agentes Sonnet (esforço médio), com QA.</dd>
           <dt>Salva</dt><dd>Estrelas e recordes, neste navegador.</dd>
         </dl>
-        <div>
+        <div class="actions">
           <button class="btn" type="button" data-play="pedrada">Jogar Pedrada</button>
           <a class="alone" href="jogos/pedrada/">abrir em página própria</a>
         </div>
@@ -221,7 +235,7 @@
       <h2 class="t" id="h-quem">Quem faz</h2>
       <div class="cols">
         <div>
-          <p>Eu sou o Pedro Javarotti e dirijo os jogos. Crio os personagens (o Kuku é criação minha), decido o que cada jogo precisa ser e peço o que mudar até ficar certo.</p>
+          <p>Eu sou o Pedro Javarotti e dirijo os jogos. Crio os personagens, decido o que cada jogo precisa ser e peço o que mudar até ficar certo.</p>
           <p>Código, arte, música e testes saem de um time de agentes de IA. Os créditos de cada jogo dizem isso sempre do mesmo jeito: quem dirigiu, qual time fez e qual motor rodou.</p>
         </div>
         <div>
@@ -243,26 +257,19 @@
       </div>
     </section>
 
-    <section class="s wide" id="como" aria-labelledby="h-como">
-      <h2 class="t" id="h-como">Como um jogo sai daqui</h2>
-      <dl class="rows">
-        <div><dt>Um arquivo só</dt><dd>Cada jogo é um único arquivo HTML. Abre no celular e no computador, sem instalar nada.</dd></div>
-        <div><dt>Som feito na hora</dt><dd>Música e efeitos são sintetizados no navegador, sem arquivos de áudio. Quando você sai da aba, o som para.</dd></div>
-        <div><dt>Arte desenhada em código</dt><dd>Sprites e cenários nascem de código vetorial. O Kuku entra por recorte do desenho original, para ninguém redesenhar o herói.</dd></div>
-        <div><dt>Um robô joga antes</dt><dd>Um bot invencível percorre as fases para provar que dá para chegar ao fim. Ele confere o caminho, não a graça. Isso sou eu quem decide.</dd></div>
-        <div><dt>A versão sempre sobe</dt><dd>Todo pedido meu que muda o jogo vira uma versão nova, com o que mudou anotado no changelog.</dd></div>
-        <div><dt>Motor JGK</dt><dd>Todos os jogos rodam no Javarotti Game Kit, o motor que o time melhora a cada jogo novo.</dd></div>
-        <div><dt>O que ainda falta</dt><dd>Testar em aparelho de verdade: celular, toque e gamepad. Até aqui foram testes automáticos e screenshots.</dd></div>
-      </dl>
+    <section class="s" id="motor" aria-labelledby="h-motor">
+      <div class="jgk">
+        <div class="jgk-mark" aria-hidden="true">JGK</div>
+        <div class="jgk-body">
+          <h2 class="t" id="h-motor">Motor JGK</h2>
+          <p class="jgk-lead">Todo jogo daqui roda no mesmo motor, o Javarotti Game Kit.</p>
+          <p>O JGK cuida do que todo jogo precisa: o loop do jogo, teclado, toque e gamepad, som sintetizado no próprio navegador, cenas, menus e o save local. O time escreve só o que é de cada jogo: fases, chefes, arte e história. Tudo sai num único arquivo HTML.</p>
+          <p><strong>O diferencial é que o motor aprende.</strong> A cada jogo novo o time registra o que deu certo e o que deu errado e leva isso para o kit, então o jogo seguinte já nasce com o que o anterior ensinou.</p>
+        </div>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <p class="credits">Desenvolvido e dirigido por Pedro Javarotti.</p>
-    <p class="credits">Feito por um time de IA.</p>
-    <p class="credits">Motor JGK, Javarotti Game Kit.</p>
-    <p class="small"><a href="https://github.com/javarottiProgramming">github.com/javarottiProgramming</a>. Fontes: Permanent Marker, Lilita One e Nunito, todas sob licença SIL OFL.</p>
-  </footer>
   <noscript><p>Sem JavaScript o painel não abre os jogos aqui, mas dá para jogar direto: <a href="jogos/kuku/">Kuku</a> e <a href="jogos/pedrada/">Pedrada de Palito</a>.</p></noscript>
 </div>
 
