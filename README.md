@@ -16,7 +16,11 @@ Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a vers�
 ## Como adicionar um jogo novo
 1. `jogos/<id>/index.html` com o HTML do jogo.
 2. `assets/<id>.jpg` com a capa (960×540).
-3. Um item novo no array `GAMES` dentro do `index.html`.
+3. Um `<article class="game">` novo no `index.html` (copie um dos dois) e uma linha no objeto `GAMES` do script.
 
 ## Publicação
 GitHub Pages, fonte: branch `main`, pasta `/ (root)`. Sem build.
+
+## Fontes
+`fonts/` guarda Permanent Marker, Lilita One e Nunito (todas SIL OFL), servidas pelo próprio site, sem depender do Google Fonts.
+Os textos sobre o Pedro e o time estão no `index.html`; edite lá.

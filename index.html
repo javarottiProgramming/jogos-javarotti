@@ -3,129 +3,267 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Jogos do Javarotti</title>
-<meta name="description" content="Portfólio rápido dos jogos do Pedro Javarotti. Escolha um e jogue direto no navegador.">
-<meta name="theme-color" content="#14142b">
-<meta property="og:title" content="Jogos do Javarotti">
+<title>Pedro Javarotti, jogos</title>
+<meta name="description" content="Jogos que abrem direto no navegador, dirigidos por Pedro Javarotti e feitos por um time de agentes de IA. Kuku e a Semente do Sol e Pedrada de Palito.">
+<meta name="theme-color" content="#f1f5fb">
+<meta name="color-scheme" content="light">
+<meta property="og:title" content="Pedro Javarotti, jogos">
 <meta property="og:description" content="Kuku e a Semente do Sol e Pedrada de Palito: jogue direto no navegador.">
-<meta property="og:image" content="assets/kuku.jpg">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314142b'/%3E%3Cpath d='M20 18h24a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8H20a8 8 0 0 1-8-8V26a8 8 0 0 1 8-8z' fill='%23ffd23f'/%3E%3Cpath d='M26 25v14l12-7z' fill='%2314142b'/%3E%3C/svg%3E">
+<meta property="og:image" content="assets/og.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23f1f5fb'/%3E%3Ctext x='32' y='47' font-size='44' font-family='Marker Felt,Comic Sans MS,cursive' font-weight='700' text-anchor='middle' fill='%23e63946' stroke='%23161833' stroke-width='3' paint-order='stroke'%3EJ%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="fonts/permanent-marker.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  @font-face{font-family:"Permanent Marker";src:url(fonts/permanent-marker.woff2) format("woff2");font-display:swap}
+  @font-face{font-family:"Lilita One";src:url(fonts/lilita-one.woff2) format("woff2");font-display:swap}
+  @font-face{font-family:"Nunito";src:url(fonts/nunito.woff2) format("woff2");font-weight:200 1000;font-display:swap}
+
   :root{
-    --bg:#14142b; --bg2:#1d1d3d; --card:#222246; --ink:#f6f3ea; --muted:#a9a8c9;
-    --line:#35356a; --yellow:#ffd23f; --red:#e63946; --blue:#2f6fe4; --green:#4cc36b;
-    --radius:18px;
-    --font: ui-rounded, "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --paper:#f1f5fb; --grid:#d3dff2; --margin:#ee6a73;
+    --ink:#161833; --ink-soft:#4a4d72;
+    --red:#e63946; --blue:#2b66dc; --yellow:#ffb627; --coral:#ff5a64;
+    --marker:"Permanent Marker","Marker Felt","Comic Sans MS",cursive;
+    --sans:"Nunito",ui-rounded,"Segoe UI",system-ui,sans-serif;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
+  html{scroll-behavior:smooth}
   body{
-    font-family:var(--font); color:var(--ink); background:var(--bg);
-    background-image:
-      radial-gradient(900px 500px at 15% -10%, rgba(255,210,63,.13), transparent 60%),
-      radial-gradient(800px 500px at 100% 0%, rgba(47,111,228,.18), transparent 60%);
-    background-attachment:fixed;
+    margin:0;color:var(--ink);font-family:var(--sans);font-size:1.0625rem;line-height:1.6;
+    background-color:var(--paper);
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:32px 32px;
     -webkit-font-smoothing:antialiased;
   }
   a{color:inherit}
-  .wrap{max-width:1040px;margin:0 auto;padding:clamp(20px,5vw,56px) 16px 40px}
+  :focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:6px}
 
-  header{display:flex;flex-direction:column;gap:10px;margin-bottom:clamp(22px,4vw,40px)}
-  .kicker{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);font-weight:800}
-  h1{margin:0;font-size:clamp(2rem,6.5vw,3.6rem);line-height:1.02;font-weight:900;letter-spacing:-.02em}
-  h1 span{color:var(--yellow)}
-  .lead{margin:0;color:var(--muted);font-size:clamp(1rem,2.4vw,1.15rem);max-width:56ch;line-height:1.5}
+  /* ---------- página ---------- */
+  .page{position:relative;max-width:1120px;margin:0 auto;padding:0 20px 0 20px}
+  @media (min-width:820px){
+    .page{padding-left:76px;padding-right:32px}
+    .page::before{content:"";position:absolute;left:44px;top:0;bottom:0;width:2px;background:var(--margin);opacity:.75}
+  }
 
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:22px}
-  .card{
-    display:flex;flex-direction:column;background:var(--card);border:2px solid var(--line);
-    border-radius:var(--radius);overflow:hidden;
-    transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
-    box-shadow:0 10px 0 -4px rgba(0,0,0,.28);
+  .top{display:flex;justify-content:space-between;align-items:baseline;padding:22px 0 0;gap:16px}
+  .top a{font-weight:800;text-decoration:none;font-size:.98rem}
+  .top nav{display:flex;gap:22px}
+  .top a:hover{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px;text-decoration-color:var(--blue)}
+  .sig{font-family:var(--marker);font-size:1.25rem;font-weight:400}
+
+  /* ---------- hero ---------- */
+  .hero{padding:clamp(28px,6vw,64px) 0 clamp(28px,5vw,48px)}
+  h1{
+    margin:0;font-family:var(--marker);font-weight:400;line-height:.92;letter-spacing:.005em;
+    font-size:clamp(3.4rem,12.5vw,8.6rem);
+    -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;
+    text-shadow:.05em .06em 0 var(--ink);
   }
-  .card:hover,.card:focus-within{transform:translateY(-4px);border-color:var(--accent,var(--yellow));box-shadow:0 16px 0 -6px rgba(0,0,0,.32)}
-  .cover{position:relative;display:block;aspect-ratio:16/9;background:#000;border:0;padding:0;width:100%;cursor:pointer;overflow:hidden}
-  .cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease}
-  .card:hover .cover img{transform:scale(1.04)}
-  .cover .play{
-    position:absolute;inset:0;display:grid;place-items:center;
-    background:linear-gradient(180deg,transparent 45%,rgba(10,10,30,.55));
-    opacity:0;transition:opacity .18s ease;
+  h1 .a{color:var(--red);display:block}
+  h1 .b{color:var(--blue);display:block;margin-left:.35em}
+  .lead{max-width:34em;margin:clamp(18px,3vw,30px) 0 0;font-size:clamp(1.15rem,2.4vw,1.4rem);line-height:1.5;font-weight:600}
+
+  /* ---------- jogos ---------- */
+  .games{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(36px,5vw,64px) clamp(28px,4vw,56px);padding:8px 0 clamp(40px,7vw,88px)}
+  .game{display:flex;flex-direction:column;gap:18px;--accent:var(--yellow)}
+  .game.pedrada{--accent:var(--coral)}
+
+  .poster{
+    all:unset;display:block;cursor:pointer;position:relative;box-sizing:border-box;
+    background:#fff;padding:10px;border:3px solid var(--ink);border-radius:22px;
+    box-shadow:8px 9px 0 var(--ink);transform:rotate(var(--tilt,-1.3deg));
+    transition:transform .25s cubic-bezier(.3,1.4,.5,1),box-shadow .25s ease;
   }
-  .cover .play i{
-    width:76px;height:76px;border-radius:50%;background:var(--accent,var(--yellow));display:grid;place-items:center;
-    box-shadow:0 6px 0 rgba(0,0,0,.35)
+  .kuku .poster{--tilt:-1.3deg}
+  .pedrada .poster{--tilt:1.1deg}
+  .poster img{display:block;width:100%;height:auto;border-radius:13px;border:2px solid var(--ink)}
+  .poster:hover,.poster:focus-visible{transform:rotate(0deg) translateY(-5px);box-shadow:11px 14px 0 var(--ink)}
+  .poster:active{transform:rotate(0deg) translateY(2px);box-shadow:4px 5px 0 var(--ink)}
+  .poster:focus-visible{outline:3px solid var(--blue);outline-offset:6px}
+  .poster .ver{
+    position:absolute;right:-6px;bottom:-12px;transform:rotate(-4deg);
+    background:var(--accent);border:3px solid var(--ink);border-radius:10px;padding:1px 12px;
+    font-family:var(--marker);font-size:1.05rem;line-height:1.5;
   }
-  .cover .play i::after{content:"";margin-left:6px;border-left:24px solid #14142b;border-top:15px solid transparent;border-bottom:15px solid transparent}
-  .card:hover .play,.cover:focus-visible .play{opacity:1}
-  .badge{
-    position:absolute;top:12px;left:12px;background:rgba(20,20,43,.88);color:var(--ink);
-    border:2px solid var(--accent,var(--yellow));border-radius:999px;padding:3px 11px;font-size:.78rem;font-weight:800;
-  }
-  .body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:12px;flex:1}
-  .body h2{margin:0;font-size:1.5rem;font-weight:900;letter-spacing:-.01em}
-  .body p{margin:0;color:var(--muted);line-height:1.5}
-  .tags{display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:0;list-style:none}
-  .tags li{font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--bg2);border:1px solid var(--line);color:var(--ink)}
-  .controls{font-size:.88rem;color:var(--muted);line-height:1.45;border-left:3px solid var(--accent,var(--yellow));padding-left:10px}
-  .controls b{color:var(--ink)}
-  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:auto;padding-top:6px;align-items:center}
+
+  .game h2{margin:10px 0 0;font-weight:400;line-height:1.02}
+  .kuku h2{font-family:"Lilita One",var(--sans);font-size:clamp(2rem,4.6vw,2.7rem);color:var(--red);
+    -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;letter-spacing:.015em;text-shadow:.04em .05em 0 var(--ink)}
+  .pedrada h2{font-family:var(--marker);font-size:clamp(2rem,4.4vw,2.6rem);color:var(--blue);
+    -webkit-text-stroke:.09em var(--ink);paint-order:stroke fill;text-shadow:.04em .05em 0 var(--ink)}
+  .game p{margin:0;max-width:34em}
+  .ficha{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.98rem;max-width:36em;
+    padding-top:14px;border-top:2px dashed var(--ink-soft)}
+  .ficha dt{font-weight:900}
+  .ficha dd{margin:0}
+
   .btn{
-    font:inherit;font-weight:900;font-size:1.05rem;cursor:pointer;text-decoration:none;
-    background:var(--accent,var(--yellow));color:#14142b;border:0;border-radius:14px;padding:12px 24px;
-    box-shadow:0 5px 0 rgba(0,0,0,.35);transition:transform .08s ease,box-shadow .08s ease;min-height:48px;display:inline-flex;align-items:center;gap:8px
+    all:unset;box-sizing:border-box;cursor:pointer;align-self:flex-start;
+    font-family:var(--marker);font-size:1.4rem;line-height:1;padding:14px 26px 12px;
+    background:var(--accent);color:var(--ink);border:3px solid var(--ink);border-radius:14px;
+    box-shadow:5px 6px 0 var(--ink);transition:transform .1s ease,box-shadow .1s ease;
   }
-  .btn:hover{filter:brightness(1.06)}
-  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
-  .link{font-size:.9rem;font-weight:700;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:10px 4px}
-  .link:hover{color:var(--ink)}
-  :focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:8px}
+  .btn:hover{transform:translate(-1px,-2px);box-shadow:6px 8px 0 var(--ink)}
+  .btn:active{transform:translate(4px,5px);box-shadow:1px 1px 0 var(--ink)}
+  .btn:focus-visible{outline:3px solid var(--blue);outline-offset:4px}
+  .alone{display:inline-block;margin-left:14px;font-weight:800;font-size:.95rem;color:var(--ink-soft)}
 
-  footer{margin-top:clamp(28px,5vw,48px);padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;line-height:1.6;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between}
-  footer b{color:var(--ink)}
+  /* ---------- seções de texto ---------- */
+  section.s{padding:clamp(32px,5vw,56px) 0;border-top:3px solid var(--ink)}
+  h2.t{margin:0 0 20px;font-family:var(--marker);font-weight:400;font-size:clamp(1.9rem,4.4vw,2.8rem);line-height:1.05}
+  .cols{display:grid;gap:clamp(28px,5vw,64px);grid-template-columns:1fr}
+  @media (min-width:900px){.cols{grid-template-columns:5fr 7fr}}
+  .cols p{margin:0 0 1em;max-width:32em}
+  h3{margin:0 0 .5em;font-size:1.15rem;font-weight:900}
+
+  dl.rows{margin:0;display:grid;grid-template-columns:1fr}
+  dl.rows>div{display:grid;gap:2px 20px;padding:11px 0;border-top:1px solid var(--ink-soft)}
+  dl.rows>div:last-child{border-bottom:1px solid var(--ink-soft)}
+  dl.rows dt{font-weight:900}
+  dl.rows dd{margin:0}
+  @media (min-width:640px){dl.rows>div{grid-template-columns:minmax(150px,230px) 1fr}}
+  .wide dl.rows{max-width:880px}
+
+  footer{border-top:3px solid var(--ink);padding:28px 0 56px;font-size:.98rem}
+  footer p{margin:0 0 .35em}
+  footer .credits{font-weight:800}
+  footer .small{color:var(--ink-soft);font-size:.88rem;margin-top:14px}
+
+  /* ---------- entrada: os adesivos colam na página, uma vez ---------- */
+  @media (prefers-reduced-motion:no-preference){
+    .poster{animation:slap .55s cubic-bezier(.3,1.5,.5,1) both}
+    .pedrada .poster{animation-delay:.14s}
+    @keyframes slap{from{opacity:0;transform:translateY(-34px) rotate(calc(var(--tilt) * 6)) scale(1.06)}}
+  }
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 
   /* ---------- tela do jogo ---------- */
   #player{position:fixed;inset:0;z-index:10;background:#000;display:none;flex-direction:column}
   body.playing #player{display:flex}
-  body.playing .wrap{display:none}
+  body.playing .page{display:none}
   .bar{
-    flex:0 0 auto;display:flex;align-items:center;gap:10px;height:42px;padding:0 10px;
+    flex:0 0 auto;display:flex;align-items:center;gap:10px;height:46px;padding:0 10px;
     padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
-    background:var(--bg);border-bottom:2px solid var(--line);
+    background:var(--ink);color:var(--paper);border-bottom:3px solid var(--ink);
   }
   .bar button,.bar a{
-    font:inherit;font-weight:800;font-size:.88rem;color:var(--ink);background:var(--bg2);
-    border:2px solid var(--line);border-radius:10px;padding:0 12px;height:30px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap
+    font:inherit;font-weight:800;font-size:.9rem;color:var(--ink);background:var(--paper);
+    border:2px solid var(--paper);border-radius:10px;padding:0 13px;height:32px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap
   }
-  .bar button:hover,.bar a:hover{border-color:var(--yellow)}
-  .bar .name{font-weight:900;margin:0 auto 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar button:hover,.bar a:hover{background:var(--yellow);border-color:var(--yellow)}
+  .bar .name{font-family:var(--marker);font-size:1.15rem;margin:0 auto 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #frame{flex:1 1 auto;width:100%;border:0;background:#000;min-height:0}
-  /* celular deitado: barra vira uma pílula pequena para não roubar tela do jogo */
   @media (max-height:520px) and (orientation:landscape){
-    .bar{position:absolute;top:6px;left:50%;transform:translateX(-50%);height:auto;padding:4px;border:2px solid var(--line);border-radius:12px;opacity:.55;gap:6px;z-index:2}
+    .bar{position:absolute;top:6px;left:50%;transform:translateX(-50%);height:auto;padding:4px;border:2px solid var(--paper);border-radius:12px;opacity:.55;gap:6px;z-index:2}
     .bar:hover,.bar:focus-within{opacity:1}
     .bar .name,.bar .lbl{display:none}
     .bar button,.bar a{padding:0 10px}
   }
-  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 
-<div class="wrap" id="home">
-  <header>
-    <span class="kicker">Pedro Javarotti · Games</span>
-    <h1>Escolha um jogo e <span>bora jogar</span></h1>
-    <p class="lead">Dois jogos feitos para rodar direto no navegador, no computador ou no celular. Sem instalar nada: é só clicar.</p>
+<div class="page" id="home">
+  <div class="top">
+    <span class="sig">Javarotti</span>
+    <nav aria-label="Seções">
+      <a href="#jogos">Jogos</a>
+      <a href="#quem-faz">Quem faz</a>
+      <a href="#como">Como se faz</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <h1><span class="a">Pedro</span><span class="b">Javarotti</span></h1>
+    <p class="lead">Faço jogos que abrem direto no navegador, no celular ou no computador. Eu dirijo, um time de agentes de IA constrói. Escolha um e jogue.</p>
   </header>
 
-  <main class="grid" id="grid"></main>
+  <main>
+    <div class="games" id="jogos">
+
+      <article class="game kuku">
+        <button class="poster" type="button" data-play="kuku" aria-label="Jogar Kuku e a Semente do Sol">
+          <img src="assets/kuku.jpg" width="960" height="540" alt="Tela inicial do Kuku: um pássaro vermelho de topete ao pé de uma árvore com ninho, sob um céu de pôr do sol">
+          <span class="ver" aria-hidden="true">v2.8</span>
+        </button>
+        <h2>Kuku e a Semente do Sol</h2>
+        <p>Jogo de plataforma em que o Kuku, um pássaro desastrado e cheio de pose, cruza 5 mundos e 25 fases, com um chefe no fim de cada mundo, atrás da Semente do Sol.</p>
+        <dl class="ficha">
+          <dt>Controles</dt><dd>Setas ou A e D andam, Espaço pula, X bica, P pausa. No celular, analógico na tela. Aceita gamepad.</dd>
+          <dt>Feito por</dt><dd>Gerente Fable e 10 agentes Opus.</dd>
+          <dt>Salva</dt><dd>O progresso, neste navegador.</dd>
+        </dl>
+        <div>
+          <button class="btn" type="button" data-play="kuku">Jogar Kuku</button>
+          <a class="alone" href="jogos/kuku/">abrir em página própria</a>
+        </div>
+      </article>
+
+      <article class="game pedrada">
+        <button class="poster" type="button" data-play="pedrada" aria-label="Jogar Pedrada de Palito">
+          <img src="assets/pedrada.jpg" width="960" height="540" alt="Tela inicial do Pedrada de Palito: título em marcador sobre folha de caderno quadriculado, com bonecos de palito ao redor do botão Jogar">
+          <span class="ver" aria-hidden="true">v1.0.7</span>
+        </button>
+        <h2>Pedrada de Palito</h2>
+        <p>Tiro em primeira pessoa no estilo Doom em que a única arma é um estilingue. Puxe o elástico, solte, e derrube a turma de palitos de papel recortado. São 3 fases, cada uma com chefe.</p>
+        <dl class="ficha">
+          <dt>Controles</dt><dd>WASD anda, mouse mira, segure o clique para puxar e solte para atirar. No celular, analógico à esquerda e arrastar à direita.</dd>
+          <dt>Feito por</dt><dd>Gerente Sonnet (esforço alto) e 11 agentes Sonnet (esforço médio), com QA.</dd>
+          <dt>Salva</dt><dd>Estrelas e recordes, neste navegador.</dd>
+        </dl>
+        <div>
+          <button class="btn" type="button" data-play="pedrada">Jogar Pedrada</button>
+          <a class="alone" href="jogos/pedrada/">abrir em página própria</a>
+        </div>
+      </article>
+
+    </div>
+
+    <section class="s" id="quem-faz" aria-labelledby="h-quem">
+      <h2 class="t" id="h-quem">Quem faz</h2>
+      <div class="cols">
+        <div>
+          <p>Eu sou o Pedro Javarotti e dirijo os jogos. Crio os personagens (o Kuku é criação minha), decido o que cada jogo precisa ser e peço o que mudar até ficar certo.</p>
+          <p>Código, arte, música e testes saem de um time de agentes de IA. Os créditos de cada jogo dizem isso sempre do mesmo jeito: quem dirigiu, qual time fez e qual motor rodou.</p>
+        </div>
+        <div>
+          <h3>O time Javarotti</h3>
+          <p>Um gerente e até dez agentes trabalhando ao mesmo tempo. O gerente escreve o motor e as ferramentas. Cada agente cuida de uma parte, mexe só nos próprios arquivos e entrega um relatório dizendo o que não conseguiu testar.</p>
+          <dl class="rows">
+            <div><dt>Pesquisador</dt><dd>Levanta referências de controles, menus e animação antes de começar.</dd></div>
+            <div><dt>Animador do herói</dt><dd>Dá movimento ao personagem a partir do desenho original.</dd></div>
+            <div><dt>Artista de criaturas</dt><dd>Desenha inimigos, NPCs e chefes no estilo do herói.</dd></div>
+            <div><dt>Cenógrafo</dt><dd>Monta os mundos: céu, camadas ao fundo e cenário.</dd></div>
+            <div><dt>Artista de itens e HUD</dt><dd>Faz coletáveis, objetos, projéteis e efeitos.</dd></div>
+            <div><dt>Level designer</dt><dd>Desenha as fases, os segredos e a curva de dificuldade.</dd></div>
+            <div><dt>Programador de gameplay</dt><dd>Dá vida aos chefes, aos inimigos especiais e aos eventos.</dd></div>
+            <div><dt>Designer de menus</dt><dd>Cria título, seleção de fases, opções e créditos.</dd></div>
+            <div><dt>Som e história</dt><dd>Compõe músicas e efeitos, escreve cutscenes e falas.</dd></div>
+            <div><dt>QA e playtester</dt><dd>Joga tudo, caça bugs e corrige o conteúdo.</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="s wide" id="como" aria-labelledby="h-como">
+      <h2 class="t" id="h-como">Como um jogo sai daqui</h2>
+      <dl class="rows">
+        <div><dt>Um arquivo só</dt><dd>Cada jogo é um único arquivo HTML. Abre no celular e no computador, sem instalar nada.</dd></div>
+        <div><dt>Som feito na hora</dt><dd>Música e efeitos são sintetizados no navegador, sem arquivos de áudio. Quando você sai da aba, o som para.</dd></div>
+        <div><dt>Arte desenhada em código</dt><dd>Sprites e cenários nascem de código vetorial. O Kuku entra por recorte do desenho original, para ninguém redesenhar o herói.</dd></div>
+        <div><dt>Um robô joga antes</dt><dd>Um bot invencível percorre as fases para provar que dá para chegar ao fim. Ele confere o caminho, não a graça. Isso sou eu quem decide.</dd></div>
+        <div><dt>A versão sempre sobe</dt><dd>Todo pedido meu que muda o jogo vira uma versão nova, com o que mudou anotado no changelog.</dd></div>
+        <div><dt>Motor JGK</dt><dd>Todos os jogos rodam no Javarotti Game Kit, o motor que o time melhora a cada jogo novo.</dd></div>
+        <div><dt>O que ainda falta</dt><dd>Testar em aparelho de verdade: celular, toque e gamepad. Até aqui foram testes automáticos e screenshots.</dd></div>
+      </dl>
+    </section>
+  </main>
 
   <footer>
-    <span><b>Desenvolvido e dirigido por Pedro Javarotti</b> · feito com um time de agentes de IA</span>
-    <span>Motor JGK · Javarotti Game Kit</span>
+    <p class="credits">Desenvolvido e dirigido por Pedro Javarotti.</p>
+    <p class="credits">Feito por um time de IA.</p>
+    <p class="credits">Motor JGK, Javarotti Game Kit.</p>
+    <p class="small"><a href="https://github.com/javarottiProgramming">github.com/javarottiProgramming</a>. Fontes: Permanent Marker, Lilita One e Nunito, todas sob licença SIL OFL.</p>
   </footer>
-  <noscript><p>Ative o JavaScript para usar o painel, ou abra direto: <a href="jogos/kuku/">Kuku</a> · <a href="jogos/pedrada/">Pedrada de Palito</a>.</p></noscript>
+  <noscript><p>Sem JavaScript o painel não abre os jogos aqui, mas dá para jogar direto: <a href="jogos/kuku/">Kuku</a> e <a href="jogos/pedrada/">Pedrada de Palito</a>.</p></noscript>
 </div>
 
 <section id="player" aria-label="Jogo em andamento">
@@ -133,82 +271,44 @@
     <button type="button" id="back" aria-label="Voltar para a lista de jogos">← <span class="lbl">Jogos</span></button>
     <span class="name" id="pname"></span>
     <button type="button" id="fs" aria-label="Tela cheia">⛶ <span class="lbl">Tela cheia</span></button>
-    <a id="solo" href="#" aria-label="Abrir o jogo sozinho na página"><span class="lbl">Abrir sozinho</span> ↗</a>
+    <a id="solo" href="#" aria-label="Abrir o jogo em página própria"><span class="lbl">Página própria</span> ↗</a>
   </div>
   <iframe id="frame" title="Jogo" allow="fullscreen; gamepad; autoplay; accelerometer; gyroscope" allowfullscreen></iframe>
 </section>
 
 <script>
-/* Para adicionar um jogo novo: copie o HTML dele para jogos/<id>/index.html,
-   ponha uma capa em assets/<id>.jpg e acrescente um item aqui. */
-const GAMES = [
-  {
-    id: 'kuku',
-    title: 'Kuku e a Semente do Sol',
-    badge: 'v2.8 · Plataforma 2D',
-    accent: '#ffb627',
-    cover: 'assets/kuku.jpg',
-    desc: 'Ajude o Kuku, um pássaro cartunesco cheio de personalidade, a atravessar 5 mundos, 25 fases e 5 chefes atrás da Semente do Sol.',
-    tags: ['5 mundos', '25 fases', 'Chefes', 'Cutscenes', 'Salva o progresso'],
-    controls: '<b>Teclado:</b> setas/AD andam · Espaço pula · X bica · P pausa.<br><b>Celular:</b> analógico à esquerda, botões PULO e BICO. Gamepad também funciona.',
-    path: 'jogos/kuku/'
-  },
-  {
-    id: 'pedrada',
-    title: 'Pedrada de Palito',
-    badge: 'v1.0.7 · FPS de estilingue',
-    accent: '#ff4d57',
-    cover: 'assets/pedrada.jpg',
-    desc: 'Um FPS estilo Doom em que a única arma é um estilingue. Puxe o elástico, solte e derrube a turma de palitos de papel recortado, chefe incluso.',
-    tags: ['FPS retrô', '3 fases', '3 chefes', 'Mouse ou toque', 'Gamepad'],
-    controls: '<b>Teclado:</b> WASD anda · mouse mira · segure o clique para puxar, solte para atirar · P pausa.<br><b>Celular:</b> analógico à esquerda, arraste à direita para mirar.',
-    path: 'jogos/pedrada/'
-  }
-];
+/* Jogo novo: copie o HTML para jogos/<id>/index.html, ponha a capa em assets/<id>.jpg,
+   acrescente o <article class="game"> acima e uma linha aqui. */
+const GAMES = {
+  kuku:    { title: 'Kuku e a Semente do Sol', path: 'jogos/kuku/' },
+  pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/' }
+};
 
 const $ = id => document.getElementById(id);
-const byId = Object.fromEntries(GAMES.map(g => [g.id, g]));
-
-/* ---- cards ---- */
-$('grid').innerHTML = GAMES.map(g => `
-  <article class="card" style="--accent:${g.accent}">
-    <button class="cover" type="button" data-play="${g.id}" aria-label="Jogar ${g.title}">
-      <img src="${g.cover}" alt="Tela inicial de ${g.title}" loading="lazy" width="960" height="540">
-      <span class="badge">${g.badge}</span>
-      <span class="play" aria-hidden="true"><i></i></span>
-    </button>
-    <div class="body">
-      <h2>${g.title}</h2>
-      <p>${g.desc}</p>
-      <ul class="tags">${g.tags.map(t => `<li>${t}</li>`).join('')}</ul>
-      <div class="controls">${g.controls}</div>
-      <div class="actions">
-        <button class="btn" type="button" data-play="${g.id}">▶ Jogar agora</button>
-        <a class="link" href="${g.path}">Abrir sozinho</a>
-      </div>
-    </div>
-  </article>`).join('');
-
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-play]');
   if (b) location.hash = '#/' + b.dataset.play;
 });
 
-/* ---- player (rota por hash: #/kuku, #/pedrada) ---- */
+/* player em tela cheia por hash: #/kuku, #/pedrada */
 const frame = $('frame');
+let scrollY = 0;
 function route(){
   const m = location.hash.match(/^#\/([\w-]+)$/);
-  const g = m && byId[m[1]];
+  const g = m && GAMES[m[1]];
   if (g) {
-    document.title = g.title + ' · Jogos do Javarotti';
+    if (!document.body.classList.contains('playing')) scrollY = window.scrollY;
+    document.title = g.title + ', jogos do Javarotti';
     $('pname').textContent = g.title;
     $('solo').href = g.path;
-    if (frame.dataset.id !== g.id) { frame.src = g.path; frame.dataset.id = g.id; }
+    if (frame.dataset.id !== m[1]) { frame.src = g.path; frame.dataset.id = m[1]; }
     document.body.classList.add('playing');
   } else {
-    document.title = 'Jogos do Javarotti';
+    const was = document.body.classList.contains('playing');
+    document.title = 'Pedro Javarotti, jogos';
     document.body.classList.remove('playing');
     frame.removeAttribute('src'); delete frame.dataset.id;   // descarrega o jogo e para o áudio
+    if (was) window.scrollTo(0, scrollY);
   }
 }
 frame.addEventListener('load', () => { try { frame.focus(); frame.contentWindow.focus(); } catch(_){} });
