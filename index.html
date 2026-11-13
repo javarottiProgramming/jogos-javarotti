@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jogos do Javarotti</title>
+<meta name="description" content="Portfólio rápido dos jogos do Pedro Javarotti. Escolha um e jogue direto no navegador.">
+<meta name="theme-color" content="#14142b">
+<meta property="og:title" content="Jogos do Javarotti">
+<meta property="og:description" content="Kuku e a Semente do Sol e Pedrada de Palito: jogue direto no navegador.">
+<meta property="og:image" content="assets/kuku.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314142b'/%3E%3Cpath d='M20 18h24a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8H20a8 8 0 0 1-8-8V26a8 8 0 0 1 8-8z' fill='%23ffd23f'/%3E%3Cpath d='M26 25v14l12-7z' fill='%2314142b'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#14142b; --bg2:#1d1d3d; --card:#222246; --ink:#f6f3ea; --muted:#a9a8c9;
+    --line:#35356a; --yellow:#ffd23f; --red:#e63946; --blue:#2f6fe4; --green:#4cc36b;
+    --radius:18px;
+    --font: ui-rounded, "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--font); color:var(--ink); background:var(--bg);
+    background-image:
+      radial-gradient(900px 500px at 15% -10%, rgba(255,210,63,.13), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(47,111,228,.18), transparent 60%);
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  .wrap{max-width:1040px;margin:0 auto;padding:clamp(20px,5vw,56px) 16px 40px}
+
+  header{display:flex;flex-direction:column;gap:10px;margin-bottom:clamp(22px,4vw,40px)}
+  .kicker{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);font-weight:800}
+  h1{margin:0;font-size:clamp(2rem,6.5vw,3.6rem);line-height:1.02;font-weight:900;letter-spacing:-.02em}
+  h1 span{color:var(--yellow)}
+  .lead{margin:0;color:var(--muted);font-size:clamp(1rem,2.4vw,1.15rem);max-width:56ch;line-height:1.5}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:22px}
+  .card{
+    display:flex;flex-direction:column;background:var(--card);border:2px solid var(--line);
+    border-radius:var(--radius);overflow:hidden;
+    transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+    box-shadow:0 10px 0 -4px rgba(0,0,0,.28);
+  }
+  .card:hover,.card:focus-within{transform:translateY(-4px);border-color:var(--accent,var(--yellow));box-shadow:0 16px 0 -6px rgba(0,0,0,.32)}
+  .cover{position:relative;display:block;aspect-ratio:16/9;background:#000;border:0;padding:0;width:100%;cursor:pointer;overflow:hidden}
+  .cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease}
+  .card:hover .cover img{transform:scale(1.04)}
+  .cover .play{
+    position:absolute;inset:0;display:grid;place-items:center;
+    background:linear-gradient(180deg,transparent 45%,rgba(10,10,30,.55));
+    opacity:0;transition:opacity .18s ease;
+  }
+  .cover .play i{
+    width:76px;height:76px;border-radius:50%;background:var(--accent,var(--yellow));display:grid;place-items:center;
+    box-shadow:0 6px 0 rgba(0,0,0,.35)
+  }
+  .cover .play i::after{content:"";margin-left:6px;border-left:24px solid #14142b;border-top:15px solid transparent;border-bottom:15px solid transparent}
+  .card:hover .play,.cover:focus-visible .play{opacity:1}
+  .badge{
+    position:absolute;top:12px;left:12px;background:rgba(20,20,43,.88);color:var(--ink);
+    border:2px solid var(--accent,var(--yellow));border-radius:999px;padding:3px 11px;font-size:.78rem;font-weight:800;
+  }
+  .body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:12px;flex:1}
+  .body h2{margin:0;font-size:1.5rem;font-weight:900;letter-spacing:-.01em}
+  .body p{margin:0;color:var(--muted);line-height:1.5}
+  .tags{display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:0;list-style:none}
+  .tags li{font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--bg2);border:1px solid var(--line);color:var(--ink)}
+  .controls{font-size:.88rem;color:var(--muted);line-height:1.45;border-left:3px solid var(--accent,var(--yellow));padding-left:10px}
+  .controls b{color:var(--ink)}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:auto;padding-top:6px;align-items:center}
+  .btn{
+    font:inherit;font-weight:900;font-size:1.05rem;cursor:pointer;text-decoration:none;
+    background:var(--accent,var(--yellow));color:#14142b;border:0;border-radius:14px;padding:12px 24px;
+    box-shadow:0 5px 0 rgba(0,0,0,.35);transition:transform .08s ease,box-shadow .08s ease;min-height:48px;display:inline-flex;align-items:center;gap:8px
+  }
+  .btn:hover{filter:brightness(1.06)}
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+  .link{font-size:.9rem;font-weight:700;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:10px 4px}
+  .link:hover{color:var(--ink)}
+  :focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:8px}
+
+  footer{margin-top:clamp(28px,5vw,48px);padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;line-height:1.6;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between}
+  footer b{color:var(--ink)}
+
+  /* ---------- tela do jogo ---------- */
+  #player{position:fixed;inset:0;z-index:10;background:#000;display:none;flex-direction:column}
+  body.playing #player{display:flex}
+  body.playing .wrap{display:none}
+  .bar{
+    flex:0 0 auto;display:flex;align-items:center;gap:10px;height:42px;padding:0 10px;
+    padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));
+    background:var(--bg);border-bottom:2px solid var(--line);
+  }
+  .bar button,.bar a{
+    font:inherit;font-weight:800;font-size:.88rem;color:var(--ink);background:var(--bg2);
+    border:2px solid var(--line);border-radius:10px;padding:0 12px;height:30px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap
+  }
+  .bar button:hover,.bar a:hover{border-color:var(--yellow)}
+  .bar .name{font-weight:900;margin:0 auto 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #frame{flex:1 1 auto;width:100%;border:0;background:#000;min-height:0}
+  /* celular deitado: barra vira uma pílula pequena para não roubar tela do jogo */
+  @media (max-height:520px) and (orientation:landscape){
+    .bar{position:absolute;top:6px;left:50%;transform:translateX(-50%);height:auto;padding:4px;border:2px solid var(--line);border-radius:12px;opacity:.55;gap:6px;z-index:2}
+    .bar:hover,.bar:focus-within{opacity:1}
+    .bar .name,.bar .lbl{display:none}
+    .bar button,.bar a{padding:0 10px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="home">
+  <header>
+    <span class="kicker">Pedro Javarotti · Games</span>
+    <h1>Escolha um jogo e <span>bora jogar</span></h1>
+    <p class="lead">Dois jogos feitos para rodar direto no navegador, no computador ou no celular. Sem instalar nada: é só clicar.</p>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <footer>
+    <span><b>Desenvolvido e dirigido por Pedro Javarotti</b> · feito com um time de agentes de IA</span>
+    <span>Motor JGK · Javarotti Game Kit</span>
+  </footer>
+  <noscript><p>Ative o JavaScript para usar o painel, ou abra direto: <a href="jogos/kuku/">Kuku</a> · <a href="jogos/pedrada/">Pedrada de Palito</a>.</p></noscript>
+</div>
+
+<section id="player" aria-label="Jogo em andamento">
+  <div class="bar">
+    <button type="button" id="back" aria-label="Voltar para a lista de jogos">← <span class="lbl">Jogos</span></button>
+    <span class="name" id="pname"></span>
+    <button type="button" id="fs" aria-label="Tela cheia">⛶ <span class="lbl">Tela cheia</span></button>
+    <a id="solo" href="#" aria-label="Abrir o jogo sozinho na página"><span class="lbl">Abrir sozinho</span> ↗</a>
+  </div>
+  <iframe id="frame" title="Jogo" allow="fullscreen; gamepad; autoplay; accelerometer; gyroscope" allowfullscreen></iframe>
+</section>
+
+<script>
+/* Para adicionar um jogo novo: copie o HTML dele para jogos/<id>/index.html,
+   ponha uma capa em assets/<id>.jpg e acrescente um item aqui. */
+const GAMES = [
+  {
+    id: 'kuku',
+    title: 'Kuku e a Semente do Sol',
+    badge: 'v2.8 · Plataforma 2D',
+    accent: '#ffb627',
+    cover: 'assets/kuku.jpg',
+    desc: 'Ajude o Kuku, um pássaro cartunesco cheio de personalidade, a atravessar 5 mundos, 25 fases e 5 chefes atrás da Semente do Sol.',
+    tags: ['5 mundos', '25 fases', 'Chefes', 'Cutscenes', 'Salva o progresso'],
+    controls: '<b>Teclado:</b> setas/AD andam · Espaço pula · X bica · P pausa.<br><b>Celular:</b> analógico à esquerda, botões PULO e BICO. Gamepad também funciona.',
+    path: 'jogos/kuku/'
+  },
+  {
+    id: 'pedrada',
+    title: 'Pedrada de Palito',
+    badge: 'v1.0.7 · FPS de estilingue',
+    accent: '#ff4d57',
+    cover: 'assets/pedrada.jpg',
+    desc: 'Um FPS estilo Doom em que a única arma é um estilingue. Puxe o elástico, solte e derrube a turma de palitos de papel recortado, chefe incluso.',
+    tags: ['FPS retrô', '3 fases', '3 chefes', 'Mouse ou toque', 'Gamepad'],
+    controls: '<b>Teclado:</b> WASD anda · mouse mira · segure o clique para puxar, solte para atirar · P pausa.<br><b>Celular:</b> analógico à esquerda, arraste à direita para mirar.',
+    path: 'jogos/pedrada/'
+  }
+];
+
+const $ = id => document.getElementById(id);
+const byId = Object.fromEntries(GAMES.map(g => [g.id, g]));
+
+/* ---- cards ---- */
+$('grid').innerHTML = GAMES.map(g => `
+  <article class="card" style="--accent:${g.accent}">
+    <button class="cover" type="button" data-play="${g.id}" aria-label="Jogar ${g.title}">
+      <img src="${g.cover}" alt="Tela inicial de ${g.title}" loading="lazy" width="960" height="540">
+      <span class="badge">${g.badge}</span>
+      <span class="play" aria-hidden="true"><i></i></span>
+    </button>
+    <div class="body">
+      <h2>${g.title}</h2>
+      <p>${g.desc}</p>
+      <ul class="tags">${g.tags.map(t => `<li>${t}</li>`).join('')}</ul>
+      <div class="controls">${g.controls}</div>
+      <div class="actions">
+        <button class="btn" type="button" data-play="${g.id}">▶ Jogar agora</button>
+        <a class="link" href="${g.path}">Abrir sozinho</a>
+      </div>
+    </div>
+  </article>`).join('');
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-play]');
+  if (b) location.hash = '#/' + b.dataset.play;
+});
+
+/* ---- player (rota por hash: #/kuku, #/pedrada) ---- */
+const frame = $('frame');
+function route(){
+  const m = location.hash.match(/^#\/([\w-]+)$/);
+  const g = m && byId[m[1]];
+  if (g) {
+    document.title = g.title + ' · Jogos do Javarotti';
+    $('pname').textContent = g.title;
+    $('solo').href = g.path;
+    if (frame.dataset.id !== g.id) { frame.src = g.path; frame.dataset.id = g.id; }
+    document.body.classList.add('playing');
+  } else {
+    document.title = 'Jogos do Javarotti';
+    document.body.classList.remove('playing');
+    frame.removeAttribute('src'); delete frame.dataset.id;   // descarrega o jogo e para o áudio
+  }
+}
+frame.addEventListener('load', () => { try { frame.focus(); frame.contentWindow.focus(); } catch(_){} });
+window.addEventListener('hashchange', route);
+$('back').addEventListener('click', () => { location.hash = '#/'; });
+$('fs').addEventListener('click', () => {
+  const el = $('player');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+});
+route();
+</script>
+</body>
+</html>
