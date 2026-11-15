@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.1</title>
+<title>Pedrada de Palito 1.1.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.1', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.2', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -279,8 +279,10 @@ INP.unlock = () => { try { if (document.exitPointerLock) document.exitPointerLoc
 /* geometria dos controles de toque (coordenadas lógicas) */
 function touchLayout() {
   const s = SAVE.opt.bsz || 1, sr = VIEW.safeR + 22, sb = VIEW.safeB + 20, sl = VIEW.safeL + 18, rf = 64 * s;
-  return { split: VW * .42, stickR: 62 * s, stickHome: { x: sl + 96 * s, y: VH - sb - 90 * s }, pause: { x: VW - VIEW.safeR - 34, y: VIEW.safeT + 34, r: 26 }, weapon: { x: VW - VIEW.safeR - 62, y: VH - VIEW.safeB - 62, r: 38 * s },   // 1.1.0 weapon: botão de trocar arma no canto inferior direito (só com 2+ armas)
-    fire: { x: VW - VIEW.safeR - 124 * s, y: VH - VIEW.safeB - 116 * s, r: 90 * s } };   // 1.1.1: ZONA DE TIRO (espelho do analógico, canto inferior direito). Dentro: toque atira, segurar puxa, arrastar mira. Resto do lado direito: só mira, sem atirar.
+  const fire = { x: VW - VIEW.safeR - 124 * s, y: VH - VIEW.safeB - 116 * s, r: 90 * s };   // 1.1.1: ZONA DE TIRO (espelho do analógico, canto inferior direito). Dentro: toque atira, segurar puxa, arrastar mira. Resto do lado direito: só mira, sem atirar.
+  // 1.1.0/1.1.1 weapon: botão de trocar arma (só com 2+ armas). 1.1.1: fica logo ACIMA da zona de tiro, centralizado nela, para nunca cobrir o círculo de tiro (folga de 14 px).
+  const weapon = { x: fire.x, y: fire.y - fire.r - 52 * s, r: 38 * s };
+  return { split: VW * .42, stickR: 62 * s, stickHome: { x: sl + 96 * s, y: VH - sb - 90 * s }, pause: { x: VW - VIEW.safeR - 34, y: VIEW.safeT + 34, r: 26 }, weapon, fire };
 }
 /* 1.1.1: o toque está dentro da zona de tiro? (uma folga de 10% deixa o dedo entrar sem precisão de milímetro) */
 const inFireZone = (T, x, y) => Math.hypot(x - T.fire.x, y - T.fire.y) <= T.fire.r * 1.1;
