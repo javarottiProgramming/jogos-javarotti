@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.0</title>
+<title>Pedrada de Palito 1.1.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.0', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.1', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -279,8 +279,11 @@ INP.unlock = () => { try { if (document.exitPointerLock) document.exitPointerLoc
 /* geometria dos controles de toque (coordenadas lógicas) */
 function touchLayout() {
   const s = SAVE.opt.bsz || 1, sr = VIEW.safeR + 22, sb = VIEW.safeB + 20, sl = VIEW.safeL + 18, rf = 64 * s;
-  return { split: VW * .42, stickR: 62 * s, stickHome: { x: sl + 96 * s, y: VH - sb - 90 * s }, pause: { x: VW - VIEW.safeR - 34, y: VIEW.safeT + 34, r: 26 }, weapon: { x: VW - VIEW.safeR - 62, y: VH - VIEW.safeB - 62, r: 38 * s } };   // 1.1.0 weapon: botão de trocar arma no canto inferior direito (só com 2+ armas; o resto do lado direito continua atirando)
+  return { split: VW * .42, stickR: 62 * s, stickHome: { x: sl + 96 * s, y: VH - sb - 90 * s }, pause: { x: VW - VIEW.safeR - 34, y: VIEW.safeT + 34, r: 26 }, weapon: { x: VW - VIEW.safeR - 62, y: VH - VIEW.safeB - 62, r: 38 * s },   // 1.1.0 weapon: botão de trocar arma no canto inferior direito (só com 2+ armas)
+    fire: { x: VW - VIEW.safeR - 124 * s, y: VH - VIEW.safeB - 116 * s, r: 90 * s } };   // 1.1.1: ZONA DE TIRO (espelho do analógico, canto inferior direito). Dentro: toque atira, segurar puxa, arrastar mira. Resto do lado direito: só mira, sem atirar.
 }
+/* 1.1.1: o toque está dentro da zona de tiro? (uma folga de 10% deixa o dedo entrar sem precisão de milímetro) */
+const inFireZone = (T, x, y) => Math.hypot(x - T.fire.x, y - T.fire.y) <= T.fire.r * 1.1;
 K.touchLayout = touchLayout;
 /* mouse: metade (×0,5) do valor da 1.0.1 — o padrão continua nível 5, mas toda a escala ficou 50% mais lenta (pedido do Pedro, 1.0.2). Toque: inalterado (ainda não testado no celular). */
 const SLOP = 7, HOLD_F = .05;   // folga do arrasto (px lógicos) · toque mínimo no PEDRADA (s): toque mais curto que um passo não some
@@ -296,10 +299,12 @@ function ptDown(e) {
   const T = touchLayout(), P = INP.pts[e.pointerId] = { x0: p.x, y0: p.y, x: p.x, y: p.y, lx: p.x, ly: p.y };
   const gg = K.G; if (gg && gg.pl && gg.pl.arms && gg.pl.arms.length > 1 && Math.hypot(p.x - T.weapon.x, p.y - T.weapon.y) < T.weapon.r * 1.3) { INP.wq = 1; P.wpn = 1; P.dead = 1; }   // 1.1.0: toque no botão de arma troca para a próxima (sem atirar)
   else {
-    /* 1.0.7 (sem botão): TODO o lado direito da tela é a arma — toque rápido atira, segurar puxa o elástico, arrastar o mesmo dedo mira.
+    /* 1.1.1: a zona de tiro (canto inferior direito) atira: toque rápido atira, segurar puxa o elástico, arrastar o mesmo dedo mira.
+       Fora dela, no lado direito: o dedo só move a câmera (mira), sem atirar.
        P.slop: o tremor do dedo parado não mexe a mira — só arrasta depois de SLOP px; a partir daí a câmera acompanha o dedo sem pulo. */
     if (p.x < T.split) { if (!INP.stick) { INP.stick = P; P.stick = 1; } else P.dead = 1; }
-    else { P.fire = 1; P.look = 1; P.slop = 1; INP.hF = HOLD_F; }
+    else if (inFireZone(T, p.x, p.y)) { P.fire = 1; P.look = 1; P.slop = 1; INP.hF = HOLD_F; }
+    else { P.look = 1; }
   }
 }
 function ptMove(e) {
@@ -364,6 +369,9 @@ INP.drawTouch = (c, charge) => {
     c.save(); c.globalAlpha = P ? Math.min(1, al + .3) : al * .75;
     c.beginPath(); c.arc(bx, by, r, 0, TAU); c.fillStyle = 'rgba(247,245,238,.28)'; c.fill(); c.lineWidth = 4; c.strokeStyle = PAL.ink; c.stroke();
     c.beginPath(); c.arc(kx, ky, r * .46, 0, TAU); c.fillStyle = P ? PAL.yellow : 'rgba(255,217,61,.8)'; c.fill(); c.strokeStyle = PAL.ink; c.lineWidth = 4; c.stroke(); c.restore(); }
+  { const Z = T.fire;   // 1.1.1: zona de tiro sempre visível (contorno + rótulo), para o jogador saber onde atirar
+    c.save(); c.globalAlpha = al * .7; c.beginPath(); c.arc(Z.x, Z.y, Z.r, 0, TAU); c.fillStyle = 'rgba(229,56,59,.14)'; c.fill(); c.lineWidth = 4; c.strokeStyle = PAL.ink; c.setLineDash([12, 9]); c.stroke(); c.setLineDash([]);
+    K.text(c, 'ATIRAR', Z.x, Z.y, { size: Z.r * .28, align: 'center', base: 'middle', color: PAL.ink, sw: 3 }); c.restore(); }
   { const F = [...Object.values(INP.pts)].find(p => p.fire);   // anel no dedo que puxa/mira (o dedo cobre o resto), com a carga em volta
     if (F) { c.save(); c.globalAlpha = Math.min(1, al + .3); c.beginPath(); c.arc(F.x, F.y, 46, 0, TAU); c.fillStyle = 'rgba(229,56,59,.22)'; c.fill(); c.lineWidth = 4; c.strokeStyle = PAL.ink; c.stroke();
       if (charge > 0) { c.beginPath(); c.arc(F.x, F.y, 54, -Math.PI / 2, -Math.PI / 2 + TAU * charge); c.strokeStyle = PAL.yellow; c.lineWidth = 7; c.lineCap = 'round'; c.stroke(); } c.restore(); } }
