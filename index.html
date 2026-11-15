@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pedro Javarotti, jogos</title>
-<meta name="description" content="Jogos que abrem direto no navegador, dirigidos por Pedro Javarotti e feitos por um time de agentes de IA. Kuku e a Semente do Sol e Pedrada de Palito.">
+<meta name="description" content="Jogos que abrem direto no navegador, dirigidos por Pedro Javarotti e feitos por um time de agentes de IA. Kuku e a Semente do Sol, Pedrada de Palito e Cacos de Sol.">
 <meta name="theme-color" content="#f1f5fb">
 <meta name="color-scheme" content="light">
 <meta property="og:title" content="Pedro Javarotti, jogos">
-<meta property="og:description" content="Kuku e a Semente do Sol e Pedrada de Palito: jogue direto no navegador.">
+<meta property="og:description" content="Kuku e a Semente do Sol, Pedrada de Palito e Cacos de Sol: jogue direto no navegador.">
 <meta property="og:image" content="assets/og.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23f1f5fb'/%3E%3Ctext x='32' y='47' font-size='44' font-family='Marker Felt,Comic Sans MS,cursive' font-weight='700' text-anchor='middle' fill='%23e63946' stroke='%23161833' stroke-width='3' paint-order='stroke'%3EJ%3C/text%3E%3C/svg%3E">
 <link rel="preload" href="fonts/permanent-marker.woff2" as="font" type="font/woff2" crossorigin>
@@ -73,6 +73,7 @@
   }
   .kuku .poster{--tilt:-1.3deg}
   .pedrada .poster{--tilt:1.1deg}
+  .cacos .poster{--tilt:-.8deg}
   .poster img{display:block;width:100%;height:auto;border-radius:13px;border:2px solid var(--ink)}
   .poster:hover,.poster:focus-visible{transform:rotate(0deg) translateY(-5px);box-shadow:11px 14px 0 var(--ink)}
   .poster:active{transform:rotate(0deg) translateY(2px);box-shadow:4px 5px 0 var(--ink)}
@@ -85,6 +86,8 @@
 
   .game h2{margin:10px 0 0;font-weight:400;line-height:1.02}
   .kuku h2{font-family:"Lilita One",var(--sans);font-size:clamp(2rem,4.6vw,2.7rem);color:var(--red);
+    -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;letter-spacing:.015em;text-shadow:.04em .05em 0 var(--ink)}
+  .cacos h2{font-family:"Lilita One",var(--sans);font-size:clamp(2rem,4.6vw,2.7rem);color:var(--yellow);
     -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;letter-spacing:.015em;text-shadow:.04em .05em 0 var(--ink)}
   .pedrada h2{font-family:var(--marker);font-size:clamp(2rem,4.4vw,2.6rem);color:var(--blue);
     -webkit-text-stroke:.09em var(--ink);paint-order:stroke fill;text-shadow:.04em .05em 0 var(--ink)}
@@ -138,6 +141,7 @@
   @media (prefers-reduced-motion:no-preference){
     .poster{animation:slap .55s cubic-bezier(.3,1.5,.5,1) both}
     .pedrada .poster{animation-delay:.14s}
+    .cacos .poster{animation-delay:.28s}
     @keyframes slap{from{opacity:0;transform:translateY(-34px) rotate(calc(var(--tilt) * 6)) scale(1.06)}}
   }
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
@@ -229,6 +233,24 @@
         </div>
       </article>
 
+      <article class="game cacos">
+        <button class="poster" type="button" data-play="cacos-de-sol" aria-label="Jogar Cacos de Sol">
+          <img src="assets/cacos-de-sol.jpg" width="960" height="540" alt="Tela inicial do Cacos de Sol: título amarelo e coral ao lado do menu, com uma ilha flutuante de casinhas coloridas e o herói no centro, sob um céu alaranjado">
+          <span class="ver" aria-hidden="true">v1.0.2</span>
+        </button>
+        <h2>Cacos de Sol</h2>
+        <p>RPG de ação em 3D numa ilha aberta que se quebrou em pedaços. Explore campos, floresta, dunas e a montanha de cristal, converse com a vila, fabrique armas e poções, vença os chefes e junte os fragmentos do sol antes de enfrentar o Rei Estilhaço.</p>
+        <dl class="ficha">
+          <dt>Controles</dt><dd>WASD anda, mouse move a câmera, clique esquerdo ataca, Shift rola, Espaço pula, Q, R e X são as habilidades, E fala. Clique ou Enter passam as falas. No celular, analógico e botões na tela. Aceita gamepad.</dd>
+          <dt>Feito por</dt><dd>Gerente Sonnet (esforço alto) e agentes Sonnet (esforço médio), no motor JGK em 3D.</dd>
+          <dt>Salva</dt><dd>A partida, neste navegador.</dd>
+        </dl>
+        <div class="actions">
+          <button class="btn" type="button" data-play="cacos-de-sol">Jogar Cacos de Sol</button>
+          <a class="alone" href="jogos/cacos-de-sol/">abrir em página própria</a>
+        </div>
+      </article>
+
     </div>
 
     <section class="s" id="quem-faz" aria-labelledby="h-quem">
@@ -270,7 +292,7 @@
     </section>
   </main>
 
-  <noscript><p>Sem JavaScript o painel não abre os jogos aqui, mas dá para jogar direto: <a href="jogos/kuku/">Kuku</a> e <a href="jogos/pedrada/">Pedrada de Palito</a>.</p></noscript>
+  <noscript><p>Sem JavaScript o painel não abre os jogos aqui, mas dá para jogar direto: <a href="jogos/kuku/">Kuku</a> e <a href="jogos/pedrada/">Pedrada de Palito</a> e <a href="jogos/cacos-de-sol/">Cacos de Sol</a>.</p></noscript>
 </div>
 
 <section id="player" aria-label="Jogo em andamento">
@@ -288,7 +310,8 @@
    acrescente o <article class="game"> acima e uma linha aqui. */
 const GAMES = {
   kuku:    { title: 'Kuku e a Semente do Sol', path: 'jogos/kuku/' },
-  pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/' }
+  pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/' },
+  'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/' }
 };
 
 const $ = id => document.getElementById(id);
@@ -297,7 +320,7 @@ document.addEventListener('click', e => {
   if (b) location.hash = '#/' + b.dataset.play;
 });
 
-/* player em tela cheia por hash: #/kuku, #/pedrada */
+/* player em tela cheia por hash: #/kuku, #/pedrada, #/cacos-de-sol */
 const frame = $('frame');
 let scrollY = 0;
 function route(){
