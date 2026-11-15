@@ -251,6 +251,24 @@
         </div>
       </article>
 
+      <article class="game javas-brick">
+        <button class="poster" type="button" data-play="javas-brick" aria-label="Jogar Java's Brick">
+          <img src="assets/javas-brick.jpg" width="960" height="540" alt="Tela inicial do Java's Brick: título dourado sobre uma parede de blocos verdes e laranjas, com a bola no meio e os botões de menu embaixo">
+          <span class="ver" aria-hidden="true">v1.0.15</span>
+        </button>
+        <h2>Java's Brick</h2>
+        <p>Quebra-tijolos com o motor JGK. Doze fases em quatro mundos, com mosaicos de palavra nas fases avançadas (JAVAROTTI e JGK). Dez poderes que caem na hora certa, com o nome escrito embaixo. A bola acelera a cada bloco quebrado.</p>
+        <dl class="ficha">
+          <dt>Controles</dt><dd>Mouse ou toque movem a raquete, clique ou toque solta a bola. Teclado: setas ou A/D movem a raquete, espaço solta a bola, Esc ou P pausa. Nos menus, setas ou WASD escolhem, espaço ou Enter confirmam e Backspace volta.</dd>
+          <dt>Feito por</dt><dd>Gerente Haiku 5.5 (esforço médio) e 4 agentes Haiku 5.5 (esforço baixo), no motor JGK.</dd>
+          <dt>Salva</dt><dd>O progresso e os recordes, neste navegador.</dd>
+        </dl>
+        <div class="actions">
+          <button class="btn" type="button" data-play="javas-brick">Jogar Java's Brick</button>
+          <a class="alone" href="jogos/javas-brick/">abrir em página própria</a>
+        </div>
+      </article>
+
     </div>
 
     <section class="s" id="quem-faz" aria-labelledby="h-quem">
@@ -311,7 +329,8 @@
 const GAMES = {
   kuku:    { title: 'Kuku e a Semente do Sol', path: 'jogos/kuku/' },
   pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/' },
-  'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/' }
+  'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/' },
+  'javas-brick':  { title: "Java's Brick",      path: 'jogos/javas-brick/' }
 };
 
 const $ = id => document.getElementById(id);
