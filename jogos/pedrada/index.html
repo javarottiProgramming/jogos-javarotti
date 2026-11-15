@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.4</title>
+<title>Pedrada de Palito 1.1.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.4', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.5', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -392,8 +392,10 @@ const AU = K.audio = { c: null, sg: null, mg: null, eg: null, nb: null, sfx: {},
  * Nunca deixar música/efeito tocando em segundo plano. Vale para qualquer jogo do time. */
 AU.asleep = false;
 AU.sleep = () => { AU.asleep = true; if (AU.c && AU.c.state === 'running') AU.c.suspend().catch(() => {}); };
-AU.wake = () => { if (!AU.asleep) return; if (document.hidden || (document.hasFocus && !document.hasFocus())) return; AU.asleep = false; if (AU.c && AU.c.state === 'suspended') { AU.c.resume().catch(() => {}); AU.next = AU.c.currentTime + .08; } };
-window.addEventListener('blur', AU.sleep); window.addEventListener('focus', AU.wake); window.addEventListener('pagehide', AU.sleep);
+AU.wake = force => { if (!AU.asleep) return; if (document.hidden || (!force && document.hasFocus && !document.hasFocus())) return; AU.asleep = false; if (AU.c && AU.c.state !== 'running') { AU.c.resume().catch(() => {}); AU.next = AU.c.currentTime + .08; } };
+/* 1.1.5: tela cheia do portfólio (iframe) fazia blur→focus e o focus chegava com document.hasFocus() ainda falso: o áudio ficava dormindo para sempre. Agora o wake tenta de novo por ~3 s e qualquer gesto do jogador (tecla/clique) acorda de vez, sem olhar o foco. */
+AU.wakeSoon = () => { let n = 0; const t = setInterval(() => { if (!AU.asleep || ++n > 12) { clearInterval(t); return; } AU.wake(); }, 250); };
+window.addEventListener('blur', AU.sleep); window.addEventListener('focus', () => { AU.wake(); AU.wakeSoon(); }); document.addEventListener('fullscreenchange', () => { AU.wakeSoon(); }); window.addEventListener('resize', () => { if (AU.asleep) AU.wakeSoon(); }); window.addEventListener('pagehide', AU.sleep);
 document.addEventListener('visibilitychange', () => { if (document.hidden) AU.sleep(); else AU.wake(); });
 AU.init = () => {
   if (AU.c) { if (AU.c.state === 'suspended' && !AU.asleep) AU.c.resume().catch(() => {}); return; }
@@ -1188,12 +1190,14 @@ K.hud.status = (c, S) => {
   if (S.boss && !S.boss.dead && S.boss.st !== 'die') { const bw = Math.min(420, VW - 340), bx2 = VW / 2 - bw / 2, by2 = y0 + 54, f = S.boss.hp / S.boss.maxhp; K.rr(c, bx2, by2, bw, 20, 8); c.fillStyle = PAL.paper2; c.fill(); c.save(); K.rr(c, bx2, by2, bw, 20, 8); c.clip(); c.fillStyle = PAL.red; c.fillRect(bx2, by2, bw * f, 20); c.restore(); K.rr(c, bx2, by2, bw, 20, 8); c.strokeStyle = PAL.ink; c.lineWidth = 3; c.stroke(); if (S.boss.def.phases) for (const ph of S.boss.def.phases) { const tx = bx2 + bw * ph.at; c.beginPath(); c.moveTo(tx, by2 + 1); c.lineTo(tx, by2 + 19); c.lineWidth = 3; c.strokeStyle = '#fff'; c.stroke(); }   /* 1.1.0: marcas das fases do chefe na barra */
     K.text(c, S.boss.def.nome || 'CHEFE', VW / 2, by2 + 10, { size: 15, align: 'center', base: 'middle', color: '#fff', sw: 3 }); }
 };
+/* 1.1.5: cores dos itens no minimapa, por categoria: verde = cura · amarelo = pedra de ouro · azul = armas e munição · roxo = poderes (escudo, força, botas) */
+K.pickupMapColor = id => { const d = K.pickupDefs[id] || {}; if (id === 'ouro') return PAL.yellow; if (d.weapon || id === 'municao') return PAL.blue; if (d.power && id !== 'poder_coracao' && d.power !== 'coracao') return '#9B5DE5'; return PAL.green; };
 K.hud.minimap = (c, S) => {
   const sz = 8, w = S.w, h = S.h, mw = Math.min(110, w * sz), cs = mw / Math.max(w, h), x0 = VW - VIEW.safeR - 72 - mw, y0 = VIEW.safeT + 14;
   c.save(); c.globalAlpha = .82; c.fillStyle = PAL.paper; c.fillRect(x0 - 3, y0 - 3, w * cs + 6, h * cs + 6); c.strokeStyle = PAL.ink; c.lineWidth = 3; c.strokeRect(x0 - 3, y0 - 3, w * cs + 6, h * cs + 6);
   c.fillStyle = PAL.ink2; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (S.cells[y * w + x]) c.fillRect(x0 + x * cs, y0 + y * cs, cs + .5, cs + .5);
   c.fillStyle = PAL.red; for (const b of S.bots) if (!b.dead && b.st !== 'die') c.fillRect(x0 + b.x * cs - 1.5, y0 + b.y * cs - 1.5, 3, 3);
-  for (const p of S.picks) if (!p.taken) { c.fillStyle = p.id === 'ouro' ? PAL.yellow : PAL.green; c.strokeStyle = PAL.ink; c.lineWidth = 1.5; c.beginPath(); c.arc(x0 + p.x * cs, y0 + p.y * cs, 3.3, 0, TAU); c.fill(); c.stroke(); }   // itens no minimapa
+  for (const p of S.picks) if (!p.taken) { c.fillStyle = K.pickupMapColor(p.id); c.strokeStyle = PAL.ink; c.lineWidth = 1.5; c.beginPath(); c.arc(x0 + p.x * cs, y0 + p.y * cs, 3.3, 0, TAU); c.fill(); c.stroke(); }   // itens no minimapa
   if (S.gate.cx >= 0) { c.fillStyle = S.gate.open ? PAL.green : PAL.yellow2; c.fillRect(x0 + S.gate.cx * cs, y0 + S.gate.cy * cs, cs, cs); }
   const px = x0 + S.pl.x * cs, py = y0 + S.pl.y * cs; c.fillStyle = PAL.blue; c.beginPath(); c.arc(px, py, 3.2, 0, TAU); c.fill(); c.strokeStyle = PAL.blue; c.lineWidth = 2; c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(S.pl.a) * 8, py + Math.sin(S.pl.a) * 8); c.stroke(); c.restore();
 };
