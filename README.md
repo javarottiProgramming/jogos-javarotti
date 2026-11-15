@@ -5,7 +5,7 @@ Portfólio rápido dos jogos do Pedro Javarotti: um painel para escolher o jogo 
 | Jogo | Versão | Pasta |
 |---|---|---|
 | **Kuku e a Semente do Sol** (plataforma 2D) | 2.8 | `jogos/kuku/` |
-| **Pedrada de Palito** (FPS de estilingue) | 1.1.3 | `jogos/pedrada/` |
+| **Pedrada de Palito** (FPS de estilingue) | 1.1.4 | `jogos/pedrada/` |
 
 Cada jogo é **um único arquivo HTML** (o `releases/*.html` do repositório original), copiado sem alteração para `jogos/<id>/index.html`.
 Os códigos-fonte continuam nos repositórios dos próprios jogos.

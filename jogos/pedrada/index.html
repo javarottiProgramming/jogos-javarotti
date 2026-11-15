@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.3</title>
+<title>Pedrada de Palito 1.1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.3', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.4', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -266,7 +266,8 @@ const INP = K.input = { keys: {}, kd: {}, anyQ: 0, bot: null, pts: {}, stick: nu
 const KEYMAP = { KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', ArrowLeft: 'aL', ArrowRight: 'aR', ArrowUp: 'aU', ArrowDown: 'aD', Space: 'F', ControlLeft: 'F', Enter: 'OK', NumpadEnter: 'OK', Escape: 'ESC', KeyP: 'P', KeyM: 'MAP', KeyQ: 'Q', KeyE: 'E', Digit1: 'N1', Digit2: 'N2', Digit3: 'N3', Digit4: 'N4', Digit5: 'N5', Digit6: 'N6', Digit7: 'N7', Digit8: 'N8', Digit9: 'N9' };
 window.addEventListener('keydown', e => {
   const k = KEYMAP[e.code]; if (!k) return; if (!e.repeat) { INP.kd[k] = 1; INP.anyQ = 1; }
-  INP.keys[k] = true; K.audio.init(); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+  INP.keys[k] = true; K.audio.init(); if (k !== 'ESC' && k !== 'P') INP.autoLock();   /* 1.1.4: qualquer tecla (menos Esc/P, que pausam) prende o mouse na fase, sem exigir o "primeiro clique" */
+  if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
 });
 window.addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) INP.keys[k] = false; });
 function dropTouches() { INP.pts = {}; INP.stick = null; INP.hF = 0; UI.press = null; }
@@ -274,6 +275,9 @@ window.addEventListener('blur', () => { INP.keys = {}; INP.mFire = 0; dropTouche
 document.addEventListener('visibilitychange', () => { if (document.hidden) { dropTouches(); if (K.scene && K.scene.onBlur) K.scene.onBlur(); } });
 document.addEventListener('pointerlockchange', () => { const was = INP.locked; INP.locked = document.pointerLockElement === cv; if (was && !INP.locked && K.scene && K.scene.onBlur) K.scene.onBlur(); });
 INP.lock = () => { try { if (!INP.locked && cv.requestPointerLock && !VIEW.touch) { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } } catch (e) {} };
+/* 1.1.4 (MOTOR JGK): mouse já entra mirando. Na cena de jogo ativa e sem pausa, prende o ponteiro (precisa de um gesto do usuário: o clique/tecla que abriu a fase vale; se o navegador negar, a próxima tecla/clique tenta de novo).
+   Pausa/menus/resultado: ponteiro solto (seta normal) — o `pause()` da cena solta o ponteiro e `exit()` também. */
+INP.autoLock = () => { if (!INP.locked && !VIEW.touch && K.scene && K.scene.fps && !K.scene.paused && K.sceneName === 'play' && !K.tr.on) INP.lock(); };
 INP.unlock = () => { try { if (document.exitPointerLock) document.exitPointerLock(); } catch (e) {} };
 
 /* geometria dos controles de toque (coordenadas lógicas). PADRÃO FPS (regra 21 do time JGK): analógico à esquerda; lado direito = mira, só a zona `fire` atira; `weapon` logo acima da zona; `pause` no canto. Não mude sem decisão do Pedro. Teste: npm run touchcheck */
@@ -820,7 +824,9 @@ function loadLevel(L) {
   G.pl = { x: sx, y: sy, a: ((L.start && L.start.a) || 0) * Math.PI / 180, pitch: 0, hp: 100, maxhp: 100, vx: 0, vy: 0, bob: 0, charge: 0, pulling: false, cd: 0, gold: 0, recoil: 0, step: 0, pullT: 0, fireLock: false, w: 'estilingue', arms: ['estilingue'], ammo: {}, pw: {}, mod: { spd: 1, charge: 1, dmg: 1 }, shield: 0 };
   { const pl = G.pl; for (const id in (SAVE.arms || {})) if (K.weapons[id] && id !== 'estilingue') pl.arms.push(id); pl.arms.sort((a, b) => K.weapons[a].order - K.weapons[b].order); for (const id of pl.arms) if (K.weapons[id].ammo) pl.ammo[id] = Math.ceil(K.weapons[id].ammo * .5); }   // 1.1.0: armas já pegas voltam em toda fase (munição pela metade)
   G.propCells = new Set(G.props.filter(p => K.propDefs[p.id] && K.propDefs[p.id].solid).map(p => (p.y | 0) * w + (p.x | 0)));
-  G.total = G.bots.filter(b => !b.def.noCount).length; G.remaining = G.total; flowBuild(); return G;
+  G.total = G.bots.filter(b => !b.def.noCount).length; G.remaining = G.total; flowBuild();
+  /* 1.1.4: corrida até o portal. Fase comum: o portal abre e o jogador tem PORTAL_SECS para chegar; senão ele fecha e metade dos bots originais volta ao mapa. Fase de chefe: sem tempo, só o guia. */
+  G.baseIds = G.bots.filter(b => !b.def.noCount && !b.def.boss && b.defId).map(b => b.defId); G.baseTotal = G.total; G.timed = !(L.boss || G.boss) && G.gate.cx >= 0; G.portalT = 0; G.guide = null; return G;
 }
 function spawnLegend(lg, x, y, L) {
   if (lg.boss) lg = { bot: L.boss || 'chefe' };
@@ -828,7 +834,7 @@ function spawnLegend(lg, x, y, L) {
 }
 K.spawnBot = (id, x, y) => {
   const def = K.botDefs[id]; if (!def) { console.error('bot inexistente: ' + id); return null; }
-  const e = { id: ++G.id, def, look: K.looks[def.look || id], x, y, hp: def.hp, maxhp: def.hp, st: 'idle', t: 0, af: 0, flash: 0, cd: R(.4, 1.5), cfg: JSON.parse(JSON.stringify({ speed: def.speed, melee: def.melee || null, shoot: def.shoot || null, keep: def.keep || null })), phase: 0, dead: false, vx: 0, vy: 0, alert: 0, fade: 1, swing: 0, ghost: 0, inv: 0 };
+  const e = { id: ++G.id, defId: id, def, look: K.looks[def.look || id], x, y, hp: def.hp, maxhp: def.hp, st: 'idle', t: 0, af: 0, flash: 0, cd: R(.4, 1.5), cfg: JSON.parse(JSON.stringify({ speed: def.speed, melee: def.melee || null, shoot: def.shoot || null, keep: def.keep || null })), phase: 0, dead: false, vx: 0, vy: 0, alert: 0, fade: 1, swing: 0, ghost: 0, inv: 0 };
   const T = G.tune && (def.boss ? G.tune.boss : G.tune.bot);   // 1.1.0: dificuldade crescente (K.defaultTune / L.tune)
   if (T) { e.tune = T; e.hp = e.maxhp = Math.max(1, Math.round(def.hp * T.hp)); e.cfg.speed *= T.spd; for (const k of ['melee', 'shoot']) if (e.cfg[k]) { e.cfg[k].dmg = Math.round(e.cfg[k].dmg * T.dmg); e.cfg[k].cd = +(e.cfg[k].cd * T.cd).toFixed(2); } }
   G.bots.push(e); if (def.boss) G.boss = e; if (G.t > 0 && !def.noCount) { G.total++; G.remaining++; } return e;
@@ -953,8 +959,46 @@ function updatePlayer(dt) {
     if (d && d.take(G, pl, p) !== false) { p.taken = true; const rare = p.id === 'ouro' || d.weapon || d.power; if (d.weapon) sfx2('weapon_get', 'gold'); else if (d.power) sfx2('power_get', 'gold'); else K.sfx(rare ? 'gold' : 'pickup'); G.flash = .25; K.fx.burst(p.x, p.y, .4, rare ? 18 : 12, d.col || (p.id === 'ouro' ? [255, 217, 61] : [47, 179, 106])); if (d.msg) AI.say(d.msg, 2.2); }   // aviso na tela: o jogador sabe o que pegou
     else if (d && d.full && G.t - (G.fullT || -9) > 2) { G.fullT = G.t; AI.say(d.full, 1.6); } } }
   // portal
-  const gt = G.gate; if (!gt.open && G.remaining <= 0 && G.st === 'play') { gt.open = true; K.sfx('portal'); AI.say('O PORTAL ABRIU! Corra até ele!', 3.5); }
+  const gt = G.gate; if (!gt.open && G.remaining <= 0 && G.st === 'play') { gt.open = true; G.portalT = PORTAL_SECS; K.sfx('portal'); AI.say(G.timed ? 'O PORTAL ABRIU! ' + PORTAL_SECS + ' segundos, corra!' : 'O PORTAL ABRIU! Siga as setas!', 3.5); }
+  if (gt.open && G.timed && G.st === 'play' && G.intro <= 0) { G.portalT -= dt; if (G.portalT <= 0) portalFail(); }
+  if (gt.open && gt.cx >= 0 && G.st === 'play') guideUpdate(); else G.guide = null;
   if (gt.cx >= 0) { gt.t += dt; if (gt.open && G.st === 'play' && Math.hypot(gt.x - pl.x, gt.y - pl.y) < .7) winLevel(); }
+}
+const PORTAL_SECS = 10;   // 1.1.4: tempo para alcançar o portal (fases comuns)
+/* tempo esgotado: o portal fecha e metade dos bots originais (arredondando para cima) reaparece longe do jogador */
+function portalFail() {
+  const gt = G.gate, pl = G.pl;
+  if (Math.hypot(gt.x - pl.x, gt.y - pl.y) < 1.4) { G.portalT = .05; return; }   // quase dentro: não tranca o jogador no bloco do portal
+  gt.open = false; G.guide = null; const n = Math.max(1, Math.ceil(G.baseTotal / 2)), ids = G.baseIds.length ? G.baseIds : ['palito'];
+  let made = 0;
+  for (let k = 0; k < n; k++) for (let tries = 0; tries < 300; tries++) {
+    const x = ((Math.random() * G.w) | 0) + .5, y = ((Math.random() * G.h) | 0) + .5, far = tries < 200 ? 7 : 4;
+    if (blocked(x, y, .4) || Math.hypot(x - pl.x, y - pl.y) < far || Math.hypot(x - gt.x, y - gt.y) < 2.5 || G.flow[(y | 0) * G.w + (x | 0)] < 0) continue;
+    const b = K.spawnBot(ids[(Math.random() * ids.length) | 0], x, y); if (b) { made++; K.fx.burst(x, y, .6, 14, [255, 255, 255]); } break;
+  }
+  K.sfx('portal'); G.flash = .35; G.shake = Math.max(G.shake, .4);
+  AI.say('TEMPO ESGOTADO! O portal fechou. Voltaram ' + made + ' bots!', 4);
+}
+/* guia até o portal: caminho (BFS do campo de fluxo, de trás pra frente) esticado em linha reta onde dá. G.guide = { pts:[{x,y}], key } */
+function losW(a, b) {   // linha livre com folga lateral (só visual)
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, px = -dy / d * .25, py = dx / d * .25;
+  if (!K.los(a.x, a.y, b.x, b.y) || !K.los(a.x + px, a.y + py, b.x + px, b.y + py) || !K.los(a.x - px, a.y - py, b.x - px, b.y - py)) return false;
+  for (let s = 0; s <= d; s += .3) if (propHit(a.x + dx / d * s, a.y + dy / d * s, .15)) return false;
+  return true;
+}
+function guideUpdate() {
+  const pl = G.pl, gt = G.gate, key = (pl.x | 0) + (pl.y | 0) * 1000; if (G.guide && G.guide.key === key) return;
+  const w = G.w, d = G.flow, gi = gt.cy * w + gt.cx; if (d[gi] < 0) { G.guide = null; return; }
+  const cells = []; let cur = gi; cells.push(cur);
+  for (let guard = 0; d[cur] > 0 && guard < 4000; guard++) {
+    const x = cur % w, y = (cur / w) | 0; let nx2 = -1;
+    for (let oy = -1; oy <= 1 && nx2 < 0; oy++) for (let ox = -1; ox <= 1; ox++) { if (!ox && !oy) continue; const nx = x + ox, ny = y + oy; if (nx < 0 || ny < 0 || nx >= w || ny >= G.h) continue; const ni = ny * w + nx; if (d[ni] !== d[cur] - 1) continue; if (ox && oy && (solidCell(x + ox, y) || solidCell(x, y + oy))) continue; nx2 = ni; break; }
+    if (nx2 < 0) break; cur = nx2; cells.push(cur);
+  }
+  cells.reverse(); const raw = cells.map(c => ({ x: (c % w) + .5, y: ((c / w) | 0) + .5 })); raw[0] = { x: pl.x, y: pl.y }; raw[raw.length - 1] = { x: gt.x, y: gt.y };
+  const pts = [raw[0]]; let i = 0;   // puxa o fio: do ponto atual, vai ao mais longe que enxerga
+  while (i < raw.length - 1) { let j = raw.length - 1; while (j > i + 1 && !losW(raw[i], raw[j])) j--; pts.push(raw[j]); i = j; }
+  G.guide = { key, pts };
 }
 function winLevel() {
   G.st = 'win'; G.endT = 0; K.sfx('win'); const L = G.L, t = G.t, hpFrac = G.pl.hp / G.pl.maxhp; let st = 1; if (t <= (L.par || 240)) st++; if (st === 2 && hpFrac >= .5) st++;
@@ -1077,8 +1121,18 @@ function buildSprites() {
   }
   const chip = S.chip; if (chip) for (const p of G.parts) out.push({ x: p.x, y: p.y, f: chip, hgt: .045, z: p.z, tint: [p.col[0] / 255, p.col[1] / 255, p.col[2] / 255], glow: true, alpha: clamp(p.life * 3, 0, 1) });
   const gt = G.gate; if (gt.cx >= 0) { const f = S[gt.open ? 'portal_on' : 'portal_off']; if (f) out.push({ x: gt.x, y: gt.y, f, hgt: 1.0, z: 0, glow: gt.open }); }
+  if (G.guide && gt.open && G.st === 'play' && cf) {   // 1.1.4: pontilhado + setas no chão até o portal
+    const pts = guidePoints(), STEP = .55, MAXD = 16, ph = (K.time * 1.4) % STEP, cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    const at = dd => { let i = 1; while (i < pts.length - 1 && cum[i] < dd) i++; const sl = cum[i] - cum[i - 1] || 1, t = (dd - cum[i - 1]) / sl, ux = (pts[i].x - pts[i - 1].x) / sl, uy = (pts[i].y - pts[i - 1].y) / sl; return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t, ux, uy }; };
+    const end = Math.min(MAXD, cum[cum.length - 1] - .4);
+    for (let dd = .9 + ph; dd < end; dd += STEP) { const p = at(dd); out.push({ x: p.x, y: p.y, f: cf, hgt: .1, z: 0, tint: [.15, 1, .45], glow: true, alpha: clamp(1 - dd / MAXD, .25, .95) }); }
+    for (let dd = 1.4 + ph * 4; dd < end; dd += 2.2) { const p = at(dd), al = clamp(1.1 - dd / MAXD, .35, 1);
+      for (const [bk, sd] of [[0, 0], [.3, .3], [.3, -.3], [.6, .6], [.6, -.6]]) out.push({ x: p.x - p.ux * bk - p.uy * sd, y: p.y - p.uy * bk + p.ux * sd, f: cf, hgt: .17, z: 0, tint: [1, .85, .1], glow: true, alpha: al }); }
+  }
   return out;
 }
+/* pontos do guia com a ponta inicial na posição atual do jogador */
+function guidePoints() { const g = G.guide, pl = G.pl; return [{ x: pl.x, y: pl.y }].concat(g.pts.slice(1)); }
 function camera() {
   const pl = G.pl, sh = SAVE.opt.shake ? G.shake : 0, jt = sh * sh * .02;
   return { x: pl.x, y: pl.y, a: pl.a + (Math.random() - .5) * jt * 2, pitch: pl.pitch + Math.sin(pl.bob) * .0035 * Math.min(1, Math.hypot(pl.vx, pl.vy)) + (Math.random() - .5) * jt, fov: (SAVE.opt.fov || 1) * (1 - G.pl.charge * .06) };
@@ -1168,9 +1222,21 @@ K.hud.msg = (c, S) => {
   if (S.intro > 0) { const k = clamp(S.intro / 3, 0, 1), a = k > .85 ? (1 - k) / .15 : k < .25 ? k / .25 : 1; c.globalAlpha = a; K.text(c, 'FASE ' + S.L.id, VW / 2, VH * .3, { size: 28, align: 'center', color: PAL.yellow }); K.text(c, S.L.nome || '', VW / 2, VH * .3 + 54, { size: 50, align: 'center', color: '#fff', maxW: VW - 80 }); if (S.L.hint) K.text(c, S.L.hint, VW / 2, VH * .3 + 96, { size: 24, align: 'center', color: '#fff', font: 'hand', sw: 5, maxW: VW - 100 }); c.globalAlpha = 1; }
   else if (S.msg) { c.globalAlpha = clamp(S.msgT * 2, 0, 1); K.text(c, S.msg, VW / 2, VH * .39, { size: 32, align: 'center', color: PAL.yellow, maxW: VW - 80 }); c.globalAlpha = 1; }
 };
+/* 1.1.4: guia até o portal — seta que aponta o próximo trecho do caminho + contagem regressiva (só em fase comum; chefe não tem tempo) */
+K.hud.guide = (c, S) => {
+  if (!S.guide || !S.gate.open || S.st !== 'play' || S.intro > 0) return;
+  const pl = S.pl, pts = guidePoints(); let tx = pts[pts.length - 1].x, ty = pts[pts.length - 1].y, acc = 0;
+  for (let i = 1; i < pts.length; i++) { const sl = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); if (acc + sl >= 2.5) { const t = (2.5 - acc) / (sl || 1); tx = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t; ty = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t; break; } acc += sl; }
+  const ang = Math.atan2(ty - pl.y, tx - pl.x) - pl.a, rel = Math.atan2(Math.sin(ang), Math.cos(ang)), timed = S.timed, low = timed && S.portalT <= 3, pulse = .5 + .5 * Math.sin(K.time * 14);
+  const w = timed ? 168 : 140, x = VW / 2 - w / 2, y = VIEW.safeT + 14 + 58;
+  K.panel(c, x, y, w, 50, { r: 12, lip: 4, fill: low ? (pulse > .5 ? '#FFD2D2' : PAL.paper) : undefined });
+  c.save(); c.translate(x + 28, y + 26); c.rotate(rel); c.lineJoin = 'round'; c.beginPath(); c.moveTo(0, -17); c.lineTo(15, 3); c.lineTo(5, 3); c.lineTo(5, 16); c.lineTo(-5, 16); c.lineTo(-5, 3); c.lineTo(-15, 3); c.closePath(); c.lineWidth = 6; c.strokeStyle = '#fff'; c.stroke(); c.lineWidth = 3; c.strokeStyle = PAL.ink; c.stroke(); c.fillStyle = PAL.green; c.fill(); c.restore();
+  if (timed) K.text(c, Math.max(0, S.portalT).toFixed(1) + ' s', x + 58 + (w - 58) / 2, y + 26, { size: 30, align: 'center', base: 'middle', color: low ? PAL.red : PAL.ink, sw: 0, maxW: w - 66 });
+  else K.text(c, 'Siga a seta', x + 58 + (w - 58) / 2, y + 26, { size: 20, align: 'center', base: 'middle', color: PAL.ink, sw: 0, font: 'hand', maxW: w - 66 });
+};
 function drawHud(c) {
   const S = Object.assign(G, { charge: G.pl.charge, recoil: G.pl.recoil, bob: G.pl.bob, gold: G.pl.gold > 0, cd: G.pl.cd });
-  (curW().hud || K.hud.weapon)(c, S); K.hud.crosshair(c, S); K.hud.arms(c, S); K.hud.vignette(c, S); K.hud.status(c, S); if (G.showMap !== false) K.hud.minimap(c, S); K.hud.msg(c, S); K.hud.pops(c, S); K.hud.bombs(c, S);
+  (curW().hud || K.hud.weapon)(c, S); K.hud.crosshair(c, S); K.hud.arms(c, S); K.hud.vignette(c, S); K.hud.status(c, S); if (G.showMap !== false) K.hud.minimap(c, S); K.hud.msg(c, S); K.hud.pops(c, S); K.hud.bombs(c, S); K.hud.guide(c, S);
   K.input.drawTouch(c, G.pl.charge);
   if (G.st !== 'play') { const k = clamp(G.endT / 1.2, 0, 1); c.fillStyle = G.st === 'win' ? 'rgba(255,217,61,' + k * .35 + ')' : 'rgba(20,20,43,' + k * .6 + ')'; c.fillRect(0, 0, VW, VH); }
   const T = K.touchLayout();
@@ -1182,6 +1248,7 @@ K.defScene('play', {
   fps: true, paused: false,
   enter(args) {
     args = args || {}; const L = K.levelById(args.level || '1'); this.paused = false; loadLevel(L); K.music(K.audio.songs[G.W.music] ? G.W.music : (K.audio.songs[G.W.base] ? G.W.base : 'caderno'));   // 1.1.0: mundo sem música própria (ainda) usa a do mundo base K.input.enabled = true;
+    K.input.lock();   // 1.1.4: o clique/tecla que abriu a fase ainda vale como gesto: já entra com o mouse mirando
     return K.preload ? K.preload() : null;
   },
   exit() { K.input.unlock(); },
@@ -1814,8 +1881,8 @@ K.hud.status = (c, S) => {
   K.text(c, Math.ceil(S.pl.hp) + '', bx + bw / 2, by + 13, { size: 16, align: 'center', base: 'middle', color: '#fff', sw: 4, font: 'hand' });
   const cx = VW / 2; K.panel(c, cx - 78, y0, 156, 48, { r: 12, lip: 4 });
   c.save(); c.translate(cx - 54, y0 + 25); c.lineCap = 'round'; c.strokeStyle = INK; c.lineWidth = 3.5; c.fillStyle = PAL.paper; c.beginPath(); c.arc(0, -10, 6, 0, TAU); c.fill(); c.stroke(); c.beginPath(); c.moveTo(0, -4); c.lineTo(0, 7); c.moveTo(-7, 0); c.lineTo(7, 0); c.moveTo(0, 7); c.lineTo(-5, 15); c.moveTo(0, 7); c.lineTo(5, 15); c.stroke(); c.fillStyle = PAL.red; c.fillRect(-7, -17, 14, 4); c.restore();
-  K.text(c, '' + Math.max(0, S.remaining), cx + 8, y0 + 25, { size: 32, align: 'center', base: 'middle', color: INK, sw: 0 });
-  K.text(c, S.remaining > 0 ? 'bots' : 'PORTAL!', cx + 46, y0 + 28, { size: 15, align: 'left', base: 'middle', color: S.remaining > 0 ? INK : PAL.green, sw: 0, font: 'hand' });
+  if (S.remaining > 0) { K.text(c, '' + S.remaining, cx + 8, y0 + 25, { size: 32, align: 'center', base: 'middle', color: INK, sw: 0 }); K.text(c, 'bots', cx + 46, y0 + 28, { size: 15, align: 'left', base: 'middle', color: INK, sw: 0, font: 'hand' }); }
+  else K.text(c, 'PORTAL!', cx + 18, y0 + 26, { size: 24, align: 'center', base: 'middle', color: PAL.green, sw: 0, font: 'hand', maxW: 100 });   // 1.1.4: cabe dentro do quadro (antes vazava pela direita)
   if (S.pl.gold > 0) { const gx = x0, gy = y0 + 58; K.panel(c, gx, gy, 220, 34, { r: 10, lip: 3, fill: PAL.yellow }); cutP(c, star(gx + 20, gy + 17, 12, 5.5, 5), '#fff', 2.5);
     K.text(c, 'Pedra de ouro  x' + S.pl.gold, gx + 38, gy + 18, { size: 19, color: INK, font: 'hand', base: 'middle', sw: 0 }); }
   if (S.boss && !S.boss.dead && S.boss.st !== 'die' && S.boss.st !== 'idle') { const w = Math.min(430, VW - 360), x = VW / 2 - w / 2, y = y0 + 60, f = clamp(S.boss.hp / S.boss.maxhp, 0, 1);
