@@ -1,9 +1,12 @@
 name: Ligar ou desligar o site
 
 # Roda só quando você manda: Actions → "Ligar ou desligar o site" → Run workflow.
-#   ligar    publica o portfólio e os dois jogos.
-#   desligar publica só uma página "fora do ar"; os jogos saem do ar.
-# Pré-requisito (uma vez): Settings → Pages → Source: "GitHub Actions".
+#   ligar     liga o GitHub Pages em modo legacy (publica a pasta raiz da main).
+#             Depois disso, cada PR concluído na main atualiza o site sozinho.
+#   desligar  desliga o GitHub Pages. O site sai do ar e nenhum merge na main
+#             o reabre, porque sem Pages não há publicação.
+# Não precisa de configuração manual: a fonte do Pages continua "main /".
+
 on:
   workflow_dispatch:
     inputs:
@@ -13,39 +16,43 @@ on:
         options:
           - ligar
           - desligar
-        default: desligar
+        default: ligar
 
 permissions:
   contents: read
   pages: write
-  id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  publicar:
+  alternar:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
       ESTADO: ${{ inputs.estado }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Montar o que vai ao ar
+      - name: Ligar o site (Pages em main /)
+        if: env.ESTADO == 'ligar'
         run: |
-          mkdir _site
-          if [ "$ESTADO" = "ligar" ]; then
-            cp -r index.html assets fonts jogos _site/
+          if gh api "repos/$REPO/pages" >/dev/null 2>&1; then
+            echo "Pages já está ligado; pedindo um build novo."
           else
-            cp fora-do-ar.html _site/index.html
+            gh api -X POST "repos/$REPO/pages" \
+              -f "source[branch]=main" -f "source[path]=/" -f build_type=legacy
+            echo "Pages ligado em main /."
           fi
-          touch _site/.nojekyll
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          gh api -X POST "repos/$REPO/pages/builds" >/dev/null
+          echo "Build disparado. Em ~1 minuto o site está no ar."
+
+      - name: Desligar o site (remover o Pages)
+        if: env.ESTADO == 'desligar'
+        run: |
+          if gh api "repos/$REPO/pages" >/dev/null 2>&1; then
+            gh api -X DELETE "repos/$REPO/pages"
+            echo "Pages desligado. O site saiu do ar."
+          else
+            echo "Pages já estava desligado; nada a fazer."
+          fi
