@@ -1,0 +1,2720 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="data:,">
+<title>Java's Brick 1.0.15</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="600"></canvas>
+<script>
+/*==ENGINE:core==  JGK (Javarotti Game Kit) 2D · registros, save, canvas, entrada, cenas, loop */
+// Motor JGK — Javarotti Game Kit. Cada jogo do time usa este mesmo núcleo.
+const K = (window.K = window.K || {});
+K.version = '1.0.15';
+K.game = "Java's Brick";
+K.W = 800;
+K.H = 600;
+
+// ---- registros (conteúdo chama estes; registrar de novo o mesmo id substitui) ----
+K.worlds = {}; K.blocks = {}; K.powers = {}; K.levels = {}; K.songs = {}; K.stories = {};
+K.credits = { extra: [] };
+K.levelOrder = ['f1-1', 'f1-2', 'f1-3', 'f2-1', 'f2-2', 'f2-3', 'f3-1', 'f3-2', 'f3-3', 'f4-1', 'f4-2', 'f4-3'];
+K.defWorld = (id, d) => (K.worlds[id] = Object.assign({ id }, d));
+K.defBlock = (id, d) => (K.blocks[id] = Object.assign({ id, hp: 1, score: 10 }, d));
+K.defPower = (id, d) => (K.powers[id] = Object.assign({ id, good: true }, d));
+K.defLevel = (id, d) => (K.levels[id] = Object.assign({ id }, d));
+K.defSong = (id, d) => (K.songs[id] = Object.assign({ id }, d));
+K.defStory = (id, d) => (K.stories[id] = Object.assign({ id }, d));
+K.defCredits = (d) => Object.assign(K.credits, d);
+
+// ---- save local (try/catch: pode faltar em aba privada) ----
+K.KEY = 'quebra-tijolos-1';
+function K_defaultSave() {
+  return { unlocked: { 'f1-1': true }, best: {}, done: {}, opts: { music: 0.6, sfx: 0.8, gfx: 'auto' } };
+}
+K.save = (function () {
+  try {
+    const s = JSON.parse(localStorage.getItem(K.KEY));
+    if (s && s.unlocked) return Object.assign(K_defaultSave(), s);
+  } catch (e) { /* sem storage: segue com o padrão */ }
+  return K_defaultSave();
+})();
+K.store = function () {
+  try { localStorage.setItem(K.KEY, JSON.stringify(K.save)); } catch (e) { /* ignora */ }
+};
+// Zerar progresso mantém as opções (regra 18)
+K.resetProgress = function () {
+  const opts = K.save.opts;
+  K.save = K_defaultSave();
+  K.save.opts = opts;
+  K.store();
+};
+
+// ---- canvas, escala e letterbox ----
+K.cv = document.getElementById('c');
+K.g = K.cv.getContext('2d');
+// ---- gráficos: 0 baixo, 1 médio, 2 alto. "Automático" só ajusta K.q na memória (regra 13) ----
+K.gfxModes = ['auto', 'baixo', 'medio', 'alto'];
+K.autoQ = 2;            // nível que o automático escolheu agora (não é salvo)
+K.q = 2;                // nível efetivo que o jogo usa
+K.setQuality = function () {
+  const m = K.save.opts.gfx || 'auto';
+  K.q = m === 'auto' ? K.autoQ : ({ baixo: 0, medio: 1, alto: 2 })[m];
+};
+K.gfxName = function () {
+  return ({ auto: 'Automático', baixo: 'Baixo', medio: 'Médio', alto: 'Alto' })[K.save.opts.gfx || 'auto'];
+};
+K.cycleGfx = function () {
+  const i = K.gfxModes.indexOf(K.save.opts.gfx || 'auto');
+  K.save.opts.gfx = K.gfxModes[(i + 1) % K.gfxModes.length];
+  K.store();
+  K.setQuality();
+  K.fit();
+};
+K.perf = { acc: 0, n: 0 };
+// mede o tempo de quadro; no automático, cai um nível se ficar lento e sobe se sobrar folga
+K.frameSample = function (dt) {
+  if ((K.save.opts.gfx || 'auto') !== 'auto') return;
+  K.perf.acc += dt; K.perf.n++;
+  if (K.perf.n < 90) return;
+  const avg = K.perf.acc / K.perf.n;
+  if (avg > 0.026 && K.autoQ > 0) K.autoQ--;
+  else if (avg < 0.013 && K.autoQ < 2) K.autoQ++;
+  K.perf = { acc: 0, n: 0 };
+  const before = K.q;
+  K.setQuality();
+  if (K.q !== before) K.fit();
+};
+
+// ---- tela cheia (F ou botão nas opções; precisa de um toque/tecla do jogador) ----
+K.isFull = function () { return !!document.fullscreenElement; };
+K.toggleFull = function () {
+  try {
+    if (K.isFull()) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  } catch (e) { /* navegador sem tela cheia: segue normal */ }
+};
+// como no Pedrada: o botão de menu entra em tela cheia (sem barra do navegador) e, no celular, gira para paisagem
+K.fullscreen = function () {
+  try {
+    const d = document.documentElement;
+    if (!document.fullscreenElement && d.requestFullscreen) {
+      d.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+        try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* sem orientação: segue */ }
+      }).catch(() => {});
+    }
+  } catch (e) { /* navegador sem tela cheia */ }
+};
+// ícone de tela cheia no canto superior direito dos menus: sempre visível e some já em tela cheia (regra 33)
+K.fsIcon = function (g) {
+  if (K.isFull()) return;
+  const x = K.W - 74, y = 14, w = 58, h = 58;
+  K.buttons.push({ x, y, w, h, fn: () => K.fullscreen() });
+  const focused = K.buttons.length - 1 === K.focus;
+  g.save();
+  g.fillStyle = 'rgba(12,8,30,0.72)';
+  g.beginPath(); g.roundRect(x, y, w, h, 14); g.fill();
+  g.beginPath(); g.roundRect(x, y, w, h, 14);
+  g.strokeStyle = focused ? '#ffd23f' : 'rgba(255,255,255,0.5)';
+  g.lineWidth = focused ? 3 : 2; g.stroke();
+  const cx = x + w / 2, cy = y + h / 2;
+  g.strokeStyle = '#fff7d6'; g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    g.moveTo(cx + sx * 7, cy + sy * 18); g.lineTo(cx + sx * 18, cy + sy * 18); g.lineTo(cx + sx * 18, cy + sy * 7);
+  }
+  g.stroke();
+  g.restore();
+};
+document.addEventListener('fullscreenchange', () => K.fit());
+
+K.fit = function () {
+  K.lastW = window.innerWidth; K.lastH = window.innerHeight;
+  const s = Math.min(window.innerWidth / K.W, window.innerHeight / K.H);
+  const cssW = Math.floor(K.W * s), cssH = Math.floor(K.H * s);
+  K.cv.style.width = cssW + 'px';
+  K.cv.style.height = cssH + 'px';
+  const cap = K.q === 2 ? 2 : K.q === 1 ? 1.5 : 1;
+  const dpr = Math.min(cap, window.devicePixelRatio || 1);
+  K.cv.width = Math.round(cssW * dpr);
+  K.cv.height = Math.round(cssH * dpr);
+  K.g.setTransform(K.cv.width / K.W, 0, 0, K.cv.height / K.H, 0, 0);
+};
+window.addEventListener('resize', K.fit);
+
+// ---- entrada: ponteiro/toque, teclado ----
+K.in = { x: 400, y: 300, down: false, active: false, keys: {} };
+K.buttons = [];   // botões desenhados neste quadro: {x,y,w,h,fn}
+K.focus = 0;      // botão focado pelo teclado
+function K_toL(e) {
+  const r = K.cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * K.W, y: (e.clientY - r.top) / r.height * K.H };
+}
+K.cv.addEventListener('pointerdown', (e) => {
+  const p = K_toL(e);
+  K.in.x = p.x; K.in.y = p.y; K.in.active = true; K.in.down = true;
+  try { K.cv.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
+  AU.init();
+  e.preventDefault();
+  if (K.cur && K.cur.press) K.cur.press(p.x, p.y);
+});
+K.cv.addEventListener('pointermove', (e) => {
+  const p = K_toL(e);
+  K.in.x = p.x; K.in.y = p.y; K.in.active = true;
+});
+window.addEventListener('pointerup', (e) => {
+  if (!K.in.down) return;
+  K.in.down = false;
+  const p = K_toL(e);
+  K_activate(p.x, p.y);
+});
+function K_activate(x, y) {
+  const b = K.buttons.find((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
+  if (b) { K.focus = K.buttons.indexOf(b); AU.sfx('click'); b.fn(); return; }
+  if (K.cur && K.cur.tap) K.cur.tap(x, y);
+}
+// ---- navegação por teclado (regra 32 do time) ----
+// setas ou WASD movem o foco entre botões pela geometria da tela; espaço ou Enter selecionam; Backspace volta.
+// Cenas de jogo (cena com free() verdadeiro) usam as setas e o espaço livremente para a raquete.
+const K_DIR = { ArrowUp: 'u', w: 'u', W: 'u', ArrowDown: 'd', s: 'd', S: 'd', ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r' };
+K.moveFocus = function (d) {
+  const bs = K.buttons;
+  if (!bs.length) return;
+  const cur = bs[K.focus] || bs[0];
+  const cx = cur.x + cur.w / 2, cy = cur.y + cur.h / 2;
+  const vert = d === 'u' || d === 'd';
+  let best = -1, bestScore = Infinity;
+  bs.forEach((b, i) => {
+    if (i === K.focus) return;
+    const dx = b.x + b.w / 2 - cx, dy = b.y + b.h / 2 - cy;
+    const ok = d === 'u' ? dy < -4 : d === 'd' ? dy > 4 : d === 'l' ? dx < -4 : dx > 4;
+    if (!ok) return;
+    const main = vert ? Math.abs(dy) : Math.abs(dx);
+    const cross = vert ? Math.abs(dx) : Math.abs(dy);
+    const score = main + cross * 2;
+    if (score < bestScore) { bestScore = score; best = i; }
+  });
+  if (best < 0) best = (d === 'd' || d === 'r') ? (K.focus + 1) % bs.length : (K.focus - 1 + bs.length) % bs.length;
+  K.focus = best;
+  AU.sfx('click');
+};
+// Backspace: volta para a tela anterior (cada cena pode definir back())
+K.back = function () {
+  if (!K.cur) return;
+  if (K.cur.back) K.cur.back();
+  else if (K.cur !== K.scenes.title) K.go('title');
+};
+window.addEventListener('keydown', (e) => {
+  AU.init();
+  const k = e.key;
+  if (k === 'f' || k === 'F') { K.toggleFull(); return; }   // tela cheia em qualquer cena (regra 26)
+  K.in.keys[k] = true;
+  if (k === 'Backspace') { e.preventDefault(); K.back(); return; }
+  const free = !!(K.cur && K.cur.free && K.cur.free());
+  if (!free) {
+    const d = K_DIR[k];
+    if (d && K.buttons.length) { e.preventDefault(); K.moveFocus(d); return; }
+    if ((k === 'Enter' || k === ' ') && K.buttons.length) {
+      e.preventDefault();
+      const b = K.buttons[K.focus] || K.buttons[0];
+      if (b) { AU.sfx('click'); b.fn(); }
+      return;
+    }
+  }
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) e.preventDefault();
+  if (k === 'ArrowLeft' || k === 'ArrowRight') K.in.active = false;
+  if (K.cur && K.cur.key) K.cur.key(k);
+});
+window.addEventListener('keyup', (e) => { delete K.in.keys[e.key]; });
+
+// jogo no navegador: sem menu do botão direito (nada de "Guardar imagem" ou "Inspecionar" no meio da partida)
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ---- cenas ----
+K.scenes = {};
+K.cur = null;
+K.defScene = (id, s) => (K.scenes[id] = s);
+K.go = function (id, arg) {
+  if (K.cur && K.cur.leave) K.cur.leave();
+  K.cur = K.scenes[id];
+  K.focus = 0;
+  if (K.cur && K.cur.enter) K.cur.enter(arg);
+};
+
+// botão genérico (desenha e registra para toque/teclado)
+K.btn = function (g, x, y, w, h, label, fn, opt) {
+  opt = opt || {};
+  const idx = K.buttons.length;
+  const focused = idx === K.focus;
+  K.buttons.push({ x, y, w, h, fn });
+  g.save();
+  const grad = g.createLinearGradient(0, y, 0, y + h);
+  grad.addColorStop(0, opt.top || '#ffe9a6');
+  grad.addColorStop(1, opt.bot || '#f3b33d');
+  g.fillStyle = grad;
+  g.beginPath(); g.roundRect(x, y, w, h, 12); g.fill();
+  g.lineWidth = focused ? 4 : 2;
+  g.strokeStyle = focused ? '#ffffff' : (opt.edge || '#3b2350');
+  g.stroke();
+  g.fillStyle = opt.ink || '#2b1740';
+  g.font = 'bold ' + (opt.size || 22) + 'px system-ui, Segoe UI, Arial';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(label, x + w / 2, y + h / 2 + 1);
+  g.restore();
+};
+
+// ---- loop: passo fixo nas cenas que pedem; update(dt) e draw(g) ----
+let K_last = performance.now();
+function K_frame(now) {
+  const dt = Math.min(0.05, (now - K_last) / 1000);
+  K_last = now;
+  // responsivo: se a janela mudou de tamanho (inclusive sem evento de resize), reajusta o canvas
+  if (window.innerWidth !== K.lastW || window.innerHeight !== K.lastH) K.fit();
+  K.buttons = K.buttons.length ? K.buttons : [];
+  K.buttons.length = 0;
+  if (K.cur) {
+    K.frameSample(dt);
+    if (K.cur.update) K.cur.update(dt);
+    K.g.setTransform(K.cv.width / K.W, 0, 0, K.cv.height / K.H, 0, 0);
+    K.cur.draw(K.g);
+  }
+  requestAnimationFrame(K_frame);
+}
+
+// ---- texto e painel com contraste garantido (regra 29 do time): nunca texto claro solto sobre fundo claro ----
+// K.txt desenha texto com contorno escuro (funciona em qualquer fundo). Use sempre no lugar de fillText.
+K.txt = function (g, s, x, y, o) {
+  o = o || {};
+  g.save();
+  g.font = o.font || '18px system-ui, Segoe UI, Arial';
+  g.textAlign = o.align || 'center';
+  g.textBaseline = o.base || 'middle';
+  g.lineJoin = 'round';
+  g.lineWidth = o.halo || 4;
+  g.strokeStyle = o.haloColor || 'rgba(10,6,24,0.9)';
+  g.strokeText(s, x, y);
+  g.fillStyle = o.color || '#ffffff';
+  g.fillText(s, x, y);
+  g.restore();
+};
+// K.panel: caixa escura translúcida atrás de blocos de texto
+K.panel = function (g, x, y, w, h, r) {
+  g.save();
+  g.fillStyle = 'rgba(12,8,30,0.82)';
+  g.beginPath(); g.roundRect(x, y, w, h, r || 18); g.fill();
+  g.restore();
+};
+
+// ---- utilidades ----
+K.clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+K.rnd = (a, b) => a + Math.random() * (b - a);
+K.pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+K.fmt = (n) => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+// ---- depuração (regra 21): atalhos de teste ----
+K.debug = {
+  go: (id, arg) => K.go(id, arg),
+  unlockAll: () => { K.levelOrder.forEach((id) => (K.save.unlocked[id] = true)); K.store(); },
+  state: () => (K.play && K.play.state ? K.play.state() : null),
+};
+
+;
+/*==ENGINE:audio==  JGK · sintetizador WebAudio, tocador de padrões de texto, efeitos; para ao perder o foco (regra 15) */
+const AU = (K.au = { ctx: null, music: null, sfxBus: null, musicBus: null, noise: null, timer: null, step: 0, nextT: 0, song: null });
+
+AU.init = function () {
+  try {
+    if (!AU.ctx) {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return;
+      AU.ctx = new C();
+      AU.musicBus = AU.ctx.createGain();
+      AU.sfxBus = AU.ctx.createGain();
+      AU.musicBus.connect(AU.ctx.destination);
+      AU.sfxBus.connect(AU.ctx.destination);
+      const n = AU.ctx.createBuffer(1, AU.ctx.sampleRate * 0.5, AU.ctx.sampleRate);
+      const d = n.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      AU.noise = n;
+      AU.setVol();
+    }
+    if (AU.ctx.state === 'suspended' && AU.foreground !== false) AU.ctx.resume();
+  } catch (e) { /* sem áudio: o jogo segue mudo */ }
+};
+
+// volumes vêm das opções salvas (nunca gravados pela automação)
+AU.setVol = function () {
+  if (!AU.ctx) return;
+  AU.musicBus.gain.value = 0.22 * K.save.opts.music;
+  AU.sfxBus.gain.value = 0.5 * K.save.opts.sfx;
+};
+
+// perder o foco: suspende tudo; voltar: retoma (regra 15)
+AU.sleep = function () { AU.foreground = false; if (AU.ctx && AU.ctx.state === 'running') AU.ctx.suspend(); };
+// só volta a tocar com a janela de fato focada e visível (nunca por evento isolado)
+AU.focused = function () { return !document.hidden && (!document.hasFocus || document.hasFocus()); };
+AU.wake = function () {
+  if (!AU.focused()) return;
+  AU.foreground = true;
+  if (AU.ctx && AU.ctx.state === 'suspended') AU.ctx.resume();
+};
+
+const AU_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+AU.freq = function (n) {
+  const m = /^([A-G])(#|b)?([0-8])$/.exec(n);
+  if (!m) return 0;
+  let semi = AU_SEMI[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+  const midi = (parseInt(m[3], 10) + 1) * 12 + semi;
+  return 440 * Math.pow(2, (midi - 69) / 12);
+};
+
+AU.tone = function (f, dur, when, type, vol, bus) {
+  const c = AU.ctx, o = c.createOscillator(), g = c.createGain();
+  o.type = type || 'triangle';
+  o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(bus);
+  o.start(when); o.stop(when + dur + 0.05);
+};
+AU.noiseHit = function (dur, when, vol, hp, bus) {
+  const c = AU.ctx, s = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+  s.buffer = AU.noise; f.type = 'highpass'; f.frequency.value = hp;
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  s.connect(f); f.connect(g); g.connect(bus);
+  s.start(when, Math.random() * 0.3); s.stop(when + dur + 0.05);
+};
+AU.kick = function (when, vol) {
+  const c = AU.ctx, o = c.createOscillator(), g = c.createGain();
+  o.frequency.setValueAtTime(140, when); o.frequency.exponentialRampToValueAtTime(40, when + 0.12);
+  g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.2);
+  o.connect(g); g.connect(AU.musicBus); o.start(when); o.stop(when + 0.22);
+};
+
+// ---- tocador de músicas (um token = uma semicolcheia; ver docs/ENGINE_API.md) ----
+AU.play = function (songId) {
+  AU.init();
+  AU.stop();
+  const def = K.songs[songId];
+  if (!def || !AU.ctx) return;
+  const tok = (s) => (s || '').trim().split(/\s+/).filter(Boolean);
+  AU.song = {
+    lead: tok(def.lead), bass: tok(def.bass), drums: tok(def.drums),
+    len: tok(def.lead).length, stepDur: 60 / def.bpm / 4,
+    wave: Object.assign({ lead: 'triangle', bass: 'sine' }, def.wave || {}),
+  };
+  AU.step = 0;
+  AU.nextT = AU.ctx.currentTime + 0.05;
+  AU.timer = setInterval(AU.tick, 25);
+};
+AU.tick = function () {
+  const s = AU.song;
+  if (!s || !AU.ctx) return;
+  // se a aba ficou em segundo plano, o relógio andou sem o agendador: não tocar as notas atrasadas
+  // de uma vez (isso soava como barulho ao voltar). Recomeça do instante atual.
+  if (AU.nextT < AU.ctx.currentTime) AU.nextT = AU.ctx.currentTime + 0.05;
+  if (AU.ctx.state !== 'running') return;
+  while (AU.nextT < AU.ctx.currentTime + 0.12) {
+    const i = AU.step % s.len, t = AU.nextT;
+    const l = s.lead[i], b = s.bass[i], d = s.drums[i];
+    if (l && l !== '.') AU.tone(AU.freq(l), s.stepDur * 0.9, t, s.wave.lead, 0.5, AU.musicBus);
+    if (b && b !== '.') AU.tone(AU.freq(b), s.stepDur * 1.8, t, s.wave.bass, 0.6, AU.musicBus);
+    if (d === 'k') AU.kick(t, 0.9);
+    if (d === 's') AU.noiseHit(0.16, t, 0.5, 1200, AU.musicBus);
+    if (d === 'h') AU.noiseHit(0.04, t, 0.22, 6000, AU.musicBus);
+    AU.step++;
+    AU.nextT += s.stepDur;
+  }
+};
+AU.stop = function () {
+  if (AU.timer) clearInterval(AU.timer);
+  AU.timer = null; AU.song = null;
+};
+
+// ---- efeitos ----
+AU.sfx = function (name) {
+  if (!AU.ctx || !AU.sfxBus || AU.ctx.state !== 'running') return;
+  const t = AU.ctx.currentTime, b = AU.sfxBus;
+  switch (name) {
+    case 'hit': AU.tone(660, 0.08, t, 'triangle', 0.5, b); break;
+    case 'wall': AU.tone(220, 0.05, t, 'sine', 0.3, b); break;
+    case 'paddle': AU.tone(330, 0.1, t, 'square', 0.35, b); break;
+    case 'break': AU.noiseHit(0.14, t, 0.6, 2000, b); AU.tone(990, 0.1, t, 'square', 0.25, b); break;
+    case 'boom': AU.noiseHit(0.4, t, 0.9, 80, b); AU.tone(90, 0.35, t, 'sawtooth', 0.4, b); break;
+    case 'power': [523, 659, 784, 1047].forEach((f, i) => AU.tone(f, 0.12, t + i * 0.05, 'triangle', 0.4, b)); break;
+    case 'laser': AU.tone(1200, 0.12, t, 'sawtooth', 0.15, b); break;
+    case 'shield': AU.tone(440, 0.4, t, 'sine', 0.4, b); break;
+    case 'life': [784, 988, 1175].forEach((f, i) => AU.tone(f, 0.15, t + i * 0.08, 'triangle', 0.4, b)); break;
+    case 'lose': AU.tone(392, 0.5, t, 'sawtooth', 0.4, b); AU.tone(196, 0.6, t + 0.2, 'sawtooth', 0.4, b); break;
+    case 'win': [523, 659, 784, 1047, 1319].forEach((f, i) => AU.tone(f, 0.2, t + i * 0.09, 'square', 0.3, b)); break;
+    case 'click': AU.tone(880, 0.03, t, 'sine', 0.25, b); break;
+    case 'launch': AU.tone(300, 0.12, t, 'triangle', 0.35, b); AU.tone(600, 0.12, t + 0.06, 'triangle', 0.25, b); break;
+    default: break;
+  }
+};
+
+// perder o foco pausa o áudio e o jogo (regra 15)
+window.addEventListener('blur', () => { AU.sleep(); if (K.cur && K.cur.blur) K.cur.blur(); });
+window.addEventListener('focus', () => AU.wake());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { AU.sleep(); if (K.cur && K.cur.blur) K.cur.blur(); } else AU.wake();
+});
+window.addEventListener('pagehide', () => AU.sleep());
+
+;
+/*==ENGINE:play==  JGK · jogo de quebra-tijolos: física, blocos, poderes, Núcleo, desenho da fase */
+const PL = (K.play = {});
+// grade: 12 colunas por padrão; fases avançadas podem usar até 20 (mosaicos de palavras)
+let PL_COLS = 12, PL_CW = 64, PL_CH = 30, PL_X0 = 16, PL_Y0 = 84, PL_BW = 56, PL_BH = 22;
+const PL_PY = 556, PL_PH = 14;            // raquete
+const PL_STEP = 1 / 120;                  // passo fixo
+const PL_DEFAULT_LEGEND = {
+  '1': 'basico', '2': 'dupla', '3': 'tripla', '#': 'indestrutivel', '*': 'explosivo', G: 'nucleo',
+};
+const PL_DROP_TABLE = [
+  ['multi', 14], ['laser', 12], ['fire', 10], ['sticky', 10], ['wide', 12],
+  ['narrow', 6], ['shield', 8], ['slow', 10], ['bonus', 10], ['vida', 4],
+];
+const PL_DROP_TOTAL = PL_DROP_TABLE.reduce((a, b) => a + b[1], 0);
+
+PL.G = null;
+PL.order = K.levelOrder;
+
+// ---- início de fase ----
+PL.start = function (levelId) {
+  const def = K.levels[levelId];
+  if (!def) return;
+  const legend = Object.assign({}, PL_DEFAULT_LEGEND, def.legend || {});
+  // grade da fase: a largura total fica em 768 px, então blocos menores em fases mais largas
+  PL_COLS = Math.min(20, Math.max(1, def.cols || 12));
+  PL_CW = Math.floor(768 / PL_COLS);
+  PL_BW = PL_CW - 8;
+  PL_X0 = Math.floor((800 - PL_CW * PL_COLS) / 2);
+  const bricks = [];
+  def.rows.forEach((row, r) => {
+    for (let c = 0; c < PL_COLS; c++) {
+      const ch = row[c];
+      if (!ch || ch === '.') continue;
+      const L = legend[ch];
+      const bname = typeof L === 'string' ? L : L && L.block;
+      const bd = K.blocks[bname];
+      if (!bd) continue;
+      const hp = bd.hp;
+      bricks.push({
+        c, r, id: bname, def: bd, hp, maxHp: hp, dead: false, flash: 0,
+        letter: L && L.letter, move: bd.move || null,
+        baseX: PL_X0 + c * PL_CW + 4,
+        y: PL_Y0 + r * PL_CH,
+        x: PL_X0 + c * PL_CW + 4,
+      });
+    }
+  });
+  const world = K.worlds[def.world] || { sky: ['#1b2a4a', '#0b1020'], accent: '#7cc24a', paddle: '#f2c230', ball: '#ffffff' };
+  PL.G = {
+    id: levelId, def, world, tune: Object.assign({ speed: 1, drop: 0.15, lives: 3 }, def.tune || {}),
+    bricks, balls: [], drops: [], bullets: [], parts: [], floats: [],
+    paddle: { x: 400, w: 110 }, lives: 0, score: 0, timers: {}, shield: 0,
+    t: 0, mode: 'ready', modeT: 0, shake: 0, hits: 0, msg: '', msgT: 0,
+    sticky: false, laserCd: 0, acc: 0, paused: false,
+  };
+  PL.G.lives = PL.G.tune.lives;
+  PL.G.total = bricks.filter((b) => b.hp !== Infinity).length;
+  PL.G.broken = 0;
+  PL.spawnBall(true);
+  AU.play(def.song);
+};
+
+PL.spawnBall = function (stuck, x, y, vx, vy) {
+  const G = PL.G;
+  G.balls.push({
+    x: x === undefined ? G.paddle.x : x, y: y === undefined ? PL_PY - 12 : y,
+    vx: vx || 0, vy: vy || 0, r: 7, stuck: !!stuck, ox: 0,
+  });
+};
+
+PL.speed = function () {
+  const G = PL.G;
+  // velocidade cresce com o progresso da fase: +60% quando todos os blocos quebráveis caem
+  const prog = G.total ? (G.broken || 0) / G.total : 0;
+  let s = 330 * G.tune.speed * (1 + 0.6 * prog);
+  if (G.timers.slow > 0) s *= 0.65;
+  return s;
+};
+
+PL.launch = function () {
+  const G = PL.G;
+  let any = false;
+  G.balls.forEach((b) => {
+    if (!b.stuck) return;
+    any = true;
+    b.stuck = false;
+    const s = PL.speed();
+    const a = (-Math.PI / 2) + K.rnd(-0.35, 0.35) * (b.ox / 40 + 0.001 > 0 ? 1 : 1);
+    b.vx = Math.cos(a) * s; b.vy = Math.sin(a) * s;
+  });
+  if (any) { AU.sfx('launch'); G.mode = 'play'; }
+};
+
+// ---- poderes ----
+PL.apply = function (id) {
+  const G = PL.G;
+  AU.sfx(id === 'vida' ? 'life' : 'power');
+  const say = (txt) => { G.msg = txt; G.msgT = 1.6; };
+  switch (id) {
+    case 'multi': {
+      const cur = G.balls.filter((b) => !b.stuck);
+      const base = cur.length ? cur : G.balls;
+      base.slice(0, 4).forEach((b) => {
+        for (let k = -1; k <= 1; k += 2) {
+          const s = PL.speed(), a = Math.atan2(b.vy, b.vx) + k * 0.45;
+          if (G.balls.length < 14) PL.spawnBall(false, b.x, b.y, Math.cos(a) * s, Math.sin(a) * s);
+        }
+      });
+      if (!cur.length) PL.spawnBall(true);
+      say('Chuva de Sóis! bolas extras');
+      break;
+    }
+    case 'laser': G.timers.laser = 10; say('Lança-Cometa: a raquete atira'); break;
+    case 'fire': G.timers.fire = 6; say('Raio Quark: bola atravessa a pancada'); break;
+    case 'sticky': G.timers.sticky = 10; say('Ímã Estelar: a bola gruda na raquete'); break;
+    case 'wide': G.timers.wide = 10; G.timers.narrow = 0; say('Expansão Nebulosa!'); break;
+    case 'narrow': G.timers.narrow = 8; G.timers.wide = 0; say('Encolhe-Pacote: raquete menor'); break;
+    case 'shield': G.shield = 1; G.timers.shield = 15; say('Escudo Aurora: uma queda evitada'); break;
+    case 'slow': G.timers.slow = 8; say('Tempo de Mel: bola mais lenta'); break;
+    case 'bonus': G.timers.bonus = 10; say('Bônus Dourado: pontos em dobro'); break;
+    case 'vida': G.lives = Math.min(5, G.lives + 1); say('Coração Pixel: +1 vida'); break;
+    default: break;
+  }
+};
+
+// sorteio com bom senso: vida e escudo aparecem mais quando sobra só uma vida;
+// o poder de encolher não cai se a raquete já está estreita; multi cai mais quando há uma bola só
+PL.pickDrop = function () {
+  const G = PL.G;
+  const table = PL_DROP_TABLE.map(([id, w]) => {
+    let k = 1;
+    // só cai o que faz sentido agora: nada que já está ativo, nem excesso de bolas
+    if (G.lives <= 1 && (id === 'vida' || id === 'shield')) k = 3;
+    if (id === 'narrow' && G.timers.narrow > 0) k = 0;
+    if (id === 'wide' && G.timers.wide > 0) k = 0;
+    if (id === 'laser' && G.timers.laser > 0) k = 0;
+    if (id === 'fire' && G.timers.fire > 0) k = 0;
+    if (id === 'sticky' && G.timers.sticky > 0) k = 0;
+    if (id === 'slow' && G.timers.slow > 0) k = 0;
+    if (id === 'bonus' && G.timers.bonus > 0) k = 0;
+    if (id === 'shield' && G.shield > 0) k = 0;
+    if (id === 'vida' && G.lives >= 5) k = 0;
+    if (id === 'multi') k = G.balls.length === 1 ? 1.5 : G.balls.length >= 4 ? 0 : 1;
+    return [id, w * k];
+  });
+  const total = table.reduce((a, b) => a + b[1], 0);
+  let roll = Math.random() * total;
+  for (const [id, w] of table) { roll -= w; if (roll <= 0) return id; }
+  return 'multi';
+};
+
+PL.brickX = function (b) {
+  if (!b.move) return b.baseX;
+  const x = b.baseX + Math.sin(PL.G.t * b.move.speed) * b.move.amp;
+  return K.clamp(x, 4, 800 - 4 - PL_BW);
+};
+
+PL.breakable = function (b) { return !b.dead && b.hp !== Infinity; };
+
+// dano em um bloco; retorna true se quebrou
+PL.damage = function (b, source) {
+  const G = PL.G;
+  if (b.dead) return false;
+  if (b.hp === Infinity) { b.flash = 0.25; AU.sfx('wall'); return false; }
+  b.hp -= 1;
+  b.flash = 1;
+  if (b.hp > 0) { AU.sfx('hit'); return false; }
+  PL.destroy(b, source);
+  return true;
+};
+
+PL.destroy = function (b, source) {
+  const G = PL.G;
+  b.dead = true;
+  const mult = G.timers.bonus > 0 ? 2 : 1;
+  G.score += (b.def.score || 10) * mult;
+  G.hits += 1;
+  G.broken = (G.broken || 0) + 1;
+  G.sinceBreak = 0;
+  // a bola acelera a cada bloco quebrado (gradual, não só no quique)
+  G.balls.forEach((ball) => { if (!ball.stuck) PL.speedUp(ball); });
+  PL.burst(PL.brickX(b) + PL_BW / 2, b.y + PL_BH / 2, G.world.accent, 14);
+  G.floats.push({ x: PL.brickX(b) + PL_BW / 2, y: b.y, txt: '+' + (b.def.score || 10) * mult, t: 0.8 });
+  AU.sfx('break');
+  if (b.id === 'explosivo') {
+    AU.sfx('boom');
+    G.shake = 0.25;
+    G.bricks.forEach((o) => {
+      if (o.dead || o.hp === Infinity) return;
+      if (Math.abs(o.c - b.c) <= 1 && Math.abs(o.r - b.r) <= 1) {
+        o.hp = 1; PL.damage(o, 'boom');
+      }
+    });
+  }
+  if (b.id === 'nucleo') G.shake = 0.4;
+  // no máximo duas quedas na tela ao mesmo tempo, para não virar bagunça
+  if (Math.random() < G.tune.drop && G.drops.length < 2) {
+    G.drops.push({ x: PL.brickX(b) + PL_BW / 2, y: b.y + PL_BH / 2, id: PL.pickDrop(), t: 0 });
+  }
+};
+
+PL.burst = function (x, y, color, n) {
+  const G = PL.G;
+  n = Math.round(n * [0.4, 0.7, 1][K.q]);   // menos partículas nos gráficos baixos
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = K.rnd(60, 220);
+    G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: K.rnd(0.3, 0.6), c: color });
+  }
+};
+
+// ---- passo de física ----
+PL.step = function (dt) {
+  const G = PL.G;
+  G.t += dt;
+  // anti-travamento: 20 s sem quebrar bloco e a bola está num ciclo; muda o ângulo dela
+  G.sinceBreak = (G.sinceBreak || 0) + dt;
+  if (G.sinceBreak > 20) {
+    G.sinceBreak = 0;
+    const sp = PL.speed();
+    G.balls.forEach((ball) => {
+      if (ball.stuck) return;
+      ball.vx = (Math.random() < 0.5 ? -1 : 1) * sp * 0.6;
+      ball.vy = (ball.vy < 0 ? -1 : 1) * Math.sqrt(Math.max(0, sp * sp - ball.vx * ball.vx));
+    });
+  }
+  for (const k of Object.keys(G.timers)) if (G.timers[k] > 0) G.timers[k] -= dt;
+  G.timers.shield = G.timers.shield || 0;
+  if (G.timers.shield <= 0) G.shield = 0;
+  // raquete: segue o ponteiro se ele estiver ativo, senão teclado
+  const w = G.timers.wide > 0 ? 160 : G.timers.narrow > 0 ? 70 : 110;
+  G.paddle.w = w;
+  if (K.in.keys['ArrowLeft'] || K.in.keys['a']) { G.paddle.x -= 640 * dt; K.in.active = false; }
+  if (K.in.keys['ArrowRight'] || K.in.keys['d']) { G.paddle.x += 640 * dt; K.in.active = false; }
+  if (K.in.active) G.paddle.x = K.in.x;
+  G.paddle.x = K.clamp(G.paddle.x, w / 2, 800 - w / 2);
+  // tiro da raquete
+  if (G.timers.laser > 0) {
+    G.laserCd -= dt;
+    if (G.laserCd <= 0) {
+      G.laserCd = 0.35;
+      G.bullets.push({ x: G.paddle.x - w / 2 + 8, y: PL_PY - 10 });
+      G.bullets.push({ x: G.paddle.x + w / 2 - 8, y: PL_PY - 10 });
+      AU.sfx('laser');
+    }
+  }
+  // blocos móveis
+  G.bricks.forEach((b) => { if (!b.dead) b.x = PL.brickX(b); if (b.flash > 0) b.flash = Math.max(0, b.flash - dt * 4); });
+  // bolas
+  const s = PL.speed();
+  for (let i = G.balls.length - 1; i >= 0; i--) {
+    const b = G.balls[i];
+    if (b.stuck) { b.x = G.paddle.x + b.ox; b.y = PL_PY - PL_PH / 2 - b.r - 1; continue; }
+    const px = b.x, py = b.y;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    // paredes e teto
+    if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); AU.sfx('wall'); }
+    if (b.x > 800 - b.r) { b.x = 800 - b.r; b.vx = -Math.abs(b.vx); AU.sfx('wall'); }
+    if (b.y < b.r) { b.y = b.r; b.vy = Math.abs(b.vy); AU.sfx('wall'); }
+    // raquete
+    const pl = G.paddle.x - w / 2 - b.r * 0.5, pr = G.paddle.x + w / 2 + b.r * 0.5;
+    if (b.vy > 0 && b.y + b.r >= PL_PY - PL_PH / 2 && py + b.r <= PL_PY - PL_PH / 2 + 4 && b.x >= pl && b.x <= pr) {
+      if (G.sticky || G.timers.sticky > 0) {
+        b.stuck = true; b.ox = b.x - G.paddle.x; b.vx = 0; b.vy = 0;
+        AU.sfx('paddle');
+        continue;
+      }
+      const off = K.clamp((b.x - G.paddle.x) / (w / 2), -1, 1);
+      const vx = s * 0.95 * off;
+      const vy = -Math.sqrt(Math.max(s * s * 0.12, s * s - vx * vx));
+      b.vx = vx || (Math.random() < 0.5 ? -1 : 1) * 0.001; b.vy = vy;
+      PL.guardAngle(b);
+      b.y = PL_PY - PL_PH / 2 - b.r;
+      AU.sfx('paddle');
+    }
+    // queda
+    if (b.y > 600 + b.r) {
+      if (G.shield > 0) {
+        G.shield -= 1; b.y = 586 - b.r; b.vy = -Math.abs(b.vy);
+        AU.sfx('shield');
+        G.msg = 'Escudo Aurora segurou a bola!'; G.msgT = 1.2;
+        continue;
+      }
+      G.balls.splice(i, 1);
+      continue;
+    }
+    // blocos (uma colisão por passo)
+    let hit = false;
+    for (const br of G.bricks) {
+      if (br.dead) continue;
+      const bx = br.x, by = br.y;
+      const cx = K.clamp(b.x, bx, bx + PL_BW), cy = K.clamp(b.y, by, by + PL_BH);
+      const dx = b.x - cx, dy = b.y - cy;
+      if (dx * dx + dy * dy > b.r * b.r) continue;
+      if (G.timers.fire > 0 && br.hp !== Infinity) {
+        // raio quark: atravessa, mas quebra o bloco
+        PL.damage(br, 'fire');
+        continue;
+      }
+      const penX = Math.min(b.x + b.r - bx, bx + PL_BW - (b.x - b.r));
+      const penY = Math.min(b.y + b.r - by, by + PL_BH - (b.y - b.r));
+      if (penX < penY) b.vx = -b.vx; else b.vy = -b.vy;
+      PL.damage(br, 'ball');
+      hit = true;
+      break;
+    }
+    if (hit) PL.speedUp(b);
+  }
+  // tiros da raquete
+  for (let i = G.bullets.length - 1; i >= 0; i--) {
+    const q = G.bullets[i];
+    q.y -= 700 * dt;
+    let gone = q.y < 0;
+    for (const br of G.bricks) {
+      if (br.dead || gone) continue;
+      if (q.x >= br.x && q.x <= br.x + PL_BW && q.y >= br.y && q.y <= br.y + PL_BH) {
+        PL.damage(br, 'laser'); gone = true;
+      }
+    }
+    if (gone) G.bullets.splice(i, 1);
+  }
+  // quedas de poderes
+  for (let i = G.drops.length - 1; i >= 0; i--) {
+    const d = G.drops[i];
+    d.y += 96 * dt; d.t += dt;   // queda clara: dá para ler o poder e ir pegar
+    if (Math.abs(d.x - G.paddle.x) < w / 2 + 12 && d.y > PL_PY - 14 && d.y < PL_PY + 14) {
+      PL.apply(d.id); G.drops.splice(i, 1); continue;
+    }
+    if (d.y > 620) G.drops.splice(i, 1);
+  }
+  // partículas e textos
+  G.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; p.t -= dt; });
+  G.parts = G.parts.filter((p) => p.t > 0);
+  G.floats.forEach((f) => { f.y -= 40 * dt; f.t -= dt; });
+  G.floats = G.floats.filter((f) => f.t > 0);
+  if (G.msgT > 0) G.msgT -= dt;
+  if (G.shake > 0) G.shake -= dt;
+  // fim da bola / fim da fase
+  if (G.balls.length === 0 && G.mode === 'play') {
+    G.lives -= 1;
+    AU.sfx('lose');
+    if (G.lives <= 0) { G.mode = 'over'; G.modeT = 0; AU.stop(); }
+    else { G.mode = 'ready'; G.msg = 'Vidas: ' + G.lives + ' · toque para soltar'; G.msgT = 2; PL.spawnBall(true); }
+  }
+  if (G.mode === 'play' && !G.bricks.some((b) => PL.breakable(b))) {
+    G.mode = 'clear'; G.modeT = 0; AU.sfx('win'); AU.stop();
+    PL.complete();
+  }
+};
+
+// a bola acelera um pouco a cada pancada (limite no speed())
+PL.speedUp = function (b) {
+  const s = PL.speed();
+  const m = Math.hypot(b.vx, b.vy) || 1;
+  b.vx = b.vx / m * s; b.vy = b.vy / m * s;
+  PL.guardAngle(b);
+};
+// ângulo mínimo: bola quase vertical quica para sempre; força um mínimo horizontal
+PL.guardAngle = function (b) {
+  const s = PL.speed();
+  const min = s * 0.22;
+  if (Math.abs(b.vx) >= min) return;
+  const sign = b.vx < 0 ? -1 : 1;
+  b.vx = sign * min;
+  b.vy = (b.vy < 0 ? -1 : 1) * Math.sqrt(Math.max(0, s * s - min * min));
+};
+
+// salva progresso e libera a próxima fase
+PL.complete = function () {
+  const G = PL.G;
+  const id = G.id;
+  K.save.done[id] = true;
+  const best = K.save.best[id] || 0;
+  if (G.score > best) K.save.best[id] = G.score;
+  const i = PL.order.indexOf(id);
+  if (i >= 0 && i + 1 < PL.order.length) K.save.unlocked[PL.order[i + 1]] = true;
+  K.store();
+};
+PL.next = function () {
+  const i = PL.order.indexOf(PL.G.id);
+  return i >= 0 && i + 1 < PL.order.length ? PL.order[i + 1] : null;
+};
+
+// ---- roda o tempo fixo ----
+PL.update = function (dt) {
+  const G = PL.G;
+  if (!G) return;
+  if (G.mode === 'clear' || G.mode === 'over') { G.modeT += dt; return; }
+  if (G.paused) return;
+  G.acc += dt;
+  while (G.acc >= PL_STEP) {
+    G.acc -= PL_STEP;
+    if (G.mode === 'ready') {
+      G.balls.forEach((b) => { if (b.stuck) b.x = G.paddle.x + b.ox; });
+      G.t += PL_STEP;
+      if (G.paddle) G.paddle.x = K.clamp(G.paddle.x, 60, 740);
+      if (K.in.active) G.paddle.x = K.in.x;
+      continue;
+    }
+    if (G.mode === 'play') PL.step(PL_STEP);
+  }
+};
+
+PL.state = function () {
+  const G = PL.G;
+  if (!G) return null;
+  return {
+    id: G.id, mode: G.mode, score: G.score, lives: G.lives,
+    bricksLeft: G.bricks.filter((b) => PL.breakable(b)).length,
+    balls: G.balls.length, timers: G.timers,
+  };
+};
+
+// ---- desenho ----
+PL.drawSky = function (g, world) {
+  const grd = g.createLinearGradient(0, 0, 0, K.H);
+  grd.addColorStop(0, world.sky[0]);
+  grd.addColorStop(1, world.sky[1]);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, K.W, K.H);
+  // estrelinhas nas colunas livres das laterais (regra 16); piscam nos gráficos médio e alto
+  const n = [0, 16, 26][K.q];
+  const t = performance.now() / 1000;
+  for (let i = 0; i < n; i++) {
+    const x = (i * 97 + 13) % 800, y = (i * 53 + 7) % 600;
+    if (x > 40 && x < 760) continue;
+    const tw = K.q ? 0.14 + 0.12 * Math.sin(t * 2 + i) : 0.18;
+    g.fillStyle = 'rgba(255,255,255,' + tw + ')';
+    g.fillRect(x, y, 2, 2);
+  }
+};
+
+PL.draw = function (g) {
+  const G = PL.G;
+  if (!G) return;
+  const sx = G.shake > 0 ? K.rnd(-4, 4) : 0, sy = G.shake > 0 ? K.rnd(-3, 3) : 0;
+  PL.drawSky(g, G.world);
+  g.save();
+  g.translate(sx, sy);
+  // bordas da área de jogo
+  g.strokeStyle = 'rgba(255,255,255,0.25)';
+  g.lineWidth = 2;
+  g.strokeRect(2, 62, 796, 530);
+  // blocos
+  G.bricks.forEach((b) => {
+    if (b.dead) return;
+    b.def.draw(g, b.x, b.y, PL_BW, PL_BH, {
+      hp: b.hp, maxHp: b.maxHp, world: G.world, t: G.t, flash: b.flash, letter: b.letter,
+    });
+  });
+  // poderes caindo
+  G.drops.forEach((d) => {
+    const pw = K.powers[d.id];
+    if (!pw) return;
+    g.save();
+    g.globalAlpha = 0.25; g.fillStyle = pw.color || '#fff';
+    g.beginPath(); g.arc(d.x, d.y, 22, 0, Math.PI * 2); g.fill();
+    g.restore();
+    pw.draw(g, d.x, d.y, 14, G.t);
+    // nome do poder embaixo do ícone, para o jogador saber o que está caindo
+    K.txt(g, pw.name, d.x, d.y + 26, { font: 'bold 11px system-ui, Segoe UI, Arial', color: pw.good === false ? '#ffb3b3' : '#fff7d6' });
+  });
+  // raquete
+  const w = G.paddle.w, px = G.paddle.x - w / 2, py = PL_PY - PL_PH / 2;
+  g.save();
+  const pg = g.createLinearGradient(0, py, 0, py + PL_PH);
+  pg.addColorStop(0, '#ffffff');
+  pg.addColorStop(1, G.world.paddle);
+  g.fillStyle = pg;
+  g.beginPath(); g.roundRect(px, py, w, PL_PH, 7); g.fill();
+  g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2; g.stroke();
+  if (G.timers.sticky > 0) { g.fillStyle = G.world.ball; g.fillRect(px + 6, py - 3, 6, 3); g.fillRect(px + w - 12, py - 3, 6, 3); }
+  g.restore();
+  // tiros da raquete
+  g.fillStyle = '#ffe36b';
+  G.bullets.forEach((q) => { g.beginPath(); g.roundRect(q.x - 2, q.y - 9, 4, 12, 2); g.fill(); });
+  // bolas
+  G.balls.forEach((b) => {
+    // halo de brilho da bola (gradiente, sem shadowBlur); só nos gráficos médio e alto
+    if (K.q >= 1) {
+      const hg = g.createRadialGradient(b.x, b.y, b.r, b.x, b.y, b.r * 3.2);
+      hg.addColorStop(0, 'rgba(255,255,255,0.35)');
+      hg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = hg;
+      g.beginPath(); g.arc(b.x, b.y, b.r * 3.2, 0, Math.PI * 2); g.fill();
+    }
+    g.beginPath(); g.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    g.fillStyle = G.timers.fire > 0 ? '#ff9a3c' : G.world.ball;
+    g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1.5; g.stroke();
+  });
+  // escudo
+  if (G.shield > 0) {
+    g.save(); g.strokeStyle = 'rgba(120,255,220,0.8)'; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(0, 590); g.lineTo(800, 590); g.stroke(); g.restore();
+  }
+  // partículas e textos
+  G.parts.forEach((p) => {
+    g.globalAlpha = Math.max(0, p.t * 2);
+    g.fillStyle = p.c; g.fillRect(p.x - 2, p.y - 2, 4, 4);
+  });
+  g.globalAlpha = 1;
+  g.font = 'bold 16px system-ui, Segoe UI, Arial';
+  g.textAlign = 'center';
+  G.floats.forEach((f) => { g.globalAlpha = Math.min(1, f.t * 2); g.fillStyle = '#fff3b0'; g.fillText(f.txt, f.x, f.y); });
+  g.globalAlpha = 1;
+  g.restore();
+  PL.drawHud(g);
+  // mensagens e estado "pronto"
+  if (G.msgT > 0) PL.banner(g, G.msg, 0.4);
+  if (G.mode === 'ready') PL.banner(g, 'Toque ou aperte espaço para soltar a bola', 0.82);
+};
+
+PL.banner = function (g, txt, yFrac) {
+  g.save();
+  g.font = 'bold 18px system-ui, Segoe UI, Arial';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const w = g.measureText(txt).width + 36;
+  g.fillStyle = 'rgba(10,10,30,0.7)';
+  g.beginPath(); g.roundRect(400 - w / 2, 600 * yFrac - 18, w, 36, 18); g.fill();
+  g.fillStyle = '#ffffff';
+  g.fillText(txt, 400, 600 * yFrac);
+  g.restore();
+};
+
+PL.drawHud = function (g) {
+  const G = PL.G;
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  g.fillRect(0, 0, 800, 56);
+  g.fillStyle = '#ffffff';
+  g.font = 'bold 18px system-ui, Segoe UI, Arial';
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.fillText(G.def.name, 16, 20);
+  g.textAlign = 'center';
+  g.fillText('Pontos ' + K.fmt(G.score), 400, 28);
+  g.textAlign = 'right';
+  g.fillText('♥ ' + G.lives, 720, 28);
+  // botão de pausa (toque)
+  // botão de pausa só existe durante a jogada (nas sobreposições ele atrapalharia o foco do teclado)
+  if (G.mode === 'play' || G.mode === 'ready') K.btn(g, 752, 12, 36, 32, 'II', () => PL.pause(), { size: 16, top: '#fff', bot: '#d9dde8' });
+  // poderes ativos: barras
+  let x = 16;
+  const bars = [['laser', 'Lança'], ['fire', 'Raio'], ['sticky', 'Ímã'], ['wide', 'Expansão'], ['narrow', 'Pacote'], ['slow', 'Mel'], ['bonus', 'Bônus']];
+  bars.forEach(([k, label]) => {
+    const t = G.timers[k];
+    if (!(t > 0)) return;
+    g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(x, 46, 80, 6);
+    g.fillStyle = (K.powers[k] && K.powers[k].color) || '#fff';
+    g.fillRect(x, 46, 80 * Math.min(1, t / 10), 6);
+    g.font = 'bold 10px system-ui, Segoe UI, Arial'; g.fillStyle = '#fff';
+    g.textAlign = 'left'; g.fillText(label, x, 39);
+    x += 92;
+  });
+  if (G.shield > 0) { g.fillStyle = '#7fffd4'; g.font = 'bold 11px system-ui'; g.fillText('Escudo x' + G.shield, x, 36); }
+  g.restore();
+};
+
+// ---- entrada na fase ----
+PL.press = function (x, y) {
+  const G = PL.G;
+  if (!G || G.paused || G.mode === 'over' || G.mode === 'clear' || G.mode === 'pause') return;
+  // qualquer bola grudada (ímã ou começo da fase) solta no toque
+  if (G.balls.some((b) => b.stuck)) PL.launch();
+  if (G.mode === 'play' && y < 60 && x > 700) PL.pause();
+};
+PL.pause = function () {
+  const G = PL.G;
+  if (!G || G.mode !== 'play') return;
+  G.mode = 'pause'; G.paused = true;
+  AU.sfx('click');
+};
+PL.resume = function () {
+  const G = PL.G;
+  if (!G) return;
+  G.paused = false;
+  G.mode = G.balls.some((b) => b.stuck) ? 'ready' : 'play';
+};
+
+;
+/*==ENGINE:ui==  JGK · cenas de menu (título, fases, história, opções, créditos) e cena de jogo com sobreposições */
+const UI_CX = 400;                       // coluna central dos botões
+const UI_BW = 280, UI_BH = 58;           // tamanho padrão de botão
+function ui_t() { return performance.now() / 1000; }
+function ui_bg(g, world, cols) {
+  // fundo escuro com brilho pulsando + blocos reais só nas colunas laterais livres (regra 16)
+  const t = ui_t();
+  const grd = g.createLinearGradient(0, 0, 0, K.H);
+  grd.addColorStop(0, '#0d0a24'); grd.addColorStop(1, world.sky[1]);
+  g.fillStyle = grd; g.fillRect(0, 0, K.W, K.H);
+  const glow = g.createRadialGradient(400, 90, 20, 400, 90, 420);
+  glow.addColorStop(0, 'rgba(255,210,63,' + (0.16 + Math.sin(t * 2) * 0.05) + ')');
+  glow.addColorStop(1, 'rgba(255,210,63,0)');
+  g.fillStyle = glow; g.fillRect(0, 0, K.W, K.H);
+  const kinds = ['basico', 'dupla', 'tripla', 'explosivo', 'basico', 'marca'];
+  const n = cols || 1;
+  g.save(); g.globalAlpha = 0.5;
+  for (let side = 0; side < 2; side++) {
+    for (let c = 0; c < n; c++) {
+      const x = side ? 743 - c * 47 : 16 + c * 47;
+      const dir = (side + c) % 2 ? -1 : 1;
+      for (let i = 0; i < 22; i++) {
+        if ((i * 7 + c * 3 + side) % 3 === 0) continue;
+        const y = (((i * 28 + dir * t * (12 + c * 5)) % 616) + 616) % 616 - 28;
+        const bd = K.blocks[kinds[(i + c * 2 + side) % kinds.length]];
+        if (bd) bd.draw(g, x, y, 41, 21, { hp: 1, maxHp: 1, world, t, flash: 0, letter: null });
+      }
+    }
+  }
+  g.restore();
+}
+function ui_title(g, text, y) {
+  const t = ui_t();
+  g.save();
+  g.font = 'bold 44px system-ui, Segoe UI, Arial';
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  g.shadowColor = 'rgba(255,210,63,' + (0.45 + Math.sin(t * 2) * 0.15) + ')'; g.shadowBlur = 18;
+  g.lineWidth = 8; g.strokeStyle = 'rgba(40,10,60,0.92)';
+  g.strokeText(text, UI_CX, y); g.fillStyle = '#ffe36b'; g.fillText(text, UI_CX, y);
+  g.restore();
+}
+function ui_small(g, text, x, y, align) {
+  K.txt(g, text, x, y, { font: '14px system-ui, Segoe UI, Arial', align: align || 'center', color: '#f2eefc' });
+}
+// painel de vidro escuro com borda neon suave e reflexo
+function ui_panel(g, x, y, w, h, accent) {
+  g.save();
+  const gr = g.createLinearGradient(0, y, 0, y + h);
+  gr.addColorStop(0, 'rgba(40,26,80,0.88)'); gr.addColorStop(1, 'rgba(12,8,30,0.9)');
+  g.fillStyle = gr; g.beginPath(); g.roundRect(x, y, w, h, 18); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.06)';
+  g.beginPath(); g.roundRect(x + 4, y + 3, w - 8, Math.min(h * 0.3, 40), 14); g.fill();
+  g.strokeStyle = accent || 'rgba(255,210,63,0.45)'; g.lineWidth = 1.5;
+  g.beginPath(); g.roundRect(x, y, w, h, 18); g.stroke();
+  g.restore();
+}
+// botão de vidro (mesmo estilo do menu principal); opt: {accent, size, primary, dim, edge}
+function ui_btn(g, x, y, w, h, label, fn, opt) {
+  opt = opt || {};
+  const idx = K.buttons.length;
+  const hover = K.in.active && K.in.x >= x && K.in.x <= x + w && K.in.y >= y && K.in.y <= y + h;
+  if (hover && !K.in.down) K.focus = idx;
+  const on = K.focus === idx || hover;
+  K.buttons.push({ x, y, w, h, fn });
+  const t = ui_t();
+  const accent = opt.accent || (opt.primary ? '#ffd23f' : K.worlds.w1.accent);
+  const pulse = on ? 1 + Math.sin(t * 6) * 0.02 : 1;
+  const r = Math.min(14, h / 3);
+  g.save();
+  g.translate(x + w / 2, y + h / 2); g.scale(pulse, pulse); g.translate(-(x + w / 2), -(y + h / 2));
+  if (on) {
+    g.globalAlpha = 0.35 + Math.sin(t * 6) * 0.15;
+    g.strokeStyle = accent; g.lineWidth = 8;
+    g.beginPath(); g.roundRect(x - 4, y - 4, w + 8, h + 8, r + 2); g.stroke();
+    g.globalAlpha = 1;
+  }
+  const grd = g.createLinearGradient(0, y, 0, y + h);
+  grd.addColorStop(0, opt.dim ? 'rgba(50,48,70,0.92)' : 'rgba(60,40,100,0.92)');
+  grd.addColorStop(1, opt.dim ? 'rgba(24,22,36,0.92)' : 'rgba(18,10,40,0.92)');
+  g.fillStyle = grd; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.10)';
+  g.beginPath(); g.roundRect(x + 4, y + 3, w - 8, h * 0.42, Math.max(4, r - 4)); g.fill();
+  g.strokeStyle = on ? accent : (opt.edge || 'rgba(255,255,255,0.35)'); g.lineWidth = on ? 3 : 1.5;
+  g.beginPath(); g.roundRect(x, y, w, h, r); g.stroke();
+  g.restore();
+  K.txt(g, label, x + w / 2, y + h / 2 + 1, {
+    font: 'bold ' + (opt.size || 22) + 'px system-ui, Segoe UI, Arial', halo: 4,
+    color: opt.dim ? '#c9c5d8' : (opt.primary || on ? accent : '#ffffff'),
+  });
+}
+
+// ---- título: a cena fica em 04-title.js (menu principal) ----
+
+// ---- seleção de fases ----
+K.defScene('select', {
+  enter() { AU.play('mundo1'); },
+  update() {},
+  draw(g) {
+    ui_bg(g, K.worlds.w1, 1);
+    ui_title(g, 'Escolha a fase', 56);
+    PL.order.forEach((id, i) => {
+      const L = K.levels[id];
+      const col = i % 4, row = Math.floor(i / 4);
+      const x = 96 + col * 150, y = 110 + row * 110;
+      const open = !!K.save.unlocked[id];
+      const done = !!K.save.done[id];
+      const label = (open ? '' : '🔒 ') + id.toUpperCase();
+      ui_btn(g, x, y, 130, 84, label, () => { if (open) ui_enter(id); }, {
+        accent: done ? '#7cf06a' : '#ffd23f', primary: open && !done, dim: !open, size: 20,
+        edge: done ? 'rgba(124,240,106,0.8)' : undefined,
+      });
+      if (done) K.txt(g, '✔', x + 114, y + 14, { font: 'bold 16px system-ui', color: '#7cf06a', halo: 3 });
+      K.txt(g, open ? L.name : '—', x + 65, y + 100, { font: '13px system-ui', color: open ? '#ffffff' : '#c9c5d8', halo: 3 });
+    });
+    K.fsIcon(g);
+    ui_btn(g, UI_CX - UI_BW / 2, 510, UI_BW, 50, 'Voltar', () => K.go('title'), { size: 18 });
+  },
+  key(k) { if (k === 'Escape') K.go('title'); },
+});
+// abre a história da fase (se houver e ainda não foi vista) e depois a fase
+function ui_enter(id) {
+  const L = K.levels[id];
+  if (L.story && K.stories[L.story] && !K.save.done['story-' + L.story]) {
+    K.go('story', { story: L.story, next: id });
+  } else {
+    K.go('play', id);
+  }
+}
+
+// ---- história (páginas com toque) ----
+K.defScene('story', {
+  enter(a) { this.s = a; this.p = 0; },
+  update() {},
+  draw(g) {
+    const st = K.stories[this.s.story];
+    const pg = st.pages[this.p] || { who: '', text: '' };
+    ui_bg(g, K.worlds.w1, 1);
+    ui_panel(g, 60, 130, 680, 320);
+    ui_title(g, st.title, 180);
+    K.txt(g, pg.who + ':', 100, 240, { font: 'bold 22px system-ui', align: 'left', color: '#ffe36b' });
+    g.save(); g.font = '20px system-ui'; g.fillStyle = '#ffffff'; g.textAlign = 'left';
+    PL_wrap(g, pg.text, 100, 282, 600, 28);
+    g.restore();
+    ui_btn(g, UI_CX - UI_BW / 2, 480, UI_BW, UI_BH, this.p + 1 < st.pages.length ? 'Próxima' : 'Jogar', () => this.next(), { primary: true });
+    ui_small(g, (this.p + 1) + ' / ' + st.pages.length, 760, 580, 'right');
+  },
+  next() {
+    const st = K.stories[this.s.story];
+    if (this.p + 1 < st.pages.length) { this.p++; AU.sfx('click'); return; }
+    K.save.done['story-' + this.s.story] = true; K.store();
+    K.go('play', this.s.next);
+  },
+  tap() { /* toque fora do botão não avança: só o botão */ },
+  key(k) { if (k === 'Enter' || k === ' ') this.next(); },
+});
+// quebra de linha simples para texto em canvas
+function PL_wrap(g, text, x, y, maxW, lh) {
+  const words = (text || '').split(' ');
+  let line = '', yy = y;
+  words.forEach((w) => {
+    const test = line ? line + ' ' + w : w;
+    if (g.measureText(test).width > maxW && line) { g.fillText(line, x, yy); line = w; yy += lh; }
+    else line = test;
+  });
+  if (line) g.fillText(line, x, yy);
+}
+
+// ---- opções ----
+K.defScene('options', {
+  enter() { this.confirm = false; AU.play('mundo1'); },
+  update() {},
+  draw(g) {
+    ui_bg(g, K.worlds.w1, 2);
+    ui_title(g, 'Opções', 80);
+    const o = K.save.opts;
+    const lab = (label, y) => K.txt(g, label, 190, y, { font: 'bold 20px system-ui', align: 'left' });
+    const row = (label, val, y, dec, inc) => {
+      ui_panel(g, 170, y - 30, 460, 58);
+      lab(label, y);
+      ui_btn(g, 480, y - 20, 40, 40, '−', dec, { size: 26 });
+      K.txt(g, Math.round(val * 10) + '', 560, y, { font: 'bold 20px system-ui' });
+      ui_btn(g, 580, y - 20, 40, 40, '+', inc, { size: 26 });
+    };
+    const clamp01 = (v) => Math.round(K.clamp(v, 0, 1) * 10) / 10;
+    row('Música', o.music, 170, () => { o.music = clamp01(o.music - 0.1); AU.setVol(); K.store(); }, () => { o.music = clamp01(o.music + 0.1); AU.setVol(); K.store(); });
+    row('Efeitos', o.sfx, 250, () => { o.sfx = clamp01(o.sfx - 0.1); AU.setVol(); K.store(); }, () => { o.sfx = clamp01(o.sfx + 0.1); AU.setVol(); K.store(); });
+    // tela cheia e gráficos (opções mínimas do motor, regra 18)
+    const rowBtn = (label, value, y, fn) => {
+      ui_panel(g, 170, y - 30, 460, 58);
+      lab(label, y);
+      ui_btn(g, 440, y - 18, 170, 36, value, fn, { size: 17 });
+    };
+    rowBtn('Tela cheia', K.isFull() ? 'Ligada' : 'Desligada', 330, () => K.toggleFull());
+    rowBtn('Gráficos', K.gfxName(), 410, () => K.cycleGfx());
+    ui_btn(g, UI_CX - UI_BW / 2, 470, UI_BW, 52, 'Zerar progresso', () => { this.confirm = true; }, { accent: '#ff7a7a', edge: 'rgba(255,122,122,0.7)', size: 20 });
+    K.fsIcon(g);
+    ui_btn(g, UI_CX - UI_BW / 2, 532, UI_BW, 50, 'Voltar', () => K.go('title'), { size: 20 });
+    if (this.confirm) {
+      g.save(); g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(0, 0, K.W, K.H); g.restore();
+      ui_panel(g, 160, 200, 480, 220, 'rgba(255,122,122,0.7)');
+      K.txt(g, 'Zerar todo o progresso?', 400, 240, { font: 'bold 22px system-ui' });
+      K.txt(g, 'Apaga fases liberadas e recordes. As opções ficam.', 400, 276, { font: '16px system-ui' });
+      K.txt(g, 'Isso não tem volta.', 400, 302, { font: '16px system-ui', color: '#ffb3b3' });
+      ui_btn(g, 190, 340, 200, 56, 'Cancelar', () => { this.confirm = false; });
+      ui_btn(g, 410, 340, 200, 56, 'Sim, zerar', () => { K.resetProgress(); this.confirm = false; }, { accent: '#ff7a7a', edge: 'rgba(255,122,122,0.7)' });
+    }
+  },
+  back() { if (this.confirm) this.confirm = false; else K.go('title'); },
+  key(k) { if (k === 'Escape') this.back(); },
+});
+
+// ---- créditos ----
+K.defScene('credits', {
+  // começa já com "Desenvolvido e Dirigido por" visível, e segue rolando devagar
+  // a primeira linha entra pela base do painel e sobe devagar; já aparece assim que a tela abre
+  enter() { this.y = 420; AU.play('mundo1'); },
+  // segurar o botão do mouse/toque (ou espaço, ou seta para baixo) acelera a rolagem
+  update(dt) {
+    const fast = (K.in.down || K.in.keys[' '] || K.in.keys['ArrowDown']) ? 5 : 1;
+    this.y -= 40 * fast * dt;
+    if (this.y < -this.total()) this.y = 420;
+  },
+  // escala tipográfica dos créditos: cada tipo tem tamanho, peso, cor e espaço próprios
+  gap(kind) { return { head: 58, label: 36, small: 30, thanks: 60 }[kind]; },
+  total() { return this.lines().reduce((a, l) => a + this.gap(l.kind), 0) + 120; },
+  lines() {
+    // créditos padrão (regra 19): dono, time, motor. Depois só o agradecimento final.
+    const L = (t, kind) => ({ t, kind });
+    const list = [
+      L('Desenvolvido e Dirigido por: Pedro Javarotti', 'head'),
+      L('Feito por um time de IA · gerente Haiku 5.5 (esforço médio)', 'label'),
+      L('4 agentes Haiku 5.5 (esforço baixo)', 'label'),
+      L('fases, blocos, poderes, músicas e histórias', 'small'),
+      L('Motor JGK · Javarotti Game Kit', 'label'),
+    ];
+    (K.credits.extra || []).forEach((t) => list.push(L(t, 'thanks')));
+    list.push(L('Versão ' + K.version, 'small'));
+    return list;
+  },
+  draw(g) {
+    ui_bg(g, K.worlds.w1, 1);
+    // texto sempre sobre painel escuro: contraste mínimo, nunca claro sobre claro (regra 29)
+    ui_panel(g, 100, 40, 600, 440);
+    g.save();
+    g.beginPath(); g.roundRect(100, 40, 600, 440, 18); g.clip();
+    const font = { head: 'bold 28px system-ui', label: '600 19px system-ui', small: '14px system-ui', thanks: 'bold 24px system-ui' };
+    const color = { head: '#ffe36b', label: '#ffffff', small: '#c9c3e6', thanks: '#fff2c4' };
+    let y = this.y;
+    this.lines().forEach((l) => {
+      K.txt(g, l.t, 400, y, { font: font[l.kind], color: color[l.kind] });
+      y += this.gap(l.kind);
+    });
+    // esmaece o texto nas bordas do painel
+    const fade = g.createLinearGradient(0, 40, 0, 480);
+    fade.addColorStop(0, 'rgba(12,8,30,0.95)'); fade.addColorStop(0.08, 'rgba(12,8,30,0)');
+    fade.addColorStop(0.92, 'rgba(12,8,30,0)'); fade.addColorStop(1, 'rgba(12,8,30,0.95)');
+    g.fillStyle = fade; g.fillRect(100, 40, 600, 440);
+    g.restore();
+    ui_small(g, 'Segure na tela (ou espaço) para acelerar', 400, 497);
+    K.fsIcon(g);
+    ui_btn(g, UI_CX - UI_BW / 2, 515, UI_BW, 50, 'Voltar', () => K.go('title'), { size: 18 });
+  },
+  key(k) { if (k === 'Escape' || k === 'Enter') K.go('title'); },
+});
+
+// ---- cena de jogo: fase + sobreposições (pausa, vitória, derrota) ----
+K.defScene('play', {
+  enter(id) {
+    this.id = id;
+    PL.start(id);
+  },
+  leave() { AU.stop(); },
+  update(dt) {
+    PL.update(dt);
+    const G = PL.G;
+    if (G && G.mode === 'clear' && G.modeT > 0.8 && !this.clearShown) this.clearShown = true;
+  },
+  draw(g) {
+    const G = PL.G;
+    if (!G) return;
+    PL.draw(g);
+    if (G.mode === 'pause') {
+      g.save(); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, K.W, K.H); g.restore();
+      K.panel(g, 240, 170, 320, 100);
+      ui_title(g, 'Pausado', 220);
+      ui_btn(g, UI_CX - UI_BW / 2, 280, UI_BW, UI_BH, 'Continuar', () => PL.resume(), { primary: true });
+      ui_btn(g, UI_CX - UI_BW / 2, 352, UI_BW, UI_BH, 'Repetir fase', () => K.go('play', this.id));
+      ui_btn(g, UI_CX - UI_BW / 2, 424, UI_BW, UI_BH, 'Menu', () => K.go('select'));
+    }
+    if (G.mode === 'clear') {
+      g.save(); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, K.W, K.H); g.restore();
+      K.panel(g, 240, 150, 320, 130);
+      ui_title(g, 'Fase limpa!', 200);
+      ui_small(g, 'Pontos: ' + K.fmt(G.score) + ' · Recorde: ' + K.fmt(K.save.best[this.id] || 0), 400, 260);
+      const nx = PL.next();
+      if (nx) ui_btn(g, UI_CX - UI_BW / 2, 300, UI_BW, UI_BH, 'Próxima fase', () => ui_enter(nx), { primary: true });
+      ui_btn(g, UI_CX - UI_BW / 2, nx ? 372 : 300, UI_BW, UI_BH, 'Repetir', () => K.go('play', this.id));
+      ui_btn(g, UI_CX - UI_BW / 2, nx ? 444 : 372, UI_BW, UI_BH, 'Menu', () => K.go('select'));
+    }
+    if (G.mode === 'over') {
+      g.save(); g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(0, 0, K.W, K.H); g.restore();
+      K.panel(g, 240, 150, 320, 130);
+      ui_title(g, 'Fim de jogo', 220);
+      ui_small(g, 'Pontos: ' + K.fmt(G.score), 400, 260);
+      ui_btn(g, UI_CX - UI_BW / 2, 300, UI_BW, UI_BH, 'Tentar de novo', () => K.go('play', this.id), { primary: true });
+      ui_btn(g, UI_CX - UI_BW / 2, 372, UI_BW, UI_BH, 'Menu', () => K.go('select'));
+    }
+  },
+  // clique/toque na tela de jogo: solta a bola grudada (o motor chama press ao descer o ponteiro)
+  press(x, y) { PL.press(x, y); },
+  // na fase, as setas e o espaço são da raquete; Backspace pausa (ou volta do pausado)
+  free() { const G = PL.G; return !!G && (G.mode === 'play' || G.mode === 'ready'); },
+  back() { const G = PL.G; if (!G) { K.go('select'); return; } if (G.mode === 'play') PL.pause(); else if (G.mode === 'pause') PL.resume(); else K.go('select'); },
+  tap() {},
+  key(k) {
+    const G = PL.G;
+    if (!G) return;
+    if (k === ' ' && G.balls.some((b) => b.stuck)) PL.launch();
+    if ((k === 'Escape' || k === 'p' || k === 'P') && G.mode === 'play') PL.pause();
+    else if ((k === 'Escape' || k === 'p' || k === 'P') && G.mode === 'pause') PL.resume();
+    if (k === 'Escape' && (G.mode === 'clear' || G.mode === 'over')) K.go('select');
+  },
+  blur() { PL.pause(); },
+});
+
+;
+/*==ENGINE:title==  JGK · menu principal: demonstração animada com os blocos reais, título ondulante e botões de vidro */
+const TT = (K.titleFx = {});
+TT.init = function () {
+  TT.t = 0;
+  TT.bricks = [];
+  // parede de blocos reais, só na faixa de cima: os botões ficam embaixo (regra 16)
+  const kinds = ['basico', 'dupla', 'tripla', 'explosivo', 'basico', 'marca'];
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 16; c++) {
+      if ((r * 7 + c * 3) % 9 === 0) continue;
+      const id = kinds[(r * 5 + c) % kinds.length];
+      TT.bricks.push({ x: 26 + c * 47, y: 34 + r * 27, w: 41, h: 21, id, alive: true, flash: 0 });
+    }
+  }
+  TT.ball = { x: 300, y: 200, vx: 230, vy: -300, r: 7 };
+  TT.parts = [];
+};
+if (!TT.bricks) TT.init();
+
+TT.hitBrick = function (b) {
+  b.alive = false;
+  for (let i = 0; i < 10; i++) {
+    const a = Math.random() * Math.PI * 2, s = K.rnd(40, 180);
+    TT.parts.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: K.rnd(0.3, 0.7), c: b.id === 'marca' ? '#ffd23f' : '#7cc24a' });
+  }
+};
+
+TT.update = function (dt) {
+  TT.t += dt;
+  const ball = TT.ball;
+  ball.x += ball.vx * dt; ball.y += ball.vy * dt;
+  if (ball.x < ball.r) { ball.x = ball.r; ball.vx = Math.abs(ball.vx); }
+  if (ball.x > 800 - ball.r) { ball.x = 800 - ball.r; ball.vx = -Math.abs(ball.vx); }
+  if (ball.y < 14 + ball.r) { ball.y = 14 + ball.r; ball.vy = Math.abs(ball.vy); }
+  if (ball.y > 160) { ball.y = 160; ball.vy = -Math.abs(ball.vy); }
+  for (const b of TT.bricks) {
+    if (!b.alive) continue;
+    const cx = K.clamp(ball.x, b.x, b.x + b.w), cy = K.clamp(ball.y, b.y, b.y + b.h);
+    const dx = ball.x - cx, dy = ball.y - cy;
+    if (dx * dx + dy * dy > ball.r * ball.r) continue;
+    const penX = Math.min(ball.x + ball.r - b.x, b.x + b.w - (ball.x - ball.r));
+    const penY = Math.min(ball.y + ball.r - b.y, b.y + b.h - (ball.y - ball.r));
+    if (penX < penY) ball.vx = -ball.vx; else ball.vy = -ball.vy;
+    TT.hitBrick(b);
+    AU.sfx('break');
+    break;
+  }
+  if (TT.bricks.every((b) => !b.alive)) TT.init();
+  TT.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; p.t -= dt; });
+  TT.parts = TT.parts.filter((p) => p.t > 0);
+};
+
+// botão de vidro com foco pulsante (desenhado do zero, sem o estilo "pintado")
+TT.button = function (g, idx, label, x, y, w, h, fn, primary) {
+  const focused = K.focus === idx;
+  const hover = K.in.active && K.in.x >= x && K.in.x <= x + w && K.in.y >= y && K.in.y <= y + h;
+  if (hover && !K.in.down) K.focus = idx;
+  const on = focused || hover;
+  const pulse = on ? 1 + Math.sin(TT.t * 6) * 0.02 : 1;
+  K.buttons.push({ x, y, w, h, fn });
+  const accent = primary ? '#ffd23f' : K.worlds.w1.accent;
+  g.save();
+  g.translate(x + w / 2, y + h / 2);
+  g.scale(pulse, pulse);
+  g.translate(-(x + w / 2), -(y + h / 2));
+  // brilho externo (anel) quando focado
+  if (on) {
+    g.globalAlpha = 0.35 + Math.sin(TT.t * 6) * 0.15;
+    g.strokeStyle = accent; g.lineWidth = 8;
+    g.beginPath(); g.roundRect(x - 4, y - 4, w + 8, h + 8, 16); g.stroke();
+    g.globalAlpha = 1;
+  }
+  // corpo de vidro escuro com reflexo
+  const grd = g.createLinearGradient(0, y, 0, y + h);
+  grd.addColorStop(0, 'rgba(60,40,100,0.92)');
+  grd.addColorStop(1, 'rgba(18,10,40,0.92)');
+  g.fillStyle = grd;
+  g.beginPath(); g.roundRect(x, y, w, h, 14); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.10)';
+  g.beginPath(); g.roundRect(x + 4, y + 3, w - 8, h * 0.42, 10); g.fill();
+  // borda neon
+  g.strokeStyle = on ? accent : 'rgba(255,255,255,0.35)';
+  g.lineWidth = on ? 3 : 1.5;
+  g.beginPath(); g.roundRect(x, y, w, h, 14); g.stroke();
+  // texto com contorno luminoso
+  g.font = 'bold 24px system-ui, Segoe UI, Arial';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,0.5)';
+  g.strokeText(label, x + w / 2, y + h / 2 + 1);
+  g.fillStyle = primary || on ? accent : '#ffffff';
+  g.fillText(label, x + w / 2, y + h / 2 + 1);
+  g.restore();
+};
+
+K.defScene('title', {
+  enter() { TT.init(); AU.play('mundo1'); },
+  update(dt) { TT.update(dt); },
+  draw(g) {
+    const w1 = K.worlds.w1;
+    // fundo: céu do mundo + brilho pulsando atrás do título
+    const grd = g.createLinearGradient(0, 0, 0, K.H);
+    grd.addColorStop(0, '#0d0a24'); grd.addColorStop(1, w1.sky[1]);
+    g.fillStyle = grd; g.fillRect(0, 0, K.W, K.H);
+    const glow = g.createRadialGradient(400, 190, 20, 400, 190, 380);
+    glow.addColorStop(0, 'rgba(255,210,63,' + (0.18 + Math.sin(TT.t * 2) * 0.05) + ')');
+    glow.addColorStop(1, 'rgba(255,210,63,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, K.W, 300);
+    // demo: blocos reais e bola
+    TT.bricks.forEach((b) => {
+      if (!b.alive) return;
+      const bd = K.blocks[b.id];
+      if (bd) bd.draw(g, b.x, b.y, b.w, b.h, { hp: 1, maxHp: 1, world: w1, t: TT.t, flash: 0, letter: null });
+    });
+    g.save();
+    g.fillStyle = w1.ball;
+    g.shadowBlur = 0;
+    g.beginPath(); g.arc(TT.ball.x, TT.ball.y, TT.ball.r, 0, Math.PI * 2); g.fill();
+    g.restore();
+    TT.parts.forEach((p) => { g.globalAlpha = Math.max(0, p.t * 2); g.fillStyle = p.c; g.fillRect(p.x - 2, p.y - 2, 4, 4); });
+    g.globalAlpha = 1;
+    // título ondulante, letra por letra
+    const title = "JAVA'S BRICK";
+    g.save();
+    g.font = 'bold 52px system-ui, Segoe UI, Arial';
+    g.textAlign = 'left'; g.textBaseline = 'middle';
+    const widths = title.split('').map((ch) => g.measureText(ch).width);
+    const total = widths.reduce((a, b) => a + b, 0);
+    let x = 400 - total / 2;
+    const cols = ['#fff2a8', '#ffd23f', '#f5b82e', '#ffe36b'];
+    title.split('').forEach((ch, i) => {
+      const y = 190 + Math.sin(TT.t * 3 + i * 0.45) * 7;
+      g.lineWidth = 8; g.strokeStyle = 'rgba(40,10,60,0.9)';
+      g.strokeText(ch, x, y);
+      g.fillStyle = cols[i % cols.length];
+      g.fillText(ch, x, y);
+      x += widths[i];
+    });
+    g.restore();
+    // subtítulo: próxima fase a jogar
+    const next = PL.order.find((id) => K.save.unlocked[id] && !K.save.done[id]) || 'f1-1';
+    const nl = K.levels[next];
+    K.txt(g, 'Próxima: ' + (nl ? nl.name : '') + '  ·  ' + next.toUpperCase(), 400, 236, { font: '16px system-ui, Segoe UI, Arial', color: '#f2eefc' });
+    // botões
+    const bx = 400 - 150, bw = 300, bh = 52;
+    TT.button(g, 0, '▶  Jogar', bx, 300, bw, bh, () => ui_enter(next), true);
+    TT.button(g, 1, 'Fases', bx, 364, bw, bh, () => K.go('select'));
+    TT.button(g, 2, 'Opções', bx, 428, bw, bh, () => K.go('options'));
+    TT.button(g, 3, 'Créditos', bx, 492, bw, bh, () => K.go('credits'));
+    K.fsIcon(g);
+    // rodapé
+    K.txt(g, 'Motor JGK · Javarotti Game Kit', 16, 582, { font: '13px system-ui, Segoe UI, Arial', align: 'left', color: '#e6e0f5', halo: 3 });
+    K.txt(g, 'v' + K.version, 784, 582, { font: '13px system-ui, Segoe UI, Arial', align: 'right', color: '#e6e0f5', halo: 3 });
+  },
+  key(k) { if (k === 'Escape') K.go('title'); },
+});
+
+;
+// Mundos e blocos do Quebra-Tijolos. Contrato em docs/ENGINE_API.md.
+// Tudo dentro de uma IIFE para não vazar helpers para os outros arquivos de conteúdo.
+(function () {
+  // ---------- MUNDOS ----------
+  K.defWorld('w1', {
+    name: 'Jardim de Pólen',
+    sky: ['#e4fbef', '#9fe3c0'],
+    accent: '#7cc24a',
+    paddle: '#f2c230',
+    ball: '#fff4a3',
+  });
+  K.defWorld('w2', {
+    name: 'Circuito Estelar',
+    sky: ['#0a0d2e', '#1f1a5e'],
+    accent: '#19e3ff',
+    paddle: '#ff4fa3',
+    ball: '#8ff8ff',
+  });
+  K.defWorld('w3', {
+    name: 'Oficina Javarotti',
+    sky: ['#3b4652', '#1c232c'],
+    accent: '#c8642c',
+    paddle: '#9aa8b5',
+    ball: '#ffb27a',
+  });
+  K.defWorld('w4', {
+    name: 'Coração do Sol',
+    sky: ['#240a45', '#c58a1e'],
+    accent: '#f0b43a',
+    paddle: '#fff3d6',
+    ball: '#fffbe6',
+  });
+
+  // ---------- HELPERS (locais à IIFE) ----------
+  function rr(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  // Corpo de vidro: cor sólida + gradiente claro no topo + borda escura de 1 px.
+  function glass(g, x, y, w, h, col) {
+    rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+    g.fillStyle = col;
+    g.fill();
+    const gr = g.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, 'rgba(255,255,255,0.75)');
+    gr.addColorStop(0.45, 'rgba(255,255,255,0.12)');
+    gr.addColorStop(0.5, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,0.28)');
+    rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+    g.fillStyle = gr;
+    g.fill();
+    rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(0,0,0,0.55)';
+    g.stroke();
+  }
+
+  // Clareia o bloco inteiro ao levar golpe.
+  function flashOver(g, x, y, w, h, st) {
+    if (st.flash > 0) {
+      g.globalAlpha = Math.min(1, st.flash) * 0.7;
+      rr(g, x, y, w, h, 4);
+      g.fillStyle = '#ffffff';
+      g.fill();
+      g.globalAlpha = 1;
+    }
+  }
+
+  // Cor com alpha pela fração de vida restante (blocos que apagam conforme apanham).
+  function lifeAlpha(st) {
+    const f = st.maxHp > 0 ? Math.max(0, st.hp) / st.maxHp : 1;
+    return 0.45 + 0.55 * f;
+  }
+
+  // ---------- BLOCOS ----------
+  K.defBlock('basico', {
+    name: 'Básico',
+    hp: 1,
+    score: 10,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      glass(g, x, y, w, h, st.world.accent);
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+
+  K.defBlock('dupla', {
+    name: 'Dupla',
+    hp: 2,
+    score: 20,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      glass(g, x, y, w, h, st.world.accent);
+      if (st.hp < st.maxHp) {
+        // rachadura em zigue-zague de cima a baixo
+        g.beginPath();
+        g.moveTo(x + w * 0.42, y + 1);
+        g.lineTo(x + w * 0.5, y + h * 0.3);
+        g.lineTo(x + w * 0.4, y + h * 0.5);
+        g.lineTo(x + w * 0.55, y + h * 0.72);
+        g.lineTo(x + w * 0.48, y + h - 1);
+        g.lineWidth = 1.5;
+        g.strokeStyle = 'rgba(20,10,0,0.8)';
+        g.stroke();
+        g.lineWidth = 0.7;
+        g.strokeStyle = 'rgba(255,255,255,0.7)';
+        g.stroke();
+      }
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+
+  K.defBlock('tripla', {
+    name: 'Tripla',
+    hp: 3,
+    score: 30,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      g.globalAlpha = lifeAlpha(st);
+      glass(g, x, y, w, h, st.world.accent);
+      // duas facetas: triângulo claro (esq.-topo) e triângulo escuro (dir.-baixo)
+      g.beginPath();
+      g.moveTo(x + 3, y + 3);
+      g.lineTo(x + w * 0.62, y + 3);
+      g.lineTo(x + 3, y + h - 3);
+      g.closePath();
+      g.fillStyle = 'rgba(255,255,255,0.32)';
+      g.fill();
+      g.beginPath();
+      g.moveTo(x + w - 3, y + 3);
+      g.lineTo(x + w - 3, y + h - 3);
+      g.lineTo(x + w * 0.38, y + h - 3);
+      g.closePath();
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.fill();
+      // aresta de brilho do cristal
+      g.beginPath();
+      g.moveTo(x + 3, y + h - 3);
+      g.lineTo(x + w - 3, y + 3);
+      g.lineWidth = 0.8;
+      g.strokeStyle = 'rgba(255,255,255,0.45)';
+      g.stroke();
+      g.globalAlpha = 1;
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+
+  K.defBlock('indestrutivel', {
+    name: 'Indestrutível',
+    hp: Infinity,
+    score: 0,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      // metal cinza com gradiente
+      rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 3);
+      const mg = g.createLinearGradient(0, y, 0, y + h);
+      mg.addColorStop(0, '#dfe5ea');
+      mg.addColorStop(0.5, '#8d98a3');
+      mg.addColorStop(1, '#4b545e');
+      g.fillStyle = mg;
+      g.fill();
+      g.lineWidth = 1;
+      g.strokeStyle = 'rgba(0,0,0,0.6)';
+      g.stroke();
+      // brilho diagonal que anda com o tempo
+      g.save();
+      rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 3);
+      g.clip();
+      const p = ((st.t * 0.6) % 1.6) - 0.3;
+      const sg = g.createLinearGradient(x + (p - 0.25) * w, y, x + (p + 0.25) * w, y + h);
+      sg.addColorStop(0, 'rgba(255,255,255,0)');
+      sg.addColorStop(0.5, 'rgba(255,255,255,0.6)');
+      sg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = sg;
+      g.fillRect(x, y, w, h);
+      g.restore();
+      // parafusos nos cantos
+      const bolts = [
+        [x + 4, y + 4],
+        [x + w - 4, y + 4],
+        [x + 4, y + h - 4],
+        [x + w - 4, y + h - 4],
+      ];
+      for (const [bx, by] of bolts) {
+        g.beginPath();
+        g.arc(bx, by, 2, 0, Math.PI * 2);
+        g.fillStyle = '#343c45';
+        g.fill();
+        g.lineWidth = 0.7;
+        g.strokeStyle = 'rgba(255,255,255,0.7)';
+        g.stroke();
+      }
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+
+  K.defBlock('explosivo', {
+    name: 'Explosivo',
+    hp: 1,
+    score: 25,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      const eg = g.createLinearGradient(0, y, 0, y + h);
+      eg.addColorStop(0, '#ff8a4c');
+      eg.addColorStop(1, '#c8301e');
+      rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+      g.fillStyle = eg;
+      g.fill();
+      // pulso de brilho (sem shadowBlur: gradiente radial dentro do bloco)
+      const pulse = 0.5 + 0.5 * Math.sin(st.t * 6);
+      g.save();
+      rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+      g.clip();
+      const rg = g.createRadialGradient(x + w / 2, y + h / 2, 2, x + w / 2, y + h / 2, w * 0.6);
+      rg.addColorStop(0, 'rgba(255,230,140,' + (0.25 + 0.45 * pulse).toFixed(3) + ')');
+      rg.addColorStop(1, 'rgba(255,230,140,0)');
+      g.fillStyle = rg;
+      g.fillRect(x, y, w, h);
+      g.restore();
+      // estrela de 5 pontas
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? 7 : 3;
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const px = cx + Math.cos(a) * r;
+        const py = cy + Math.sin(a) * r;
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.closePath();
+      g.fillStyle = 'rgba(255,248,210,' + (0.85 + 0.15 * pulse).toFixed(3) + ')';
+      g.fill();
+      g.lineWidth = 0.8;
+      g.strokeStyle = 'rgba(90,20,0,0.7)';
+      g.stroke();
+      g.lineWidth = 1;
+      g.strokeStyle = 'rgba(0,0,0,0.55)';
+      rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+      g.stroke();
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+
+  K.defBlock('nucleo', {
+    name: 'Núcleo',
+    hp: 16,
+    score: 200,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      const acc = st.world.accent;
+      // carcaça escura
+      rr(g, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+      g.fillStyle = '#1a1d24';
+      g.fill();
+      g.lineWidth = 1;
+      g.strokeStyle = 'rgba(0,0,0,0.7)';
+      g.stroke();
+      const cx = x + w / 2;
+      const cy = y + h / 2 + 1;
+      // anel girando (tracejado)
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, 9.5, 0, Math.PI * 2);
+      g.setLineDash([3, 3]);
+      g.lineDashOffset = -st.t * 20;
+      g.lineWidth = 1.2;
+      g.strokeStyle = acc;
+      g.globalAlpha = 0.9;
+      g.stroke();
+      g.restore();
+      // pulso central
+      const beat = 0.5 + 0.5 * Math.sin(st.t * 4);
+      const pr = 5 + 1.2 * beat;
+      const pg = g.createRadialGradient(cx, cy, 0, cx, cy, pr);
+      pg.addColorStop(0, '#ffffff');
+      pg.addColorStop(0.35, acc);
+      pg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.beginPath();
+      g.arc(cx, cy, pr, 0, Math.PI * 2);
+      g.fillStyle = pg;
+      g.fill();
+      // 16 faixas de vida no topo: acesas = hp restante
+      const segW = (w - 8) / 16;
+      for (let i = 0; i < 16; i++) {
+        const on = i < st.hp;
+        g.beginPath();
+        g.rect(x + 4 + i * segW + 0.25, y + 2, segW - 0.5, 2);
+        g.fillStyle = on ? acc : 'rgba(255,255,255,0.12)';
+        g.fill();
+      }
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+
+  K.defBlock('letra', {
+    name: 'Letra',
+    hp: 1,
+    score: 50,
+    draw(g, x, y, w, h, st) {
+      g.save();
+      glass(g, x, y, w, h, st.world.accent);
+      // filete dourado interno
+      rr(g, x + 2.5, y + 2.5, w - 5, h - 5, 3);
+      g.lineWidth = 0.8;
+      g.strokeStyle = 'rgba(255,240,180,0.55)';
+      g.stroke();
+      const letter = st.letter != null ? String(st.letter) : '?';
+      g.font = 'bold 16px Arial, Helvetica, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      const tx = x + w / 2;
+      const ty = y + h / 2 + 1;
+      g.lineJoin = 'round';
+      g.lineWidth = 3;
+      g.strokeStyle = 'rgba(20,8,0,0.85)';
+      g.strokeText(letter, tx, ty);
+      const lg = g.createLinearGradient(0, ty - 9, 0, ty + 9);
+      lg.addColorStop(0, '#ffffff');
+      lg.addColorStop(1, '#fff0c2');
+      g.fillStyle = lg;
+      g.fillText(letter, tx, ty);
+      flashOver(g, x, y, w, h, st);
+      g.restore();
+    },
+  });
+})();
+
+;
+// Poderes do Quebra-Tijolos: ícones, nomes e descrições (contrato em docs/ENGINE_API.md).
+// Arte: medalhão escuro + anel na cor do poder + contorno claro; ícone com contorno escuro e reflexo.
+(function () {
+  var TAU = Math.PI * 2;
+  var INK = '#1b1230';
+
+  // Medalhão: fundo escuro (contraste em qualquer mundo), anel colorido com volume, borda clara e reflexo.
+  function badge(g, x, y, r, c) {
+    g.save();
+    // sombra de contato (sem shadowBlur)
+    g.beginPath();
+    g.arc(x + 0.5, y + 1.5, r, 0, TAU);
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.fill();
+    // fundo escuro tingido
+    g.beginPath();
+    g.arc(x, y, r, 0, TAU);
+    var bg = g.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+    bg.addColorStop(0, '#3b2f63');
+    bg.addColorStop(1, '#120c24');
+    g.fillStyle = bg;
+    g.fill();
+    // brilho de cor vindo de baixo
+    g.beginPath();
+    g.arc(x, y, r - 2, 0, TAU);
+    var glow = g.createRadialGradient(x, y + r * 0.5, r * 0.1, x, y, r);
+    glow.addColorStop(0, c);
+    glow.addColorStop(0.7, 'rgba(0,0,0,0)');
+    g.globalAlpha = 0.5;
+    g.fillStyle = glow;
+    g.fill();
+    g.globalAlpha = 1;
+    // anel colorido
+    g.beginPath();
+    g.arc(x, y, r - 2.2, 0, TAU);
+    g.lineWidth = 2.6;
+    g.strokeStyle = c;
+    g.stroke();
+    // borda externa clara
+    g.beginPath();
+    g.arc(x, y, r - 0.7, 0, TAU);
+    g.lineWidth = 1.6;
+    g.strokeStyle = '#ffffff';
+    g.stroke();
+    // reflexo em arco no alto
+    g.beginPath();
+    g.ellipse(x - r * 0.28, y - r * 0.55, r * 0.42, r * 0.17, -0.45, 0, TAU);
+    g.fillStyle = 'rgba(255,255,255,0.32)';
+    g.fill();
+    g.restore();
+  }
+
+  // Polígono com contorno escuro (fill + stroke), pontos relativos ao centro.
+  function poly(g, pts, x, y, s, fill, line) {
+    g.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+      var px = x + pts[i][0] * s, py = y + pts[i][1] * s;
+      if (i) g.lineTo(px, py); else g.moveTo(px, py);
+    }
+    g.closePath();
+    g.fillStyle = fill;
+    g.fill();
+    if (line !== false) {
+      g.lineJoin = 'round';
+      g.lineWidth = Math.max(1, 1.3 * s);
+      g.strokeStyle = line || INK;
+      g.stroke();
+    }
+  }
+
+  // Esfera com degradê radial e contorno.
+  function orb(g, x, y, rr, c0, c1, line) {
+    g.beginPath();
+    g.arc(x, y, rr, 0, TAU);
+    var gr = g.createRadialGradient(x - rr * 0.35, y - rr * 0.4, rr * 0.1, x, y, rr);
+    gr.addColorStop(0, c0);
+    gr.addColorStop(1, c1);
+    g.fillStyle = gr;
+    g.fill();
+    g.lineWidth = Math.max(1, rr * 0.28);
+    g.strokeStyle = line || INK;
+    g.stroke();
+  }
+
+  function sun(g, x, y, s, t) {
+    var i, a;
+    g.lineCap = 'round';
+    // raios com contorno escuro por baixo e amarelo por cima
+    for (var pass = 0; pass < 2; pass++) {
+      g.lineWidth = pass ? 1.3 : 2.6;
+      g.strokeStyle = pass ? '#ffd23f' : INK;
+      for (i = 0; i < 8; i++) {
+        a = i * Math.PI / 4 + t * 1.5;
+        g.beginPath();
+        g.moveTo(x + Math.cos(a) * (s + 0.8), y + Math.sin(a) * (s + 0.8));
+        g.lineTo(x + Math.cos(a) * (s + 3.4), y + Math.sin(a) * (s + 3.4));
+        g.stroke();
+      }
+    }
+    orb(g, x, y, s, '#ffffff', '#ffc933');
+  }
+
+  K.defPower('multi', {
+    name: 'Chuva de Sóis',
+    desc: 'Duas bolas extras para cada bola em jogo',
+    color: '#ffd23f',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      g.save();
+      badge(g, x, y, r, '#ffd23f');
+      sun(g, x - 5.2 * s, y + 3.4 * s, 3.2 * s, t);
+      sun(g, x + 5.2 * s, y + 3.4 * s, 3.2 * s, t + 0.4);
+      sun(g, x, y - 4.6 * s, 3.2 * s, t + 0.8);
+      g.restore();
+    }
+  });
+
+  K.defPower('laser', {
+    name: 'Lança-Cometa',
+    desc: 'A bola vira cometa e atravessa os tijolos',
+    color: '#4cc9f0',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      g.save();
+      badge(g, x, y, r, '#4cc9f0');
+      // cauda em duas camadas: externa azul, interna branca
+      poly(g, [[5, -4], [-9, 5], [-6, 9], [7, 0]], x, y, s, '#4cc9f0', INK);
+      poly(g, [[4.5, -3], [-5, 3.5], [-4, 6], [5, 0]], x, y, s, '#e8fbff', false);
+      // cabeça
+      orb(g, x + 5 * s, y - 3.6 * s, 4.4 * s, '#ffffff', '#9eeaff');
+      // faíscas da cauda, pulsando
+      for (var i = 0; i < 3; i++) {
+        var k = (Math.sin(t * 6 + i * 2) + 1) / 2;
+        g.beginPath();
+        g.arc(x - (7 + i * 2) * s, y + (4 - i * 2.2) * s + k * s, (1.2 + k * 0.4) * s, 0, TAU);
+        g.fillStyle = '#ffffff';
+        g.fill();
+      }
+      g.restore();
+    }
+  });
+
+  K.defPower('fire', {
+    name: 'Raio Quark',
+    desc: 'Bola de fogo que destrói tudo no caminho',
+    color: '#ff6b35',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      var pts = [[3, -11], [-6, 1.5], [-0.5, 1.5], [-3.5, 11], [7, -2.5], [1.5, -2.5]];
+      g.save();
+      badge(g, x, y, r, '#ff6b35');
+      var glow = 0.3 + 0.2 * Math.sin(t * 8);
+      g.beginPath();
+      for (var i = 0; i < pts.length; i++) {
+        var px = x + pts[i][0] * s, py = y + pts[i][1] * s;
+        if (i) g.lineTo(px, py); else g.moveTo(px, py);
+      }
+      g.closePath();
+      g.lineJoin = 'round';
+      // halo pulsante: contorno largo e translúcido
+      g.lineWidth = 6 * s;
+      g.strokeStyle = 'rgba(255,200,90,' + glow.toFixed(2) + ')';
+      g.stroke();
+      // contorno escuro, depois degradê de fogo
+      g.lineWidth = 2.6 * s;
+      g.strokeStyle = INK;
+      g.stroke();
+      var fg = g.createLinearGradient(x, y - 11 * s, x, y + 11 * s);
+      fg.addColorStop(0, '#ffffff');
+      fg.addColorStop(0.5, '#ffe45e');
+      fg.addColorStop(1, '#ff8a1f');
+      g.fillStyle = fg;
+      g.fill();
+      g.restore();
+    }
+  });
+
+  K.defPower('sticky', {
+    name: 'Ímã Estelar',
+    desc: 'A bola gruda na barra até você soltar',
+    color: '#ef476f',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      g.save();
+      badge(g, x, y, r, '#ef476f');
+      // corpo em U: contorno escuro, aço claro por cima e reflexo
+      g.lineCap = 'butt';
+      g.beginPath();
+      g.arc(x, y - 1 * s, 6.5 * s, 0, Math.PI, false);
+      g.lineWidth = 6.6 * s;
+      g.strokeStyle = INK;
+      g.stroke();
+      g.beginPath();
+      g.arc(x, y - 1 * s, 6.5 * s, 0, Math.PI, false);
+      g.lineWidth = 4.2 * s;
+      g.strokeStyle = '#e8edf5';
+      g.stroke();
+      g.beginPath();
+      g.arc(x, y - 1 * s, 7.4 * s, Math.PI * 1.1, Math.PI * 1.4, false);
+      g.lineWidth = 1 * s;
+      g.strokeStyle = '#ffffff';
+      g.stroke();
+      // pontas: vermelho e azul, com tampa branca
+      poly(g, [[-9, -1], [-4.6, -1], [-4.6, 7], [-9, 7]], x, y, s, '#e63946');
+      poly(g, [[4.6, -1], [9, -1], [9, 7], [4.6, 7]], x, y, s, '#3a86ff');
+      poly(g, [[-9, 5], [-4.6, 5], [-4.6, 7], [-9, 7]], x, y, s, '#ffffff', false);
+      poly(g, [[4.6, 5], [9, 5], [9, 7], [4.6, 7]], x, y, s, '#ffffff', false);
+      // faíscas
+      var k = (Math.sin(t * 5) + 1) / 2;
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(x, y + 6.5 * s, 1.3 * s + k * 0.6 * s, 0, TAU);
+      g.fill();
+      g.beginPath();
+      g.arc(x - 3 * s, y + 4 * s - k * 2 * s, 0.9 * s, 0, TAU);
+      g.arc(x + 3 * s, y + 4 * s - (1 - k) * 2 * s, 0.9 * s, 0, TAU);
+      g.fill();
+      g.restore();
+    }
+  });
+
+  // Barra (corpo arredondado com degradê) usada em wide/narrow.
+  function paddle(g, x, y, s, hw) {
+    var gr = g.createLinearGradient(x, y - 3 * s, x, y + 3 * s);
+    gr.addColorStop(0, '#ffffff');
+    gr.addColorStop(1, '#b8c4d6');
+    g.beginPath();
+    g.roundRect(x - hw * s, y - 3 * s, hw * 2 * s, 6 * s, 2.5 * s);
+    g.fillStyle = gr;
+    g.fill();
+    g.lineWidth = 1.3 * s;
+    g.strokeStyle = INK;
+    g.stroke();
+  }
+
+  K.defPower('wide', {
+    name: 'Expansão Nebulosa',
+    desc: 'Barra fica mais larga por um tempo',
+    color: '#06d6a0',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      var e = 2 * Math.sin(t * 4);
+      g.save();
+      badge(g, x, y, r, '#06d6a0');
+      paddle(g, x, y, s, 6.5);
+      poly(g, [[-13.5 - e, 0], [-8, -5], [-8, 5]], x, y, s, '#7dffd9');
+      poly(g, [[13.5 + e, 0], [8, -5], [8, 5]], x, y, s, '#7dffd9');
+      g.restore();
+    }
+  });
+
+  K.defPower('narrow', {
+    name: 'Encolhe-Pacote',
+    desc: 'Barra fica mais estreita (efeito ruim)',
+    color: '#8d99ae',
+    good: false,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      var e = 1.5 * Math.sin(t * 4);
+      g.save();
+      badge(g, x, y, r, '#8d99ae');
+      paddle(g, x, y, s, 4);
+      // setas apontando para dentro, em vermelho de alerta
+      poly(g, [[-4.6 + e, 0], [-12, -5], [-12, 5]], x, y, s, '#ff7a85');
+      poly(g, [[4.6 - e, 0], [12, -5], [12, 5]], x, y, s, '#ff7a85');
+      g.restore();
+    }
+  });
+
+  K.defPower('shield', {
+    name: 'Escudo Aurora',
+    desc: 'Escudo que impede a bola de cair uma vez',
+    color: '#3a86ff',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      g.save();
+      badge(g, x, y, r, '#3a86ff');
+      g.beginPath();
+      g.moveTo(x - 9 * s, y - 8 * s);
+      g.quadraticCurveTo(x, y - 11 * s, x + 9 * s, y - 8 * s);
+      g.lineTo(x + 9 * s, y);
+      g.quadraticCurveTo(x + 8 * s, y + 7 * s, x, y + 11 * s);
+      g.quadraticCurveTo(x - 8 * s, y + 7 * s, x - 9 * s, y);
+      g.closePath();
+      var sg = g.createLinearGradient(x - 9 * s, y - 10 * s, x + 9 * s, y + 10 * s);
+      sg.addColorStop(0, '#ffffff');
+      sg.addColorStop(1, '#8ec5ff');
+      g.fillStyle = sg;
+      g.fill();
+      g.lineJoin = 'round';
+      g.lineWidth = 1.8 * s;
+      g.strokeStyle = INK;
+      g.stroke();
+      // onda de aurora dentro do escudo (recortada no formato)
+      g.save();
+      g.clip();
+      for (var pass = 0; pass < 2; pass++) {
+        g.beginPath();
+        for (var i = -9; i <= 9; i += 0.5) {
+          var px = x + i * s, py = y + (pass ? 3.2 * s : 0) + Math.sin(i * 0.9 + t * 4 + pass) * 2.2 * s - 0.5 * s;
+          if (i === -9) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.lineWidth = 2 * s;
+        g.strokeStyle = pass ? '#06d6a0' : '#3a86ff';
+        g.stroke();
+      }
+      g.restore();
+      g.restore();
+    }
+  });
+
+  K.defPower('slow', {
+    name: 'Tempo de Mel',
+    desc: 'A bola fica mais lenta por alguns segundos',
+    color: '#fca311',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      g.save();
+      badge(g, x, y, r, '#fca311');
+      // vidro da ampulheta
+      poly(g, [[-6, -9], [6, -9], [0.8, -0.3], [0.8, 0.3], [6, 9], [-6, 9], [-0.8, 0.3], [-0.8, -0.3]], x, y, s, 'rgba(235,248,255,0.92)');
+      // areia de cima (diminui) e de baixo (monte)
+      var fall = (t * 1.5) % 1;
+      poly(g, [[-4.2, -8], [4.2, -8], [0.5, -2.4 + fall * 2]], x, y, s, '#ffc23d', false);
+      poly(g, [[-4.6, 8.2], [4.6, 8.2], [0, 3.2]], x, y, s, '#ff9f1c', false);
+      // gota caindo
+      g.beginPath();
+      g.arc(x, y + (-1 + fall * 6) * s, 1.1 * s, 0, TAU);
+      g.fillStyle = '#ffc23d';
+      g.fill();
+      // tampas com contorno
+      for (var i = 0; i < 2; i++) {
+        var ty = i ? 8.6 : -10.6;
+        g.beginPath();
+        g.roundRect(x - 7.5 * s, y + ty * s, 15 * s, 2.2 * s, 1 * s);
+        g.fillStyle = '#7a4a12';
+        g.fill();
+        g.lineWidth = 1 * s;
+        g.strokeStyle = INK;
+        g.stroke();
+      }
+      g.restore();
+    }
+  });
+
+  K.defPower('bonus', {
+    name: 'Bônus Dourado',
+    desc: 'Ganha pontos extras para o placar',
+    color: '#ffb703',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      var rx = Math.max(1.5 * s, 8.5 * s * Math.abs(Math.cos(t * 2.5)));
+      g.save();
+      badge(g, x, y, r, '#ffb703');
+      // moeda girando: borda espessa de ouro, miolo claro e cifrão/estrela quando de frente
+      g.beginPath();
+      g.ellipse(x, y, rx, 9.5 * s, 0, 0, TAU);
+      var cg = g.createLinearGradient(x - rx, y - 9 * s, x + rx, y + 9 * s);
+      cg.addColorStop(0, '#fff7c2');
+      cg.addColorStop(0.5, '#ffcc33');
+      cg.addColorStop(1, '#d68a00');
+      g.fillStyle = cg;
+      g.fill();
+      g.lineWidth = 1.8 * s;
+      g.strokeStyle = INK;
+      g.stroke();
+      g.beginPath();
+      g.ellipse(x, y, rx * 0.68, 6.6 * s, 0, 0, TAU);
+      g.lineWidth = 1 * s;
+      g.strokeStyle = '#9a6700';
+      g.stroke();
+      if (rx > 4.5 * s) {
+        // estrela de 5 pontas no miolo
+        g.beginPath();
+        for (var i = 0; i < 10; i++) {
+          var a = -Math.PI / 2 + i * Math.PI / 5, rr = (i % 2 ? 1.9 : 4.2) * s;
+          var px = x + Math.cos(a) * rr * (rx / (8.5 * s)), py = y + Math.sin(a) * rr;
+          if (i) g.lineTo(px, py); else g.moveTo(px, py);
+        }
+        g.closePath();
+        g.fillStyle = '#fff7c2';
+        g.fill();
+        g.lineWidth = 0.9 * s;
+        g.strokeStyle = '#9a6700';
+        g.stroke();
+      }
+      g.restore();
+    }
+  });
+
+  K.defPower('vida', {
+    name: 'Coração Pixel',
+    desc: 'Ganha uma vida extra',
+    color: '#ff4d6d',
+    good: true,
+    draw: function (g, x, y, r, t) {
+      t = t || 0;
+      var s = r / 16;
+      var rows = ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'];
+      var k = 1 + 0.07 * Math.sin(t * 6);
+      var ps = 2.6 * s * k;
+      var ox = x - (7 * ps) / 2, oy = y - (6 * ps) / 2;
+      var i, j;
+      g.save();
+      badge(g, x, y, r, '#ff4d6d');
+      // contorno escuro: cada pixel preenchido expandido em 1 px
+      g.fillStyle = INK;
+      for (j = 0; j < rows.length; j++) {
+        for (i = 0; i < 7; i++) {
+          if (rows[j].charAt(i) !== '1') continue;
+          g.beginPath();
+          g.rect(ox + i * ps - 1.2, oy + j * ps - 1.2, ps + 2.4, ps + 2.4);
+          g.fill();
+        }
+      }
+      // corpo vermelho com degradê, depois brilho nos pixels de cima à esquerda
+      var hg = g.createLinearGradient(x, oy, x, oy + 6 * ps);
+      hg.addColorStop(0, '#ff8fa3');
+      hg.addColorStop(1, '#d90429');
+      g.fillStyle = hg;
+      for (j = 0; j < rows.length; j++) {
+        for (i = 0; i < 7; i++) {
+          if (rows[j].charAt(i) !== '1') continue;
+          g.beginPath();
+          g.rect(ox + i * ps, oy + j * ps, ps + 0.4, ps + 0.4);
+          g.fill();
+        }
+      }
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.rect(ox + 1 * ps, oy + 0.9 * ps, ps * 0.9, ps * 0.9);
+      g.rect(ox + 1 * ps, oy + 1.9 * ps, ps * 0.45, ps * 0.9);
+      g.fill();
+      g.restore();
+    }
+  });
+})();
+
+;
+// Músicas, histórias e créditos extras do Quebra-Tijolos.
+// Formatos: docs/ENGINE_API.md. Um token = uma semicolcheia (1/16). Compasso = 16 tokens.
+// Cada mundo tem BPM e ondas próprios (não repetir em outros mundos).
+
+// ---------- Músicas ----------
+
+// Mundo 1 · Jardim de Pólen: 118 BPM, lead triangle, bass seno, bateria leve (só k e h)
+K.defSong('mundo1', {
+  bpm: 118,
+  wave: { lead: 'triangle', bass: 'sine' },
+  lead: 'A4 . C5 . E5 . D5 . C5 . A4 . G4 . E4 . A4 . C5 . D5 . E5 . C5 . A4 . G4 . A4 .',
+  bass: 'A2 . . . A2 . . . F2 . . . G2 . . . A2 . . . A2 . . . F2 . . . E2 . . .',
+  drums: 'k . h . k . h . k . h . k . h . k . h . k . h . k . h . k . h h',
+});
+
+// Mundo 2 · Circuito Estelar: 132 BPM, lead square, bass serra, bateria com caixa
+K.defSong('mundo2', {
+  bpm: 132,
+  wave: { lead: 'square', bass: 'sawtooth' },
+  lead: 'E5 G5 B5 G5 A5 G5 E5 . D5 E5 F#5 E5 B4 . D5 . E5 G5 B5 A5 G5 F#5 E5 D5 E5 . B4 . E5 . E5 .',
+  bass: 'E2 . E2 . A2 . A2 . D2 . D2 . B2 . B2 . E2 . E2 . G2 . G2 . B2 . B2 . E2 . E2 .',
+  drums: 'k . s . k h s h k . s . k h s h k . s . k h s h k . s k s h s h',
+});
+
+// Mundo 3 · Oficina Javarotti: 96 BPM, lead serra, bass quadrada, bateria pesada em contratempo
+K.defSong('mundo3', {
+  bpm: 96,
+  wave: { lead: 'sawtooth', bass: 'square' },
+  lead: 'C4 . Eb4 . G4 . F4 . Eb4 . D4 . C4 . . . Ab3 . C4 . Eb4 . G4 . F4 . Eb4 . D4 . C4 .',
+  bass: 'C2 . C2 . G2 . G2 . Eb2 . Eb2 . C2 . . . Ab2 . Ab2 . Bb2 . Bb2 . F2 . F2 . G2 . G2 .',
+  drums: '. s . s k . s . . s . s k s . s . s . s k . s . . s . s k s k s',
+});
+
+// Mundo 4 · Coração do Sol: 144 BPM, lead triangle agudo, bass seno, bateria cheia
+K.defSong('mundo4', {
+  bpm: 144,
+  wave: { lead: 'triangle', bass: 'sine' },
+  lead: 'D6 F6 A6 F6 E6 D6 C6 A5 Bb5 C6 D6 . A5 . F5 . D6 F6 A6 C7 Bb6 A6 G6 F6 E6 G6 F6 E6 D6 . A5 .',
+  bass: 'D3 . D3 . C3 . C3 . Bb2 . Bb2 . A2 . A2 . D3 . D3 . F2 . F2 . G2 . G2 . A2 . A2 .',
+  drums: 'k h s h k h s h k h s h k k s h k h s h k h s h k h s h k s k s',
+});
+
+// ---------- Histórias ----------
+
+K.defStory('w1', {
+  title: 'Jardim de Pólen',
+  pages: [
+    { who: 'Pedro', text: 'Bem-vindo ao Jardim de Pólen! Aqui os tijolos são flores frágeis e a bolinha ainda não sabe voar direito. Cuidado com o pólen!' },
+    { who: 'JGK', text: 'Eu sou o JGK, o motor deste jogo. Rebata a bolinha, quebre as flores e não deixe ela cair. Simples, né? Quase.' },
+  ],
+});
+
+K.defStory('w2', {
+  title: 'Circuito Estelar',
+  pages: [
+    { who: 'Pedro', text: 'No Circuito Estelar os blocos são placas de circuito e a bola ganha velocidade a cada batida. Mantenha o foco.' },
+    { who: 'JGK', text: 'Detectei três anomalias no painel. Os tijolos explosivos destroem os vizinhos, então escolha bem o alvo.' },
+  ],
+});
+
+K.defStory('w3', {
+  title: 'Oficina Javarotti',
+  pages: [
+    { who: 'Pedro', text: 'Essa é a oficina onde tudo nasce: parafusos, engrenagens e muito café. Alguns blocos resistem mais, então bata duas vezes se precisar.' },
+    { who: 'JGK', text: 'Atenção, operador: ferramentas soltas podem cair na pista. Pegue os poderes bons e evite os ruins.' },
+  ],
+});
+
+K.defStory('w4', {
+  title: 'Coração do Sol',
+  pages: [
+    { who: 'Pedro', text: 'Chegamos ao Coração do Sol, o último mundo. Aqui a trilha está no máximo e os blocos brilham como brasa.' },
+    { who: 'JGK', text: 'Núcleo detectado. Quebre tudo com cuidado: o sol não perdoa quem deixa a bola cair. Boa sorte, jogador.' },
+  ],
+});
+
+// ---------- Créditos extras ----------
+
+K.defCredits({
+  extra: [
+    'Obrigado por jogar e até o próximo jogo',
+  ],
+});
+
+;
+// Fases do Quebra-Tijolos: 4 mundos x 3 fases.
+// Grade: 12 colunas x ate 12 linhas. '.' = vazio. Legenda padrao: 1, 2, 3, #, *, G (Nucleo).
+
+// ---------- MUNDO 1 ----------
+
+K.defLevel('f1-1', {
+  world: 'w1',
+  name: 'Coracao de Estreia',
+  rows: [
+    '............',
+    '.11......11.',
+    '1111....1111',
+    '111111111111',
+    '..11111111..',
+    '...111111...',
+    '....1111....',
+    '.....11.....',
+  ],
+  tune: { speed: 1.0, drop: 0.20, lives: 3 },
+  song: 'mundo1',
+  story: 'w1',
+});
+
+K.defLevel('f1-2', {
+  world: 'w1',
+  name: 'Escadinha do Aquecimento',
+  rows: [
+    '............',
+    '........11..',
+    '......1122..',
+    '....112222..',
+    '..11222222..',
+    '112222222211',
+    '111111111111',
+  ],
+  tune: { speed: 1.05, drop: 0.20, lives: 3 },
+  song: 'mundo1',
+});
+
+K.defLevel('f1-3', {
+  world: 'w1',
+  name: 'Foguete Sem Freio',
+  rows: [
+    '.....11.....',
+    '....1111....',
+    '....1221....',
+    '...122221...',
+    '...12G221...',
+    '...122221...',
+    '..11222211..',
+    '.11.1111.11.',
+    '............',
+  ],
+  tune: { speed: 1.1, drop: 0.20, lives: 3 },
+  song: 'mundo1',
+});
+
+// ---------- MUNDO 2 ----------
+
+K.defLevel('f2-1', {
+  world: 'w2',
+  name: 'Tabuleiro Explosivo',
+  rows: [
+    '2*2*2*2*2*2*',
+    '32.32.32.32.',
+    '2*2*2*2*2*2*',
+    '32.32.32.32.',
+    '2*2*2*2*2*2*',
+    '32.32.32.32.',
+    '2*2*2*2*2*2*',
+  ],
+  tune: { speed: 1.1, drop: 0.18, lives: 3 },
+  song: 'mundo2',
+  story: 'w2',
+});
+
+K.defLevel('f2-2', {
+  world: 'w2',
+  name: 'Espiral Maluca',
+  rows: [
+    '333333333333',
+    '3..........3',
+    '3.22222222.3',
+    '3.2......2.3',
+    '3.2.3333.2.3',
+    '3.2.3..3.2.3',
+    '3.2......2.3',
+    '3.22222222.3',
+    '3..........3',
+    '333333333333',
+  ],
+  tune: { speed: 1.18, drop: 0.18, lives: 3 },
+  song: 'mundo2',
+});
+
+K.defLevel('f2-3', {
+  world: 'w2',
+  name: 'Estrela Cadente',
+  rows: [
+    '....*33*....',
+    '...*3333*...',
+    '**33333333**',
+    '*33333G3333*',
+    '**33333333**',
+    '...*3333*...',
+    '....*33*....',
+  ],
+  tune: { speed: 1.25, drop: 0.18, lives: 3 },
+  song: 'mundo2',
+});
+
+// ---------- MUNDO 3 ----------
+
+K.defLevel('f3-1', {
+  world: 'w3',
+  name: 'Caminho de Pedra',
+  rows: [
+    '333#333#333#',
+    '#..........#',
+    '#.33333333.#',
+    '#.3......3.#',
+    '#.3.333.3.##',
+    '#.3.3.3.3..#',
+    '#..........#',
+    '333333333333',
+  ],
+  tune: { speed: 1.25, drop: 0.16, lives: 3 },
+  song: 'mundo3',
+  story: 'w3',
+});
+
+K.defLevel('f3-2', {
+  world: 'w3',
+  name: 'Marca JAVAROTTI',
+  legend: {
+    'J': { block: 'letra', letter: 'J' },
+    'A': { block: 'letra', letter: 'A' },
+    'V': { block: 'letra', letter: 'V' },
+    'R': { block: 'letra', letter: 'R' },
+    'O': { block: 'letra', letter: 'O' },
+    'T': { block: 'letra', letter: 'T' },
+    'I': { block: 'letra', letter: 'I' },
+    'M': 'marca',
+  },
+  cols: 20,
+  rows: [
+    '....M..M..M.M..M....',
+    '....M.M.M.M.M.M.M...',
+    '....M.MMM.M.M.MMM...',
+    '..M.M.M.M.M.M.M.M...',
+    '..MMM.M.M..M..M.M...',
+    '....................',
+    'MM..MMM.MMM.MMM.MMM.',
+    'M.M.M.M..M...M...M..',
+    'MM..M.M..M...M...M..',
+    'M.M.M.M..M...M...M..',
+    'M.M.MMM..M...M..MMM.',
+  ],
+  tune: { speed: 1.32, drop: 0.16, lives: 3 },
+  song: 'mundo3',
+});
+
+K.defLevel('f3-3', {
+  world: 'w3',
+  name: 'Castelo do Fim',
+  rows: [
+    '3.3.3.3.3.3.',
+    '333333333333',
+    '3..........3',
+    '3..333333..3',
+    '3..3.G..3..3',
+    '3..333333..3',
+    '333333333333',
+  ],
+  tune: { speed: 1.4, drop: 0.16, lives: 3 },
+  song: 'mundo3',
+});
+
+// ---------- MUNDO 4 (final) ----------
+
+K.defLevel('f4-1', {
+  world: 'w4',
+  name: 'Escada Gigante',
+  rows: [
+    '..........33',
+    '........3333',
+    '......333333',
+    '....33333333',
+    '..3333333333',
+    '333333333333',
+  ],
+  tune: { speed: 1.4, drop: 0.15, lives: 2 },
+  song: 'mundo4',
+  story: 'w4',
+});
+
+K.defLevel('f4-2', {
+  world: 'w4',
+  name: 'Letras JGK',
+  legend: {
+    'J': { block: 'letra', letter: 'J' },
+    'Q': { block: 'letra', letter: 'G' },
+    'K': { block: 'letra', letter: 'K' },
+  },
+  cols: 20,
+  rows: [
+    '....33.333333.33..33',
+    '....33.333333.33..33',
+    '....33.33.....33..33',
+    '....33.33.....33..33',
+    '....33.33..33.3333..',
+    '....33.33..33.3333..',
+    '33..33.33..33.33..33',
+    '33..33.33..33.33..33',
+    '333333.333333.33..33',
+    '333333.333333.33..33',
+  ],
+  tune: { speed: 1.5, drop: 0.15, lives: 2 },
+  song: 'mundo4',
+});
+
+K.defLevel('f4-3', {
+  world: 'w4',
+  name: 'Foguete do Nucleo',
+  rows: [
+    '.....33.....',
+    '....3333....',
+    '....3333....',
+    '...333333...',
+    '...333G333..',
+    '...333333...',
+    '..33333333..',
+    '.33.3333.33.',
+    '............',
+  ],
+  tune: { speed: 1.6, drop: 0.15, lives: 2 },
+  song: 'mundo4',
+});
+
+;
+// Bloco de marca: peça do mosaico que desenha JAVAROTTI / JGK na tela. Dourado com brilho que anda.
+K.defBlock('marca', {
+  name: 'Peça da marca',
+  hp: 1,
+  score: 30,
+  draw(g, x, y, w, h, st) {
+    g.save();
+    const rad = Math.min(4, h / 3);
+    const body = () => { g.beginPath(); g.roundRect(x, y, w, h, rad); };
+    // corpo: degradê de ouro com bandas (reflexo metálico)
+    const grd = g.createLinearGradient(x, y, x, y + h);
+    grd.addColorStop(0, '#fff6b8');
+    grd.addColorStop(0.35, '#ffd24a');
+    grd.addColorStop(0.55, '#f0a81c');
+    grd.addColorStop(1, '#a8650c');
+    g.fillStyle = grd;
+    body(); g.fill();
+    g.save();
+    body(); g.clip();
+    // brilho de canto superior esquerdo (radial, sem shadowBlur)
+    const rg = g.createRadialGradient(x + w * 0.2, y + h * 0.15, 1, x + w * 0.2, y + h * 0.15, Math.max(w, h) * 0.7);
+    rg.addColorStop(0, 'rgba(255,255,255,0.55)');
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg;
+    g.fillRect(x, y, w, h);
+    // faixa escura embaixo para dar volume
+    g.fillStyle = 'rgba(110,55,0,0.35)';
+    g.fillRect(x, y + h * 0.78, w, h * 0.22);
+    // faixa de luz diagonal que passa a cada 2,4 s
+    const sweep = ((st.t || 0) % 2.4) / 2.4;
+    const sx = x - w + sweep * (w * 3);
+    g.globalAlpha = 0.6;
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(sx, y + h); g.lineTo(sx + 7, y + h); g.lineTo(sx + 19, y); g.lineTo(sx + 12, y); g.closePath(); g.fill();
+    g.globalAlpha = 0.25;
+    g.beginPath(); g.moveTo(sx + 9, y + h); g.lineTo(sx + 12, y + h); g.lineTo(sx + 24, y); g.lineTo(sx + 21, y); g.closePath(); g.fill();
+    g.restore();
+    // reflexo fino de cima
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.fillRect(x + rad, y + 1.5, w - rad * 2, 1.5);
+    // contorno interno claro e externo escuro
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(255,250,200,0.8)';
+    g.beginPath(); g.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(1, rad - 1)); g.stroke();
+    g.lineWidth = 1.5; g.strokeStyle = '#5a3206';
+    body(); g.stroke();
+    if (st.flash > 0) { g.globalAlpha = st.flash * 0.7; g.fillStyle = '#ffffff'; body(); g.fill(); }
+    g.restore();
+  },
+});
+
+;
+/*==ENGINE:boot==  JGK · inicialização: título da aba com a versão, primeira tela e loop */
+document.title = K.game + ' ' + K.version;
+K.setQuality();
+K.fit();
+K.go('title');
+requestAnimationFrame(K_frame);
+
+</script>
+</body>
+</html>
