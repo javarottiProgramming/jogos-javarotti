@@ -218,7 +218,7 @@
       <article class="game pedrada">
         <button class="poster" type="button" data-play="pedrada" aria-label="Jogar Pedrada de Palito">
           <img src="assets/pedrada.jpg" width="960" height="540" alt="Tela inicial do Pedrada de Palito: título em marcador sobre folha de caderno quadriculado, com bonecos de palito ao redor do botão Jogar">
-          <span class="ver" aria-hidden="true">v1.1.4</span>
+          <span class="ver" aria-hidden="true">v1.1.5</span>
         </button>
         <h2>Pedrada de Palito</h2>
         <p>Tiro em primeira pessoa no estilo Doom. A arma base é um estilingue: puxe o elástico, solte e derrube a turma de palitos de papel recortado. Pegue armas e poderes pelo cenário. São 10 fases, com chefes nas fases 3, 6, 9 e 10.</p>
@@ -344,6 +344,8 @@ function route(){
 frame.addEventListener('load', () => { try { frame.focus(); frame.contentWindow.focus(); } catch(_){} });
 window.addEventListener('hashchange', route);
 $('back').addEventListener('click', () => { location.hash = '#/'; });
+/* tela cheia: o clique no botão tira o foco do jogo (iframe) e o áudio dormia; devolve o foco ao jogo ao entrar/sair da tela cheia */
+document.addEventListener('fullscreenchange', () => { setTimeout(() => { try { frame.focus(); frame.contentWindow.focus(); } catch(_){} }, 150); });
 $('fs').addEventListener('click', () => {
   const el = $('player');
   if (document.fullscreenElement) document.exitFullscreen();
