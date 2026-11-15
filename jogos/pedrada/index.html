@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.2</title>
+<title>Pedrada de Palito 1.1.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.2', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.3', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -276,7 +276,7 @@ document.addEventListener('pointerlockchange', () => { const was = INP.locked; I
 INP.lock = () => { try { if (!INP.locked && cv.requestPointerLock && !VIEW.touch) { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } } catch (e) {} };
 INP.unlock = () => { try { if (document.exitPointerLock) document.exitPointerLock(); } catch (e) {} };
 
-/* geometria dos controles de toque (coordenadas lógicas) */
+/* geometria dos controles de toque (coordenadas lógicas). PADRÃO FPS (regra 21 do time JGK): analógico à esquerda; lado direito = mira, só a zona `fire` atira; `weapon` logo acima da zona; `pause` no canto. Não mude sem decisão do Pedro. Teste: npm run touchcheck */
 function touchLayout() {
   const s = SAVE.opt.bsz || 1, sr = VIEW.safeR + 22, sb = VIEW.safeB + 20, sl = VIEW.safeL + 18, rf = 64 * s;
   const fire = { x: VW - VIEW.safeR - 124 * s, y: VH - VIEW.safeB - 116 * s, r: 90 * s };   // 1.1.1: ZONA DE TIRO (espelho do analógico, canto inferior direito). Dentro: toque atira, segurar puxa, arrastar mira. Resto do lado direito: só mira, sem atirar.
@@ -2365,9 +2365,9 @@ K.hud.status = (c, S) => {
    arma       papel                   n  cd    carga  dano (mín→cheio)  extra                 munição (máx/pega)
    Leque      curta distância         3  .55   .50    .7 → 1,6 por pedra  alcance ~10 células   24 / 14
    Zarabatana dano contínuo baixo     1  .13   0      .55 (≈4,2/s)      auto, tiro reto        80 / 45
-   Quicadora  cantos e cobertura      1  .45   .45    1,2 → 2,6         3 quicadas            30 / 18
-   Lança      corredor (perfura)      1  .70   .90    2 → 4,2           atravessa 3 bots      14 / 9
+   Shotgun    muito dano de perto     5  1,0   0      1,5 por tachinha  tiro instantâneo, alcance ~5 células (life .36 s), leque de ~.07 rad  14 / 8
    Bola       grupos (explosão)       1  .80   .80    .5 → 1 + 5 área   raio 1,8, ignora armadura 10 / 7
+   (1.1.3: Pedra Quicadora e Lança de Lápis saíram do jogo; a Shotgun de Tachinhas ocupa o lugar da Lança, na fase 7.)
    Nenhuma troca o estilingue (que é infinito e preciso): a munição limitada impede de resolver chefe (HP 40–150) só com arma especial.
    Poderes: Elástico Forte 25 s (puxa ×1,7, dano ×1,35) · Tênis 20 s (velocidade ×1,35) · Capa 40 pts de escudo · Coração +25 de vida. */
 {
@@ -2377,8 +2377,10 @@ K.hud.status = (c, S) => {
   const beam = col => (c, w, h) => { const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, col + '00'); g.addColorStop(.5, col + '99'); g.addColorStop(1, col + 'DD'); c.fillStyle = g; c.fillRect(w * .3, 0, w * .4, h); };
   /* anel + raios de caneta (mesmo vocabulário dos halos de cura/ouro de 12-arma-hud.js), numa cor por categoria */
   const ring = col => (c, w, h) => { c.lineCap = 'round'; const cx = w / 2, cy = h / 2; for (const [lw, cc] of [[11, INK], [6, col]]) { c.lineWidth = lw; c.strokeStyle = cc; c.beginPath(); c.arc(cx, cy, 22, 0, TAU); for (let i = 0; i < 12; i++) { const a = i * TAU / 12; c.moveTo(cx + Math.cos(a) * 28, cy + Math.sin(a) * 28); c.lineTo(cx + Math.cos(a) * 33, cy + Math.sin(a) * 33); } c.stroke(); } };
-  const GRAY = '#A9B3C9', CY = '#2DE2E6';
+  const GRAY = '#A9B3C9';
   const ball = (c, x, y, r, fill, hi) => { cutP(c, oval(x, y, r, r), fill, 3); c.fillStyle = hi || '#fff'; c.beginPath(); c.arc(x - r * .35, y - r * .38, r * .27, 0, TAU); c.fill(); };
+  /* tachinha: cabeça redonda vermelha + agulha de tinta (r gira; s escala) */
+  const tack = (c, x, y, s, r) => { c.save(); c.translate(x, y); c.rotate(r || 0); c.scale(s, s); line(c, '#fff', 5, [[0, 2], [0, 13]]); line(c, INK, 3, [[0, 2], [0, 13]]); ball(c, 0, -1, 6, RED); c.restore(); };
 
   /* ---------------------------------------------------------------- ARTE DOS ITENS (caixa 48×48) */
   const clip = (c, x, y, s) => { c.save(); c.translate(x, y); c.scale(s, s); for (const [col, lw] of [['#fff', 7], [INK, 5], ['#B8C2D9', 2.4]]) { c.strokeStyle = col; c.lineWidth = lw; c.lineCap = c.lineJoin = 'round'; c.beginPath(); c.moveTo(-3, 5); c.lineTo(-3, -4); c.arc(0, -4, 3, Math.PI, TAU); c.lineTo(3, 6); c.arc(.5, 6, 3.5, 0, Math.PI); c.lineTo(-3, -1); c.stroke(); } c.restore(); };
@@ -2395,16 +2397,14 @@ K.hud.status = (c, S) => {
       cutP(c, rrP(-24, -6, 48, 12, 5), '#E6F0FF', 4); c.fillStyle = BLUE; c.fillRect(-12, -5, 6, 10); c.fillRect(6, -5, 6, 10);
       cutP(c, rrP(-27, -8, 8, 16, 3), BLUE, 3); cutP(c, rrP(18, -8, 8, 16, 3), BLUE, 3);
       c.restore(); clip(c, 8, 12, .9); clip(c, 40, 38, .9); clip(c, 40, 10, .7); },
-    ricochete: c => { // bola saltitante com trilha em zigue-zague e seta
-      line(c, '#fff', 8, [[3, 12], [12, 40], [21, 24]]); line(c, INK, 4.5, [[3, 12], [12, 40], [21, 24]]);
-      cutP(c, poly([[21, 17], [24, 29], [13, 25]]), RED, 2.5);
-      ball(c, 33, 18, 12, CY); c.strokeStyle = INK; c.lineWidth = 2.5; c.beginPath(); c.arc(33, 18, 12, .5, 2.2); c.stroke();
-      c.fillStyle = 'rgba(20,20,43,.3)'; c.beginPath(); c.ellipse(33, 43, 11, 3, 0, 0, TAU); c.fill(); },
-    lapis: c => { // lápis gigante apontado para cima-direita
-      c.save(); c.translate(24, 24); c.rotate(-Math.PI / 4);
-      cutP(c, poly([[-22, -7], [10, -7], [24, 0], [10, 7], [-22, 7]]), PAL.yellow, 4); c.fillStyle = PAL.yellow2; c.fillRect(-20, -1, 30, 2.5);
-      cutP(c, poly([[10, -7], [24, 0], [10, 7]]), PAL.paper, 3); c.fillStyle = INK; c.beginPath(); c.moveTo(19, -2.2); c.lineTo(25, 0); c.lineTo(19, 2.2); c.fill();
-      cutP(c, rrP(-27, -7, 6, 14, 2), '#C7CCD9', 3); cutP(c, rrP(-33, -7, 8, 14, 4), '#FF8FA3', 3); c.restore(); },
+    shotgun: c => { // espingarda de papel (cano cinza, coronha azul) com leque de tachinhas saindo da boca
+      c.save(); c.translate(20, 32); c.rotate(-.55);
+      cutP(c, rrP(-20, -5, 16, 11, 4), BLUE, 3.5);                 // coronha
+      cutP(c, rrP(-6, 1, 28, 5, 2), '#A9B3C9', 3);                 // tubo do carregador
+      cutP(c, rrP(-6, -5, 32, 7, 3), '#E6F0FF', 3.5);              // cano
+      cutP(c, rrP(6, 1, 9, 6, 2), RED, 2.5);                       // pump
+      c.restore();
+      tack(c, 36, 8, .55, -.35); tack(c, 41, 15, .55, .35); tack(c, 31, 4, .5, -.9); },
     bomba: c => { // bola de papel amassada com pavio
       cutP(c, poly([[9, 30], [8, 21], [14, 14], [22, 12], [30, 13], [38, 18], [41, 27], [38, 37], [29, 43], [18, 43], [11, 38]]), '#fff', 4);
       line(c, '#9AA6BD', 2, [[14, 20], [22, 26], [20, 38]]); line(c, '#9AA6BD', 2, [[24, 15], [28, 27], [37, 30]]); line(c, '#9AA6BD', 2, [[12, 33], [24, 33]]);
@@ -2432,7 +2432,7 @@ K.hud.status = (c, S) => {
       cutP(c, poly([[10, 22], [38, 22], [43, 42], [5, 42]]), PAL.green, 4); cutP(c, rrP(8, 19, 32, 7, 3), '#fff', 3);
       ball(c, 24, 33, 6, GRAY); },
   };
-  const BAD = { triplo: BLUE, rajada: BLUE, ricochete: BLUE, lapis: BLUE, bomba: BLUE, forca: RED, botas: RED, escudo: RED, coracao: RED, municao: PAL.green };
+  const BAD = { triplo: BLUE, rajada: BLUE, shotgun: BLUE, bomba: BLUE, forca: RED, botas: RED, escudo: RED, coracao: RED, municao: PAL.green };
   const item = (id, a) => (c, w, h) => { shadow(c, w, h, .36); c.save(); c.scale(w / 48, h / 48); ART[id](c); c.restore(); };
   /* ícone do HUD (40×40): arte pequena num selo de papel com borda da cor da categoria (azul arma, vermelho poder) */
   const icon = id => (c, w, h) => { cutP(c, oval(w / 2, h / 2, w / 2 - 3, h / 2 - 3), PAL.paper, 3); c.strokeStyle = BAD[id]; c.lineWidth = 3; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 6, 0, TAU); c.stroke(); c.save(); c.translate(w * .14, h * .14); c.scale(w * .72 / 48, h * .72 / 48); ART[id](c); c.restore(); };
@@ -2441,7 +2441,7 @@ K.hud.status = (c, S) => {
   K.defSprite('aura_arma', { w: 80, h: 80, hgt: .56, glow: true, draw: ring(BLUE) });  K.defSprite('feixe_arma', { w: 48, h: 160, hgt: 1, glow: true, draw: beam(BLUE) });
   K.defSprite('aura_poder', { w: 80, h: 80, hgt: .56, glow: true, draw: ring(RED) });   K.defSprite('feixe_poder', { w: 48, h: 160, hgt: 1, glow: true, draw: beam(RED) });
   K.defSprite('aura_municao', { w: 80, h: 80, hgt: .56, glow: true, draw: ring(PAL.green) }); K.defSprite('feixe_municao', { w: 48, h: 160, hgt: 1, glow: true, draw: beam(PAL.green) });
-  for (const id of ['triplo', 'rajada', 'ricochete', 'lapis', 'bomba']) { K.defSprite('arma_' + id, { w: 48, h: 48, hgt: .3, glow: true, draw: item(id) }); K.defSprite('icone_' + id, { w: 40, h: 40, hgt: .2, draw: icon(id) }); }
+  for (const id of ['triplo', 'rajada', 'shotgun', 'bomba']) { K.defSprite('arma_' + id, { w: 48, h: 48, hgt: .3, glow: true, draw: item(id) }); K.defSprite('icone_' + id, { w: 40, h: 40, hgt: .2, draw: icon(id) }); }
   K.defSprite('icone_estilingue', { w: 40, h: 40, hgt: .2, draw: (c, w, h) => { cutP(c, oval(w / 2, h / 2, w / 2 - 3, h / 2 - 3), PAL.paper, 3); c.strokeStyle = PAL.yellow2; c.lineWidth = 3; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 6, 0, TAU); c.stroke(); line(c, INK, 7, [[20, 33], [20, 22], [12, 10]]); line(c, INK, 7, [[20, 22], [28, 10]]); line(c, PAL.yellow, 3.5, [[20, 33], [20, 22], [12, 10]]); line(c, PAL.yellow, 3.5, [[20, 22], [28, 10]]); line(c, PAL.red, 2, [[12, 10], [20, 16], [28, 10]]); } });
   for (const id of ['forca', 'botas', 'escudo', 'coracao']) { K.defSprite('poder_' + id, { w: 48, h: 48, hgt: .3, glow: true, draw: item(id) }); K.defSprite('icone_' + id, { w: 40, h: 40, hgt: .2, draw: icon(id) }); }
   K.defSprite('municao', { w: 48, h: 48, hgt: .28, glow: true, draw: item('municao') });
@@ -2449,8 +2449,7 @@ K.hud.status = (c, S) => {
   /* projéteis (billboards pequenos; cada arma com forma própria para o jogador ler o tiro) */
   K.defSprite('proj_triplo',    { w: 18, h: 18, hgt: .1, glow: true, draw: (c, w, h) => { ball(c, 9, 9, 6.5, '#8FB2F2'); c.strokeStyle = BLUE; c.lineWidth = 1.5; c.beginPath(); c.arc(9, 9, 8.2, 0, TAU); c.stroke(); } });
   K.defSprite('proj_rajada',    { w: 22, h: 14, hgt: .07, glow: true, draw: (c, w, h) => { clip(c, 11, 7, .78); } });
-  K.defSprite('proj_ricochete', { w: 22, h: 22, hgt: .12, glow: true, draw: (c, w, h) => { c.fillStyle = 'rgba(45,226,230,.45)'; c.beginPath(); c.arc(11, 11, 11, 0, TAU); c.fill(); ball(c, 11, 11, 7.5, CY); } });
-  K.defSprite('proj_lapis',     { w: 40, h: 14, hgt: .1, glow: true, draw: (c, w, h) => { cutP(c, poly([[3, 3], [26, 3], [37, 7], [26, 11], [3, 11]]), PAL.yellow, 2.5); cutP(c, poly([[26, 3], [37, 7], [26, 11]]), PAL.paper, 2); c.fillStyle = INK; c.fillRect(33, 6, 4, 2); c.fillStyle = '#FF8FA3'; c.fillRect(1, 4, 4, 6); } });
+  K.defSprite('proj_shotgun',   { w: 16, h: 16, hgt: .07, glow: true, draw: (c, w, h) => { tack(c, 8, 7, .62, 0); } });
   K.defSprite('proj_bomba',     { w: 30, h: 34, hgt: .22, glow: true, draw: (c, w, h) => { cutP(c, poly([[4, 22], [4, 15], [9, 10], [16, 9], [22, 11], [26, 16], [26, 24], [20, 30], [11, 30]]), '#fff', 3); line(c, '#9AA6BD', 1.6, [[9, 15], [15, 20], [13, 27]]); line(c, INK, 2.5, [[15, 9], [17, 4]]); c.fillStyle = PAL.yellow; c.strokeStyle = RED; c.lineWidth = 1.4; c.beginPath(); for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5, rr = k % 2 ? 2 : 4.6; c.lineTo(18 + Math.cos(a) * rr, 3.5 + Math.sin(a) * rr); } c.closePath(); c.fill(); c.stroke(); } });
 
   /* ---------------------------------------------------------------- HUD EM 1ª PESSOA */
@@ -2471,28 +2470,24 @@ K.hud.status = (c, S) => {
     arm(c, VW - 20, VH + 110, cx + 20, by - 90); A.hand(c, cx + 20, by - 90, 1.05, true);
     arm(c, cx - 190, VH + 90, cx - 14, by - 175 + kick * .3); A.hand(c, cx - 14, by - 175 + kick * .3, .95, true);
     c.restore(); };
-  function arm(c, x0, y0, x1, y1) { A.arm(c, x0, y0, x1, y1); }
-  /* Lança de Lápis: segurada como lança; puxar = recuar o lápis; solta = estocada (some até recarregar) */
-  const hudLapis = (c, S) => {
-    const f = pf(S), loaded = S.cd < .05 || f.pull > 0, thrust = S.recoil * 70;
-    const bx = VW / 2 + 120 + f.sw + f.pull * 40, by = VH + 40 + f.pull * 46 + f.bo - thrust * .3;
-    const tx = VW / 2 + 12 + thrust * -.1, ty = VH / 2 + 80 - thrust * 1.4;
+  /* Shotgun de Tachinhas: cano grosso em perspectiva (duas mãos), recuo forte, pump que desliza e leque de tachinhas na boca ao disparar */
+  const hudShotgun = (c, S) => {
+    const f = pf(S), kick = S.recoil * 40, cx = VW / 2 + f.sw + 60, by = VH + 14 + f.bo + kick, slide = Math.sin(Math.min(1, S.recoil) * P) * 26;
     c.save(); c.lineJoin = c.lineCap = 'round';
-    if (loaded || S.recoil > .15) {
-      const dx = tx - bx, dy = ty - by, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux, w0 = 30, w1 = 11;
-      const pt = (t, s) => [bx + ux * L * t + nx * s * (w0 + (w1 - w0) * t), by + uy * L * t + ny * s * (w0 + (w1 - w0) * t)];
-      cutP(c, poly([pt(0, -1), pt(.82, -1), [tx, ty], pt(.82, 1), pt(0, 1)]), PAL.yellow, 5);
-      line(c, PAL.yellow2, 4, [pt(0, .25), pt(.8, .25)]);
-      cutP(c, poly([pt(.78, -1), [tx, ty], pt(.78, 1)]), PAL.paper, 3.5);
-      c.fillStyle = INK; c.beginPath(); const a = pt(.92, -.35), b = pt(.92, .35); c.moveTo(a[0], a[1]); c.lineTo(tx, ty); c.lineTo(b[0], b[1]); c.fill();
-      const e = [bx - ux * 40, by - uy * 40]; cutP(c, poly([pt(0, -1), pt(0, 1), [e[0] + nx * 26, e[1] + ny * 26], [e[0] - nx * 26, e[1] - ny * 26]]), '#FF8FA3', 4);
-      A.hand(c, pt(.34, 0)[0], pt(.34, 0)[1], 1.0, true);
-    }
-    arm(c, VW - 10, VH + 100, bx + 8, by - 58);
-    A.hand(c, bx + 8, by - 58, 1.1, true);
-    if (S.recoil > .3) for (let i = 0; i < 3; i++) line(c, '#fff', 4, [[tx - 20 + i * 20, ty + 30 + i * 6], [tx - 20 + i * 20, ty + 90 + i * 6]]);
+    const tube = [[cx - 56, by], [cx + 50, by], [cx + 24, by - 255], [cx - 10, by - 255]];
+    cutP(c, poly(tube), '#E6F0FF', 5); c.save(); c.beginPath(); poly(tube)(c); c.clip();
+    c.fillStyle = BLUE; c.fillRect(cx - 70, by - 62, 130, 24); c.fillStyle = INK; c.fillRect(cx - 70, by - 162, 130, 4); c.restore();
+    c.lineWidth = 4; c.strokeStyle = INK; c.beginPath(); poly(tube)(c); c.stroke();
+    cutP(c, rrP(cx - 20, by - 272, 44, 24, 8), BLUE, 4);                       // boca do cano
+    c.fillStyle = INK; c.beginPath(); c.ellipse(cx + 2, by - 262, 14, 5, 0, 0, TAU); c.fill();
+    cutP(c, poly([[cx - 2, by - 286], [cx + 7, by - 272], [cx - 11, by - 272]]), RED, 3); // massa de mira
+    cutP(c, rrP(cx - 40 + 4, by - 170 + slide, 62, 34, 9), RED, 4);          // pump (desliza no tiro)
+    if (S.recoil > .05) { const k = 1 - S.recoil; for (let i = 0; i < 5; i++) { const a = (i - 2) * .22; tack(c, cx + 2 + Math.sin(a) * (60 + k * 170), by - 290 - Math.cos(a) * (40 + k * 160), 1.1 - k * .4, a); } for (let i = 0; i < 3; i++) cutP(c, star(cx + 2 + (i - 1) * 26, by - 292 - k * 30 - i * 4, 8, 3, 5), '#fff', 1.2); }
+    arm(c, VW - 20, VH + 110, cx + 40, by - 8); A.hand(c, cx + 40, by - 8, 1.05, true);
+    arm(c, cx - 200, VH + 90, cx - 12, by - 150 + slide); A.hand(c, cx - 12, by - 150 + slide, .95, true);
     c.restore(); };
-  /* Arremesso (Quicadora e Bola): uma bola na mão direita; puxar = braço vai para trás e a bola cresce; soltar = a bola sai */
+  function arm(c, x0, y0, x1, y1) { A.arm(c, x0, y0, x1, y1); }
+  /* Arremesso (Bola Explosiva): uma bola na mão direita; puxar = braço vai para trás e a bola cresce; soltar = a bola sai */
   const hudThrow = (drawBall, big) => (c, S) => {
     const f = pf(S), loaded = S.cd < .05 || f.pull > 0, pull = f.pull;
     const hx = VW / 2 + 120 + f.sw + pull * 60 + S.recoil * -60, hy = VH - 90 + f.bo + pull * 60 - S.recoil * 70;
@@ -2504,8 +2499,6 @@ K.hud.status = (c, S) => {
     const lx = VW / 2 - 130 - f.sw, ly = VH - 70 + f.bo; arm(c, cx0(), VH + 90, lx, ly); A.hand(c, lx, ly, .95, false);
     c.restore(); };
   const cx0 = () => VW / 2 - 330;
-  const ballQui = (c, S, pull) => { cutP(c, oval(0, 0, 34, 34), CY, 5); c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, 34, -.4, .9); c.stroke(); c.beginPath(); c.arc(0, 0, 34, P - .4, P + .9); c.stroke(); c.fillStyle = '#fff'; c.beginPath(); c.arc(-12, -13, 8, 0, TAU); c.fill();
-    if (pull > .2) for (const s of [-1, 1]) line(c, INK, 3.5, [[s * 44, -10], [s * 54, -2], [s * 44, 6]]); };
   const ballBomba = (c, S, pull) => { cutP(c, poly([[-36, 8], [-38, -8], [-26, -26], [-6, -32], [16, -30], [34, -16], [38, 6], [30, 26], [8, 34], [-16, 32], [-30, 24]]), '#fff', 5);
     line(c, '#9AA6BD', 3, [[-26, -12], [-6, 4], [-12, 24]]); line(c, '#9AA6BD', 3, [[6, -22], [14, 4], [30, 8]]); line(c, '#9AA6BD', 3, [[-30, 14], [-2, 14]]);
     line(c, '#fff', 10, [[0, -32], [8, -50], [22, -56]]); line(c, INK, 6, [[0, -32], [8, -50], [22, -56]]);
@@ -2514,11 +2507,10 @@ K.hud.status = (c, S) => {
   /* ---------------------------------------------------------------- ARMAS (afinadas; tabela no topo) */
   K.defWeapon('triplo',    { nome: 'Leque de Pedras',      sigla: 'LEQ', order: 10, icon: 'icone_triplo',    n: 3, spread: .13, cd: .55, charge: .5, dmg: [.7, 1.6], speed: [8.5, 14], grav: [1.9, 1], life: 1, ammo: 24, ammoPick: 14, proj: 'proj_triplo', sfx: 'shoot_leque', msg: 'Três pedras de uma vez! Boa de perto.', hud: (c, S) => A.slingHud(c, S, { fork: '#6F9BEB', fork2: BLUE, n: 3 }) });
   K.defWeapon('rajada',    { nome: 'Zarabatana de Clipes', sigla: 'ZAR', order: 20, icon: 'icone_rajada',    charge: 0, auto: true, cd: .13, dmg: [.55, .55], speed: [15, 15], grav: [.4, .4], life: 2, ammo: 80, ammoPick: 45, proj: 'proj_rajada', sfx: 'shoot_rajada', msg: 'Segure para metralhar clipes.', hud: hudRajada });
-  K.defWeapon('ricochete', { nome: 'Pedra Quicadora',      sigla: 'QUI', order: 30, icon: 'icone_ricochete', cd: .45, charge: .45, dmg: [1.2, 2.6], life: 4.5, bounce: 3, ammo: 30, ammoPick: 18, proj: 'proj_ricochete', sfx: 'shoot_quica', msg: 'Quica 3 vezes nas paredes. Boa para cantos.', hud: hudThrow(ballQui, 1.15) });
-  K.defWeapon('lapis',     { nome: 'Lança de Lápis',       sigla: 'LAP', order: 40, icon: 'icone_lapis',     cd: .7, charge: .9, dmg: [2, 4.2], speed: [11, 21], grav: [.6, .25], pierce: 3, ammo: 14, ammoPick: 9, proj: 'proj_lapis', sfx: 'shoot_lapis', msg: 'Atravessa até 3 bots. Ótima em corredor.', hud: hudLapis });
+  K.defWeapon('shotgun',   { nome: 'Shotgun de Tachinhas', sigla: 'SHO', order: 40, icon: 'icone_shotgun',   n: 5, spread: .07, cd: 1, charge: 0, dmg: [1.5, 1.5], speed: [15, 15], grav: [.5, .5], life: .36, ammo: 14, ammoPick: 8, proj: 'proj_shotgun', sfx: 'shoot_shotgun', msg: 'Cinco tachinhas de uma vez! Muito dano de perto.', hud: hudShotgun });
   K.defWeapon('bomba',     { nome: 'Bola Explosiva',       sigla: 'BOM', order: 50, icon: 'icone_bomba',     cd: .8, charge: .8, dmg: [.5, 1], speed: [7, 13], grav: [2.2, 1.4], explode: { r: 1.8, dmg: 5 }, ammo: 10, ammoPick: 7, proj: 'proj_bomba', sfx: 'shoot_bomba', msg: 'Explode e fere quem estiver perto.', hud: hudThrow(ballBomba, 1.0) });
   /* sfx só vale se a música/sfx existir (41-audio.js carrega depois): getter cai para o 'shoot' padrão */
-  for (const id of ['triplo', 'rajada', 'ricochete', 'lapis', 'bomba']) { const W = K.weapons[id], n = W.sfx; Object.defineProperty(W, 'sfx', { get: () => (K.audio.sfx[n] ? n : 'shoot'), configurable: true }); }
+  for (const id of ['triplo', 'rajada', 'shotgun', 'bomba']) { const W = K.weapons[id], n = W.sfx; Object.defineProperty(W, 'sfx', { get: () => (K.audio.sfx[n] ? n : 'shoot'), configurable: true }); }
 
   /* ---------------------------------------------------------------- PODERES */
   K.defPower('forca',   { nome: 'Elástico Forte', dur: 25, icon: 'icone_forca',   mod: { charge: 1.7, dmg: 1.35 }, msg: 'ELÁSTICO FORTE! Puxa mais rápido e dói mais (25 s)' });
@@ -2527,7 +2519,7 @@ K.hud.status = (c, S) => {
   K.defPower('coracao', { nome: 'Coração Extra',  dur: 0,  icon: 'icone_coracao', start: pl => { pl.maxhp += 25; pl.hp = Math.min(pl.maxhp, pl.hp + 25); }, msg: 'CORAÇÃO EXTRA! +25 de vida máxima nesta fase' });
 
   /* ---------------------------------------------------------------- PICKUPS ('{pick:"arma_triplo"}' no legend ou ents:[{t:'arma_triplo', x, y}]) */
-  for (const id of ['triplo', 'rajada', 'ricochete', 'lapis', 'bomba']) K.defPickup('arma_' + id, { weapon: id, spr: 'arma_' + id, aura: 'aura_arma', beam: 'feixe_arma', col: [45, 108, 223] });
+  for (const id of ['triplo', 'rajada', 'shotgun', 'bomba']) K.defPickup('arma_' + id, { weapon: id, spr: 'arma_' + id, aura: 'aura_arma', beam: 'feixe_arma', col: [45, 108, 223] });
   for (const id of ['forca', 'botas', 'escudo', 'coracao']) K.defPickup('poder_' + id, { power: id, spr: 'poder_' + id, aura: 'aura_poder', beam: 'feixe_poder', col: [229, 56, 59] });
   K.defPickup('municao', { spr: 'municao', aura: 'aura_municao', beam: 'feixe_municao', col: [47, 179, 106], msg: 'MUNIÇÃO recarregada!', full: 'Munição cheia', take: () => K.refillAmmo(.5) });
 }
@@ -2615,7 +2607,7 @@ K.defLevel({ id: 3, world: 'caderno', nome: 'Capa do Caderno', par: 220, boss: '
 }
 {
 /* 21-fases-b.js — fases 4, 5 e 6 da 1.1.0 (DONO: Level Designer B).
-   F4 Sala dos Professores (lousa, sem chefe, Escudeiro, arma `rajada`) · F5 Biblioteca Proibida (biblioteca, sem chefe, Borrachudo, poderes) · F6 Quadro Negro (lousa, CHEFE 2 `chefe2`, arma `ricochete`).
+   F4 Sala dos Professores (lousa, sem chefe, Escudeiro, arma `rajada`) · F5 Biblioteca Proibida (biblioteca, sem chefe, Borrachudo, poderes) · F6 Quadro Negro (lousa, CHEFE 2 `chefe2`, sem arma nova).
    Dificuldade crescente vem do K.defaultTune (sem L.tune aqui). Moldura de porta = parede tipo 2; tipo 3/4 = pilar/destaque. */
 {
 // props da biblioteca: usa os do Cenógrafo A se existirem, senão cai nos do caderno (nunca quebra o mapa)
@@ -2689,18 +2681,17 @@ const F6 = [
   '##########################',
 ];
 K.defLevel({ id: 6, world: 'lousa', nome: 'Quadro Negro', par: 300, boss: 'chefe2',
-  hint: 'O Professor teleporta: use as carteiras de cobertura! A Quicadora acerta quem se esconde.', start: { a: 0 },
+  hint: 'O Professor teleporta: use as carteiras de cobertura e mire na cabeça!', start: { a: 0 },
   legend: { m: { prop: 'carteira' }, h: { prop: 'cadeira' }, b: { prop: 'mochila' }, z: { prop: 'giz' }, u: { pick: 'municao' } },
-  ents: [{ t: 'arma_ricochete', x: 2.5, y: 12.5 }],
   map: F6 });
 }
 
 }
 {
 /* 22-fases-c.js — fases 7, 8 e 9 da 1.1.0 (DONO: Level Designer C).
-   F7 Fliperama Rabisco (neon, sem chefe): estreia Bombardeiro (b) e Enxame (m), arma Lança de Lápis (perfura) · F8 Lata de Tinta (tinta, sem chefe): Curandeiro (h) atrás de Escudeiros/Gordões, arma Bola Explosiva ·
+   F7 Fliperama Rabisco (neon, sem chefe): estreia Bombardeiro (b) e Enxame (m), arma Shotgun de Tachinhas · F8 Lata de Tinta (tinta, sem chefe): Curandeiro (h) atrás de Escudeiros/Gordões, arma Bola Explosiva ·
    F9 Palácio do Rabisco (neon, CHEFE 3 chefe3): duas alas (norte e sul) que desembocam na arena, Sniper (n) ×2. Dificuldade vem do tune (K.defaultTune): sem compensar no mapa.
-   Legenda própria: b bombardeiro · m enxame · e escudeiro · h curandeiro · n sniper · l arma_lapis · k arma_bomba · u municao · w poder_escudo · x caixote · o caixa_som · t tubo · s estrela. */
+   Legenda própria: b bombardeiro · m enxame · e escudeiro · h curandeiro · n sniper · l arma_shotgun · k arma_bomba · u municao · w poder_escudo · x caixote · o caixa_som · t tubo · s estrela. */
 {
 const F7 = [
   '##########################',
@@ -2756,9 +2747,9 @@ const F9 = [
   '##########################',
 ];
 const LG = { b: { bot: 'bombardeiro' }, m: { bot: 'enxame' }, e: { bot: 'escudeiro' }, h: { bot: 'curandeiro' }, n: { bot: 'sniper' },
-  l: { pick: 'arma_lapis' }, k: { pick: 'arma_bomba' }, u: { pick: 'municao' }, w: { pick: 'poder_escudo' },
+  l: { pick: 'arma_shotgun' }, k: { pick: 'arma_bomba' }, u: { pick: 'municao' }, w: { pick: 'poder_escudo' },
   x: { prop: 'caixote' }, o: { prop: 'caixa_som' }, t: { prop: 'tubo' }, s: { prop: 'estrela' } };
-K.defLevel({ id: 7, world: 'neon', nome: 'Fliperama Rabisco', par: 290, hint: 'Bomba no chão = área vermelha: saia dela! A Lança de Lápis atravessa o enxame em fila.', start: { a: 0 }, legend: LG, map: F7 });
+K.defLevel({ id: 7, world: 'neon', nome: 'Fliperama Rabisco', par: 290, hint: 'Bomba no chão = área vermelha: saia dela! A Shotgun de Tachinhas acaba com o enxame de perto.', start: { a: 0 }, legend: LG, map: F7 });
 K.defLevel({ id: 8, world: 'tinta', nome: 'Lata de Tinta', par: 310, hint: 'O curandeiro cura os outros: derrube ele primeiro, por cima da linha de escudos!', start: { a: 0 }, legend: LG, map: F8 });
 K.defLevel({ id: 9, world: 'neon', nome: 'Palácio do Rabisco', par: 360, boss: 'chefe3', hint: 'Snipers mostram a linha de mira: saia dela! Rei Rabisco chama reforços: use os pilares.', start: { a: 0 }, legend: LG, map: F9 });
 }
@@ -3471,10 +3462,8 @@ K.defLevel({ id: 9, world: 'neon', nome: 'Palácio do Rabisco', par: 360, boss: 
   d('shoot_leque', (t, n) => { [0, .025, .05].forEach((a, i) => { t('square', 1500 + i * 260, 300 + i * 60, .09, .045, a); t('triangle', 760 + i * 90, 170, .12, .07, a); }); n(.07, .12, 3400); });
   /* zarabatana: sopro curto e agudo, "fiu" */
   d('shoot_rajada', (t, n) => { n(.07, .12, 5200); t('sine', 2400, 1400, .06, .06); t('triangle', 1700, 900, .05, .05, .01); });
-  /* quicadora: "boing" elástico que sobe e desce */
-  d('shoot_quica', (t, n) => { t('sine', 240, 900, .09, .1); t('triangle', 900, 260, .16, .09, .08); t('square', 520, 520, .03, .04, .02); n(.03, .08, 2200); });
-  /* lápis: "tchac" de arremesso, madeira seca e silvo agudo */
-  d('shoot_lapis', (t, n) => { n(.03, .22, 3800); t('sawtooth', 2600, 600, .16, .05); t('square', 420, 200, .05, .07); t('sine', 140, 70, .1, .12); });
+  /* shotgun de tachinhas: estouro seco e grave, chiado de papel e "tchic" de bomba (pump) em seguida */
+  d('shoot_shotgun', (t, n) => { n(.05, .3, 2600); t('sawtooth', 320, 70, .16, .12); t('sine', 150, 50, .2, .2); t('square', 1100, 300, .05, .05, .01); t('triangle', 520, 380, .06, .05, .32); n(.04, .08, 4200, .34); });
   /* bola explosiva: "tum" grave de lançamento com chiado */
   d('shoot_bomba', (t, n) => { t('sine', 190, 60, .24, .22); t('sawtooth', 420, 120, .22, .07); n(.2, .2, 900); t('triangle', 320, 540, .18, .05, .12); });
   /* pegar arma: fanfarra curta e brilhante (distinta do pickup) */
@@ -3541,13 +3530,13 @@ K.defStory('pre_5', { pages: [
 K.defStory('pre_6', { pages: [
   P('Palitinho', 'palitinho', 'Quadro Negro! Cheio de contas riscadas, giz voando e um cheiro forte de apagador. Sinto que a prova final chegou.'),
   P('Professor Palito', 'chefe2', 'Silêncio! Eu sou o Professor Palito e hoje tem prova de pontaria. Se errar, vai de giz na testa e zero no boletim. E dessa vez tô de mau humor!'),
-  P('Palitinho', 'palitinho', 'Dica: tem uma quicadora por aqui, a pedra que ricocheteia na parede. Dá para acertar o professor por trás da carteira. Nota dez de esperteza!')
+  P('Palitinho', 'palitinho', 'Dica: ele teleporta, então use as carteiras de cobertura e mire na cabeça. Nota dez de esperteza!')
 ] });
 
 K.defStory('pre_7', { pages: [
   P('Palitinho', 'palitinho', 'Fliperama Rabisco! Luzes piscando, bip-bip pra todo lado e uma musiquinha que gruda na cabeça. Parece divertido, mas não é.'),
   P('Bombardeiro', 'bombardeiro', 'Bum! É o meu nome e o meu cumprimento. Eu jogo bomba de papel e ainda assopro o pavio pra ficar mais bonito. Gostou?'),
-  P('Palitinho', 'palitinho', 'Dica: o enxame voa em bando, então não fique parado. E achei uma lança de lápis que atravessa bot em fila. Apontou, perfurou. Que tal?')
+  P('Palitinho', 'palitinho', 'Dica: o enxame voa em bando, então não fique parado. E achei uma shotgun de tachinhas: cinco de uma vez, e de perto é um estrago. Apontou, pregou. Que tal?')
 ] });
 
 K.defStory('pre_8', { pages: [
