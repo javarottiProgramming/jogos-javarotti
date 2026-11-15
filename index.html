@@ -20,7 +20,7 @@
   :root{
     --paper:#f1f5fb; --grid:#d3dff2; --margin:#ee6a73;
     --ink:#161833; --ink-soft:#4a4d72;
-    --red:#e63946; --blue:#2b66dc; --yellow:#ffb627; --coral:#ff5a64;
+    --red:#e63946; --blue:#2b66dc; --yellow:#ffb627;
     --marker:"Permanent Marker","Marker Felt","Comic Sans MS",cursive;
     --sans:"Nunito",ui-rounded,"Segoe UI",system-ui,sans-serif;
   }
@@ -52,18 +52,24 @@
   .hero{padding:clamp(28px,6vw,64px) 0 clamp(28px,5vw,48px)}
   h1{
     margin:0;font-family:var(--marker);font-weight:400;line-height:.92;letter-spacing:.005em;
-    font-size:clamp(3.4rem,12.5vw,8.6rem);
+    /* cabe em uma linha quando a tela deixa (o nome ocupa ~8em, com a folga da barra de rolagem); em tela pequena quebra em duas */
+    font-size:clamp(3.4rem,min(12.5vw,(min(100vw,1120px) - 108px) / 8.2),8.6rem);
     -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;
     text-shadow:.05em .06em 0 var(--ink);
   }
-  h1 .a{color:var(--red);display:block}
-  h1 .b{color:var(--blue);display:block;margin-left:.35em}
+  h1 .a{color:var(--red)}
+  h1 .b{color:var(--blue)}
   .lead{max-width:34em;margin:clamp(18px,3vw,30px) 0 0;font-size:clamp(1.15rem,2.4vw,1.4rem);line-height:1.5;font-weight:600}
 
   /* ---------- jogos ---------- */
   .games{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(36px,5vw,64px) clamp(28px,4vw,56px);padding:8px 0 clamp(40px,7vw,88px)}
-  .game{display:flex;flex-direction:column;gap:18px;--accent:var(--yellow)}
-  .game.pedrada{--accent:var(--coral)}
+  /* Cada cartão ocupa 5 linhas da grade (capa, título, texto, ficha, botões). As linhas são
+     compartilhadas com o cartão ao lado (subgrid), então título, texto, tracejado e botões ficam alinhados. */
+  .game{display:grid;grid-row:span 5;grid-template-rows:subgrid;row-gap:18px;
+    --accent:var(--yellow);--btn-ink:var(--ink);--title:var(--yellow)}   /* Cacos: amarelo */
+  .kuku{--accent:var(--red);--btn-ink:#fff;--title:var(--red)}
+  .pedrada{--accent:var(--blue);--btn-ink:#fff;--title:var(--blue)}
+  .javas-brick{--accent:#2e9e4f;--btn-ink:var(--ink);--title:#2e9e4f}
 
   .poster{
     all:unset;display:block;cursor:pointer;position:relative;box-sizing:border-box;
@@ -80,17 +86,13 @@
   .poster:focus-visible{outline:3px solid var(--blue);outline-offset:6px}
   .poster .ver{
     position:absolute;right:-6px;bottom:-12px;transform:rotate(-4deg);
-    background:var(--accent);border:3px solid var(--ink);border-radius:10px;padding:1px 12px;
+    background:var(--accent);color:var(--btn-ink);border:3px solid var(--ink);border-radius:10px;padding:1px 12px;
     font-family:var(--marker);font-size:1.05rem;line-height:1.5;
   }
 
-  .game h2{margin:10px 0 0;font-weight:400;line-height:1.02}
-  .kuku h2{font-family:"Lilita One",var(--sans);font-size:clamp(2rem,4.6vw,2.7rem);color:var(--red);
-    -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;letter-spacing:.015em;text-shadow:.04em .05em 0 var(--ink)}
-  .cacos h2{font-family:"Lilita One",var(--sans);font-size:clamp(2rem,4.6vw,2.7rem);color:var(--yellow);
-    -webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;letter-spacing:.015em;text-shadow:.04em .05em 0 var(--ink)}
-  .pedrada h2{font-family:var(--marker);font-size:clamp(2rem,4.4vw,2.6rem);color:var(--blue);
-    -webkit-text-stroke:.09em var(--ink);paint-order:stroke fill;text-shadow:.04em .05em 0 var(--ink)}
+  .game h2{margin:10px 0 0;font-family:"Lilita One",var(--sans);font-weight:400;font-size:clamp(2rem,4.6vw,2.7rem);line-height:1.02;
+    text-wrap:balance;color:var(--title);-webkit-text-stroke:.085em var(--ink);paint-order:stroke fill;letter-spacing:.015em;text-shadow:.04em .05em 0 var(--ink)}
+  .pedrada h2{font-family:var(--marker);font-size:clamp(2rem,4.4vw,2.6rem);letter-spacing:0;-webkit-text-stroke:.09em var(--ink)}
   .game p{margin:0;max-width:34em}
   .ficha{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.98rem;max-width:36em;
     padding-top:14px;border-top:2px dashed var(--ink-soft)}
@@ -100,7 +102,7 @@
   .btn{
     all:unset;box-sizing:border-box;cursor:pointer;align-self:flex-start;
     font-family:var(--marker);font-size:1.4rem;line-height:1;padding:14px 26px 12px;
-    background:var(--accent);color:var(--ink);border:3px solid var(--ink);border-radius:14px;
+    background:var(--accent);color:var(--btn-ink);border:3px solid var(--ink);border-radius:14px;
     box-shadow:5px 6px 0 var(--ink);transition:transform .1s ease,box-shadow .1s ease;
   }
   .btn:hover{transform:translate(-1px,-2px);box-shadow:6px 8px 0 var(--ink)}
@@ -112,17 +114,18 @@
   /* ---------- seções de texto ---------- */
   section.s{padding:clamp(32px,5vw,56px) 0;border-top:3px solid var(--ink)}
   h2.t{margin:0 0 20px;font-family:var(--marker);font-weight:400;font-size:clamp(1.9rem,4.4vw,2.8rem);line-height:1.05}
-  .cols{display:grid;gap:clamp(28px,5vw,64px);grid-template-columns:1fr}
-  @media (min-width:900px){.cols{grid-template-columns:5fr 7fr}}
-  .cols p{margin:0 0 1em;max-width:32em}
+  /* mesma grade dos jogos acima: as colunas de "Quem faz" caem exatamente sob os cartões */
+  .cols{display:grid;gap:clamp(28px,4vw,56px);grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+  .cols p{margin:0 0 1em;max-width:34em}
   h3{margin:0 0 .5em;font-size:1.15rem;font-weight:900}
+  .cols h4{margin:26px 0 4px;font-size:1rem;font-weight:900;color:var(--ink-soft)}
 
   dl.rows{margin:0;display:grid;grid-template-columns:1fr}
   dl.rows>div{display:grid;gap:2px 20px;padding:11px 0;border-top:1px solid var(--ink-soft)}
   dl.rows>div:last-child{border-bottom:1px solid var(--ink-soft)}
   dl.rows dt{font-weight:900}
   dl.rows dd{margin:0}
-  @media (min-width:640px){dl.rows>div{grid-template-columns:minmax(150px,230px) 1fr}}
+  @media (min-width:640px){dl.rows>div{grid-template-columns:minmax(120px,160px) 1fr}}
 
 
 
@@ -190,7 +193,7 @@
   </div>
 
   <header class="hero">
-    <h1><span class="a">Pedro</span><span class="b">Javarotti</span></h1>
+    <h1><span class="a">Pedro</span> <span class="b">Javarotti</span></h1>
     <p class="lead">Faço jogos que abrem direto no navegador, no celular ou no computador. Eu dirijo, um time de agentes de IA constrói. Escolha um e jogue.</p>
   </header>
 
@@ -275,23 +278,30 @@
       <h2 class="t" id="h-quem">Quem faz</h2>
       <div class="cols">
         <div>
-          <p>Eu sou o Pedro Javarotti e dirijo os jogos. Crio os personagens, decido o que cada jogo precisa ser e peço o que mudar até ficar certo.</p>
+          <p>Eu sou o Pedro Javarotti, crio e dirijo os jogos. Crio alguns personagens, decido o que cada jogo precisa ser e junto do meu time planejamos, desenvolvemos e validamos. Se necessário mudanças eu vou alinhando e mudando até chegar ao que eu quero.</p>
           <p>Código, arte, música e testes saem de um time de agentes de IA. Os créditos de cada jogo dizem isso sempre do mesmo jeito: quem dirigiu, qual time fez e qual motor rodou.</p>
         </div>
         <div>
           <h3>O time Javarotti</h3>
-          <p>Um gerente e até dez agentes trabalhando ao mesmo tempo. O gerente escreve o motor e as ferramentas. Cada agente cuida de uma parte, mexe só nos próprios arquivos e entrega um relatório dizendo o que não conseguiu testar.</p>
+          <p>Um gerente e até dez agentes trabalhando ao mesmo tempo. O gerente escreve o motor e as ferramentas, divide o trabalho em ondas e confere tudo antes de aceitar. Cada agente cuida de uma parte, mexe só nos próprios arquivos e entrega um relatório dizendo o que não conseguiu testar.</p>
+          <h4>Base do time</h4>
           <dl class="rows">
-            <div><dt>Pesquisador</dt><dd>Levanta referências de controles, menus e animação antes de começar.</dd></div>
-            <div><dt>Animador do herói</dt><dd>Dá movimento ao personagem a partir do desenho original.</dd></div>
+            <div><dt>Pesquisador</dt><dd>Levanta referências de controles, menus, animação e desempenho antes de começar.</dd></div>
+            <div><dt>Animador do herói</dt><dd>Dá movimento ao personagem, forma por forma, a partir do desenho original.</dd></div>
             <div><dt>Artista de criaturas</dt><dd>Desenha inimigos, NPCs e chefes no estilo do herói.</dd></div>
-            <div><dt>Cenógrafo</dt><dd>Monta os mundos: céu, camadas ao fundo e cenário.</dd></div>
-            <div><dt>Artista de itens e HUD</dt><dd>Faz coletáveis, objetos, projéteis e efeitos.</dd></div>
+            <div><dt>Cenógrafo</dt><dd>Monta os mundos: céu, camadas de fundo que rolam sem emenda, chão e decoração.</dd></div>
+            <div><dt>Artista de itens e HUD</dt><dd>Faz coletáveis, objetos, projéteis, efeitos e a interface na tela.</dd></div>
             <div><dt>Level designer</dt><dd>Desenha as fases, os segredos e a curva de dificuldade.</dd></div>
             <div><dt>Programador de gameplay</dt><dd>Dá vida aos chefes, aos inimigos especiais e aos eventos.</dd></div>
             <div><dt>Designer de menus</dt><dd>Cria título, seleção de fases, opções e créditos.</dd></div>
-            <div><dt>Som e história</dt><dd>Compõe músicas e efeitos, escreve cutscenes e falas.</dd></div>
-            <div><dt>QA e playtester</dt><dd>Joga tudo, caça bugs e corrige o conteúdo.</dd></div>
+            <div><dt>Som e história</dt><dd>Cuida da trilha, dos efeitos, das cutscenes e das falas.</dd></div>
+            <div><dt>QA e playtester</dt><dd>Joga todas as fases e telas, caça bugs e aponta o que não foi testado.</dd></div>
+          </dl>
+          <h4>Quando o jogo pede</h4>
+          <dl class="rows">
+            <div><dt>Compositor</dt><dd>Assume a trilha e os efeitos quando o jogo pede som próprio.</dd></div>
+            <div><dt>Roteirista</dt><dd>Assume a história, as cutscenes e as falas quando o enredo é longo.</dd></div>
+            <div><dt>Modelador 3D</dt><dd>Modela e anima personagens, inimigos e cenário em 3D, como no Cacos.</dd></div>
           </dl>
         </div>
       </div>
@@ -303,7 +313,7 @@
         <div class="jgk-body">
           <h2 class="t" id="h-motor">Motor JGK</h2>
           <p class="jgk-lead">Todo jogo daqui roda no mesmo motor, o Javarotti Game Kit.</p>
-          <p>O JGK cuida do que todo jogo precisa: o loop do jogo, teclado, toque e gamepad, som sintetizado no próprio navegador, cenas, menus e o save local. O time escreve só o que é de cada jogo: fases, chefes, arte e história. Tudo sai num único arquivo HTML.</p>
+          <p>O JGK cuida do que todo jogo precisa: o loop do jogo, teclado, toque e gamepad, som sintetizado no próprio navegador, cenas, menus e o save local. O time escreve só o que é de cada jogo: fases, chefes, arte e história.</p>
           <p><strong>O diferencial é que o motor aprende.</strong> A cada jogo novo o time registra o que deu certo e o que deu errado e leva isso para o kit, então o jogo seguinte já nasce com o que o anterior ensinou.</p>
         </div>
       </div>
