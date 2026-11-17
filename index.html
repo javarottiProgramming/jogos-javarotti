@@ -111,6 +111,38 @@
   .actions{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
   .alone{display:inline-flex;align-items:center;min-height:44px;padding:0;font-weight:800;font-size:.95rem;color:var(--ink-soft)}
 
+  .links{display:flex;flex-wrap:wrap;gap:0 20px}
+  button.alone{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;min-height:44px;
+    font-family:var(--sans);font-weight:800;font-size:.95rem;color:var(--ink-soft);text-decoration:underline}
+  button.alone:hover{color:var(--ink)}
+  button.alone:focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:6px}
+
+  /* ---------- histórico de versões (modal) ---------- */
+  #hist{padding:0;border:3px solid var(--ink);border-radius:22px;background:#fff;color:var(--ink);box-shadow:8px 9px 0 var(--ink);
+    width:min(620px,calc(100vw - 24px));max-height:min(84vh,720px);overflow:hidden;margin:auto;
+    --accent:var(--yellow);--btn-ink:var(--ink)}
+  #hist[open]{display:flex;flex-direction:column}
+  #hist::backdrop{background:rgba(22,24,51,.55)}
+  #hist[data-game="kuku"]{--accent:var(--red);--btn-ink:#fff}
+  #hist[data-game="pedrada"]{--accent:var(--blue);--btn-ink:#fff}
+  #hist[data-game="javas-brick"]{--accent:#2e9e4f}
+  .hist-head{flex:0 0 auto;display:flex;align-items:flex-start;gap:16px;padding:20px 22px 14px;border-bottom:2px dashed var(--ink-soft)}
+  .hist-head h2{margin:0;flex:1;font-family:var(--marker);font-weight:400;font-size:clamp(1.5rem,5vw,2rem);line-height:1.1}
+  .hist-head h2 small{display:block;font-family:var(--sans);font-weight:800;font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px}
+  .hist-x{all:unset;box-sizing:border-box;cursor:pointer;flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;margin:-6px -8px 0 0;
+    font-size:1.5rem;font-weight:900;border-radius:12px}
+  .hist-x:hover{background:var(--grid)}
+  .hist-x:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+  #hist-list{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin:0;padding:6px 22px 8px;list-style:none}
+  #hist-list li{display:grid;grid-template-columns:6.4rem 1fr;gap:2px 14px;align-items:baseline;padding:12px 0;border-top:1px solid var(--grid)}
+  #hist-list li:first-child{border-top:0}
+  #hist-list .v{grid-row:span 2;align-self:start;justify-self:start;font-family:var(--marker);font-size:1.05rem;line-height:1.5;padding:1px 10px;border:3px solid var(--ink);border-radius:10px;
+    background:#fff;transform:rotate(-2deg);white-space:nowrap}
+  #hist-list li.now .v{background:var(--accent);color:var(--btn-ink)}
+  #hist-list time,#hist-list .nodate{font-size:.82rem;font-weight:800;color:var(--ink-soft)}
+  #hist-list .what{margin:0;line-height:1.45}
+  .hist-foot{flex:0 0 auto;margin:0;padding:10px 22px 14px;border-top:2px dashed var(--ink-soft);font-size:.82rem;font-weight:700;color:var(--ink-soft)}
+
   /* ---------- seções de texto ---------- */
   section.s{padding:clamp(32px,5vw,56px) 0;border-top:3px solid var(--ink)}
   h2.t{margin:0 0 20px;font-family:var(--marker);font-weight:400;font-size:clamp(1.9rem,4.4vw,2.8rem);line-height:1.05}
@@ -215,7 +247,10 @@
         </dl>
         <div class="actions">
           <button class="btn" type="button" data-play="kuku">Jogar Kuku</button>
-          <a class="alone" href="jogos/kuku/">abrir em página própria</a>
+          <div class="links">
+            <a class="alone" href="jogos/kuku/">abrir em página própria</a>
+            <button class="alone" type="button" data-hist="kuku">histórico</button>
+          </div>
         </div>
       </article>
 
@@ -233,7 +268,10 @@
         </dl>
         <div class="actions">
           <button class="btn" type="button" data-play="pedrada">Jogar Pedrada</button>
-          <a class="alone" href="jogos/pedrada/">abrir em página própria</a>
+          <div class="links">
+            <a class="alone" href="jogos/pedrada/">abrir em página própria</a>
+            <button class="alone" type="button" data-hist="pedrada">histórico</button>
+          </div>
         </div>
       </article>
 
@@ -251,7 +289,10 @@
         </dl>
         <div class="actions">
           <button class="btn" type="button" data-play="cacos-de-sol">Jogar Cacos de Sol</button>
-          <a class="alone" href="jogos/cacos-de-sol/">abrir em página própria</a>
+          <div class="links">
+            <a class="alone" href="jogos/cacos-de-sol/">abrir em página própria</a>
+            <button class="alone" type="button" data-hist="cacos-de-sol">histórico</button>
+          </div>
         </div>
       </article>
 
@@ -269,7 +310,10 @@
         </dl>
         <div class="actions">
           <button class="btn" type="button" data-play="javas-brick">Jogar Java's Brick</button>
-          <a class="alone" href="jogos/javas-brick/">abrir em página própria</a>
+          <div class="links">
+            <a class="alone" href="jogos/javas-brick/">abrir em página própria</a>
+            <button class="alone" type="button" data-hist="javas-brick">histórico</button>
+          </div>
         </div>
       </article>
 
@@ -331,6 +375,15 @@
   <noscript><p>Sem JavaScript o painel não abre os jogos aqui, mas dá para jogar direto: <a href="jogos/kuku/">Kuku</a> e <a href="jogos/pedrada/">Pedrada de Palito</a> e <a href="jogos/cacos-de-sol/">Cacos de Sol</a>.</p></noscript>
 </div>
 
+<dialog id="hist" aria-labelledby="hist-title">
+  <div class="hist-head">
+    <h2 id="hist-title"><small>Histórico de versões</small><span id="hist-name"></span></h2>
+    <button class="hist-x" type="button" id="hist-close" aria-label="Fechar o histórico">✕</button>
+  </div>
+  <ol id="hist-list"></ol>
+  <p class="hist-foot">Da versão mais nova para a mais antiga. Horários de Brasília.</p>
+</dialog>
+
 <section id="player" aria-label="Jogo em andamento">
   <div class="bar">
     <button type="button" id="back" aria-label="Voltar para a lista de jogos">← <span class="lbl">Jogos</span></button>
@@ -352,11 +405,116 @@ const GAMES = {
   'javas-brick':  { title: "Java's Brick",      path: 'jogos/javas-brick/', v: '1.0.21' }
 };
 
+/* Histórico de versões (botão "histórico" de cada jogo): [versão, data/hora de Brasília, frase], da mais nova para a mais antiga.
+   Data sem hora (só AAAA-MM-DD) = o dia é conhecido, a hora não; null = data não registrada.
+   A cada versão nova de um jogo, acrescente a linha NO TOPO da lista dele (a versão do topo é a marcada como "atual"). */
+const HIST = {
+  kuku: [
+    ['2.9', '2026-11-17T00:38', 'O áudio agora para quando a janela perde o foco e volta quando você retorna.'],
+    ['2.8', '2026-11-13T08:11', 'Botões de toque afastados das bordas da tela, para o Android não engolir o toque, e sem menu ao segurar o dedo.'],
+    ['2.7', '2026-11-13T08:11', 'Pulo e bico separados no celular, sem o dedo trocar de botão por acidente e sem perder toque quando o jogo congela no golpe.'],
+    ['2.6', '2026-11-13T03:12', 'A estrela das penas só vale com as 3 penas em toda fase, o Zé Geladeira foi arrumado e ganhou fala nova.'],
+    ['2.5', '2026-11-13T02:48', 'As estrelas agora respeitam o objetivo de não levar dano.'],
+    ['2.4', '2026-11-13T02:17', 'Os créditos passam a mostrar o esforço do time.'],
+    ['2.3', '2026-11-13T02:11', 'Mouse no PC (esquerdo pula, direito bica), créditos mais rápidos ao segurar uma tecla e créditos no padrão Javarotti.'],
+    ['2.2', '2026-11-12T22:55', 'Versão sempre visível e o jogo ganha repositório próprio, com build reprodutível e teste automático.'],
+    ['2.1', null, 'Rodada de correções: olhar para cima e para baixo, sprites cortados, parallax, qualidade automática, mapa do Céu e menus.'],
+    ['2.0', null, 'Jogo refeito pelo time de agentes: novo herói, inimigos e chefes, 5 mundos com parallax, menus animados, toque, áudio e cutscenes.'],
+    ['1.0', null, 'Primeira versão completa: plataforma 2D em um único arquivo, jogável no celular e no computador.']
+  ],
+  pedrada: [
+    ['1.1.7', '2026-11-17T01:05', 'Todos os palitos, chefes inclusos, com a mesma altura e o mesmo traço de desenho.'],
+    ['1.1.6', '2026-11-17T00:59', 'Palitos nítidos de longe, com contorno liso, no Médio e no Alto.'],
+    ['1.1.5', '2026-11-15T10:11', 'O som não some mais na tela cheia e o minimapa mostra os itens por cor.'],
+    ['1.1.4', '2026-11-15T09:47', 'Corrida de 10 segundos até o portal, com guia no chão, e o mouse já entra mirando.'],
+    ['1.1.3', '2026-11-15T09:18', 'Saem a Pedra Quicadora e a Lança de Lápis; entra a Shotgun de Tachinhas, liberada na fase 7.'],
+    ['1.1.2', '2026-11-15T02:45', 'No celular, o botão de trocar arma sai de dentro da zona de tiro.'],
+    ['1.1.1', '2026-11-15T02:39', 'No celular, mira e tiro ficam em áreas separadas, com uma zona de tiro no canto.'],
+    ['1.1.0', '2026-11-14T23:31', 'A Grande Atualização: 10 fases, 4 chefes, armas e poderes pegos no cenário, 6 inimigos e 4 mundos novos.'],
+    ['1.0.8', '2026-11-13T08:02', 'No celular, o lado direito da tela vira o estilingue: toque atira, segurar puxa e arrastar mira.'],
+    ['1.0.7', '2026-11-13T04:19', 'Tiro na cabeça mais exigente: dano 1,5× e mira que não ajuda de graça.'],
+    ['1.0.6', '2026-11-13T03:58', 'Corrigido o tiro na cabeça que não contava: a pedra agora vai para onde a mira aponta.'],
+    ['1.0.5', '2026-11-13T02:14', 'Piscadela para o Zelda na abertura: o Palitinho aparece de gorro verde.'],
+    ['1.0.4', '2026-11-13T02:02', 'Créditos no padrão Javarotti, com o time de IA e o motor JGK.'],
+    ['1.0.3', '2026-11-13T02:02', 'Tiro na cabeça inconfundível, chefes com fases de verdade e a bomba do Rei Rabisco.'],
+    ['1.0.2', '2026-11-13T01:30', 'O áudio para sem foco, sensibilidade do mouse pela metade, botão de zerar progresso e coletáveis com destaque.'],
+    ['1.0.1', '2026-11-13', 'Estilingue do HUD refeito: a mão agora puxa a pedra pela frente e o cabo ficou mostarda.'],
+    ['1.0', '2026-11-12', 'Primeira entrega: motor FPS, 3 fases com chefe, 4 bots, 3 chefes e 3 mundos.']
+  ],
+  'cacos-de-sol': [
+    ['1.1.1', '2026-11-17T00:45', 'O objetivo no mapa não esconde mais a vila nem você.'],
+    ['1.1.0', '2026-11-17', 'Vila vira área segura, o mouse volta sozinho depois das falas e menus, mapa-múndi refeito, minimapa em 3 tamanhos e créditos enxutos.'],
+    ['1.0.4', '2026-11-16T23:53', 'No celular o mapa não trava mais o jogo, rolar não enterra o herói e o pulo passa por cercas e obstáculos baixos.'],
+    ['1.0.3', '2026-11-15T10:20', 'Os monstros não somem mais quando você chega perto e os voadores deixam de virar barras.'],
+    ['1.0.2', '2026-11-15T09:37', 'O som voltou, o clique passa as falas e o cursor do mouse não some mais nas telas.'],
+    ['1.0.1', '2026-11-15T09:06', 'No celular em pé o jogo abre direto, sem tela pedindo para girar.'],
+    ['1.0', '2026-11-15', 'Primeira versão: RPG de ação 3D numa ilha aberta com 4 biomas, vila, combate, 8 monstros e 4 chefes.']
+  ],
+  'javas-brick': [
+    ['1.0.21', '2026-11-16T23:56', 'A bola não atravessa mais a raquete.'],
+    ['1.0.20', '2026-11-16T23:50', 'Blocos menores em todas as telas e bem mais longe da raquete.'],
+    ['1.0.19', '2026-11-16T23:37', 'Controles de toque com duas setas abaixo da raquete; apertar as duas juntas solta a bola.'],
+    ['1.0.18', '2026-11-16T23:28', 'Telas ultralargas sem faixas pretas.'],
+    ['1.0.17', '2026-11-16T23:19', 'Menus em formato widescreen no celular deitado.'],
+    ['1.0.16', '2026-11-16T22:52', 'Fase em widescreen no celular deitado, com tudo cerca de 15% maior.'],
+    ['1.0.15', '2026-11-15T13:00', 'Removido o vigia de foco; o áudio segue parando ao perder o foco.'],
+    ['1.0.14', '2026-11-15', 'O áudio para quando a janela perde o foco.'],
+    ['1.0.13', '2026-11-15', 'Os créditos sobem pela base do painel.'],
+    ['1.0.12', '2026-11-15T12:54', 'Menus pelo teclado, tela cheia e créditos já com "Desenvolvido e Dirigido por" visível.'],
+    ['1.0.11', '2026-11-15', 'Poderes caem mais devagar, com o nome escrito, sorteio mais esperto e botão direito bloqueado.'],
+    ['1.0.10', '2026-11-15', 'O clique e o toque agora soltam a bola de verdade.'],
+    ['1.0.9', '2026-11-15', 'A bola grudada solta, a bola acelera a cada bloco quebrado e os poderes caem mais devagar.'],
+    ['1.0.8', '2026-11-15', 'Pausa, fase limpa e fim de jogo ganham painel escuro e texto legível.'],
+    ['1.0.7', '2026-11-15', 'Menu com título e botões reposicionados e tela que se ajusta em janelas pequenas.'],
+    ['1.0.6', '2026-11-15', 'Nome final: Java\'s Brick.'],
+    ['1.0.5', '2026-11-15', 'O jogo passa a se chamar Javarotti Brick.'],
+    ['1.0.4', '2026-11-15', 'Créditos limpos, com hierarquia de fontes.'],
+    ['1.0.3', '2026-11-15', 'Menus redesenhados, ícones novos para os 10 poderes e texto sempre legível.'],
+    ['1.0.2', '2026-11-15', 'Tela cheia, níveis de gráficos, estrelas que piscam e créditos que aceleram ao segurar.'],
+    ['1.0.1', '2026-11-15', 'Mosaicos JAVAROTTI e JGK nas fases e menu principal refeito.'],
+    ['1.0.0', '2026-11-15', 'Primeira versão jogável: 12 fases em 4 mundos, 10 poderes e 4 trilhas.']
+  ]
+};
+
 const $ = id => document.getElementById(id);
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-play]');
   if (b) location.hash = '#/' + b.dataset.play;
 });
+
+/* ---------- modal do histórico ---------- */
+const hist = $('hist');
+function fmtData(d){
+  const m = d && d.match(/^(\d{4})-(\d\d)-(\d\d)(?:T(\d\d):(\d\d))?/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' às ' + m[4] + ':' + m[5] : '') : '';
+}
+function abrirHist(id){
+  const g = GAMES[id], lista = HIST[id];
+  if (!g || !lista) return;
+  $('hist-name').textContent = g.title;
+  hist.dataset.game = id;
+  const ul = $('hist-list');
+  ul.textContent = '';
+  lista.forEach(([v, d, txt], i) => {
+    const li = document.createElement('li');
+    if (v === g.v) li.className = 'now';
+    const b = document.createElement('span'); b.className = 'v'; b.textContent = 'v' + v;
+    let quando;
+    if (d) { quando = document.createElement('time'); quando.dateTime = d + (d.length > 10 ? '-03:00' : ''); quando.textContent = fmtData(d); }
+    else { quando = document.createElement('span'); quando.className = 'nodate'; quando.textContent = 'data não registrada'; }
+    const p = document.createElement('p'); p.className = 'what'; p.textContent = txt;
+    li.append(b, quando, p);
+    ul.append(li);
+  });
+  ul.scrollTop = 0;
+  hist.showModal();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-hist]');
+  if (b) abrirHist(b.dataset.hist);
+});
+$('hist-close').addEventListener('click', () => hist.close());
+hist.addEventListener('click', e => { if (e.target === hist) hist.close(); });   // clique fora da caixa fecha
 
 /* player em tela cheia por hash: #/kuku, #/pedrada, #/cacos-de-sol */
 const frame = $('frame');
