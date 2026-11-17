@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="data:,">
-<title>Java's Brick 1.0.17</title>
+<title>Java's Brick 1.0.18</title>
 <style>
   html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -17,7 +17,7 @@
 /*==ENGINE:core==  JGK (Javarotti Game Kit) 2D · registros, save, canvas, entrada, cenas, loop */
 // Motor JGK — Javarotti Game Kit. Cada jogo do time usa este mesmo núcleo.
 const K = (window.K = window.K || {});
-K.version = '1.0.17';
+K.version = '1.0.18';
 K.game = "Java's Brick";
 K.W = 800;
 K.H = 600;
@@ -141,7 +141,7 @@ K.layout = function () {
   const a = window.innerWidth / Math.max(1, window.innerHeight);
   if (a > 1.34) {
     K.H = 520;
-    K.W = Math.max(800, Math.min(1120, Math.round(520 * a)));
+    K.W = Math.max(800, Math.min(1400, Math.round(520 * a)));
   } else { K.W = 800; K.H = 600; }
 };
 K.wide = function () { return K.H < 600; };   // layout widescreen ativo
@@ -1412,14 +1412,16 @@ K.defScene('play', {
 const TT = (K.titleFx = {});
 TT.init = function () {
   TT.t = 0;
+  TT.W = K.W;   // a demo ocupa a largura toda da tela (paisagem larga tem mais colunas)
   TT.bricks = [];
   // parede de blocos reais, só na faixa de cima: os botões ficam embaixo (regra 16)
   const kinds = ['basico', 'dupla', 'tripla', 'explosivo', 'basico', 'marca'];
   for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 16; c++) {
+    const cols = Math.max(16, Math.floor((K.W - 52) / 47) + 1), x0 = Math.round((K.W - (cols * 47 - 6)) / 2);
+    for (let c = 0; c < cols; c++) {
       if ((r * 7 + c * 3) % 9 === 0) continue;
       const id = kinds[(r * 5 + c) % kinds.length];
-      TT.bricks.push({ x: 26 + c * 47, y: 34 + r * 27, w: 41, h: 21, id, alive: true, flash: 0 });
+      TT.bricks.push({ x: x0 + c * 47, y: 34 + r * 27, w: 41, h: 21, id, alive: true, flash: 0 });
     }
   }
   TT.ball = { x: 300, y: 200, vx: 230, vy: -300, r: 7 };
@@ -1440,7 +1442,7 @@ TT.update = function (dt) {
   const ball = TT.ball;
   ball.x += ball.vx * dt; ball.y += ball.vy * dt;
   if (ball.x < ball.r) { ball.x = ball.r; ball.vx = Math.abs(ball.vx); }
-  if (ball.x > 800 - ball.r) { ball.x = 800 - ball.r; ball.vx = -Math.abs(ball.vx); }
+  if (ball.x > TT.W - ball.r) { ball.x = TT.W - ball.r; ball.vx = -Math.abs(ball.vx); }
   if (ball.y < 14 + ball.r) { ball.y = 14 + ball.r; ball.vy = Math.abs(ball.vy); }
   if (ball.y > 160) { ball.y = 160; ball.vy = -Math.abs(ball.vy); }
   for (const b of TT.bricks) {
@@ -1507,6 +1509,7 @@ K.defScene('title', {
   update(dt) { TT.update(dt); },
   draw(g) {
     const w1 = K.worlds.w1;
+    if (TT.W !== K.W) TT.init();
     // fundo: céu do mundo + brilho pulsando atrás do título
     const grd = g.createLinearGradient(0, 0, 0, K.H);
     grd.addColorStop(0, '#0d0a24'); grd.addColorStop(1, w1.sky[1]);
@@ -1515,8 +1518,8 @@ K.defScene('title', {
     glow.addColorStop(0, 'rgba(255,210,63,' + (0.18 + Math.sin(TT.t * 2) * 0.05) + ')');
     glow.addColorStop(1, 'rgba(255,210,63,0)');
     g.fillStyle = glow; g.fillRect(0, 0, K.W, 300);
-    // demo: blocos reais e bola (faixa de 800 centralizada)
-    g.save(); g.translate(K.ox(), 0);
+    // demo: blocos reais e bola 
+    g.save();
     TT.bricks.forEach((b) => {
       if (!b.alive) return;
       const bd = K.blocks[b.id];
