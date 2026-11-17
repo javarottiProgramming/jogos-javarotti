@@ -7,13 +7,13 @@ Portfólio rápido dos jogos do Pedro Javarotti: um painel para escolher o jogo 
 | **Kuku e a Semente do Sol** (plataforma 2D) | 2.8 | `jogos/kuku/` |
 | **Pedrada de Palito** (FPS de estilingue) | 1.1.5 | `jogos/pedrada/` |
 | **Cacos de Sol** (RPG de ação 3D) | 1.0.3 | `jogos/cacos-de-sol/` |
-| **Java's Brick** (quebra-tijolos) | 1.0.17 | `jogos/javas-brick/` |
+| **Java's Brick** (quebra-tijolos) | 1.0.18 | `jogos/javas-brick/` |
 
 Cada jogo é **um único arquivo HTML** (o `releases/*.html` do repositório original), copiado sem alteração para `jogos/<id>/index.html`.
 Os códigos-fonte continuam nos repositórios dos próprios jogos.
 
 ## Como atualizar um jogo
-Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a versão no `badge` do `index.html` e faça push na `main`.
+Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a versão no `badge` do `index.html` **e o campo `v` do jogo no objeto `GAMES`** (ele evita que o navegador mostre a versão antiga em cache dentro do quadro) e faça push na `main`.
 
 ## Como adicionar um jogo novo
 1. `jogos/<id>/index.html` com o HTML do jogo.
