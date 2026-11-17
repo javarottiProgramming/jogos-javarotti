@@ -395,7 +395,7 @@
 </section>
 
 <script>
-/* v = versão do jogo: vai na URL do iframe para o navegador não servir uma versão antiga em cache (o Pages cacheia 10 min). Atualize junto com o selo. */
+/* v = versão do jogo, usada só no histórico de versões (marca a atual). Atualize junto com o selo. */
 /* Jogo novo: copie o HTML para jogos/<id>/index.html, ponha a capa em assets/<id>.jpg,
    acrescente o <article class="game"> acima e uma linha aqui. */
 const GAMES = {
@@ -519,6 +519,9 @@ hist.addEventListener('click', e => { if (e.target === hist) hist.close(); });  
 /* player em tela cheia por hash: #/kuku, #/pedrada, #/cacos-de-sol */
 const frame = $('frame');
 let scrollY = 0;
+/* O GitHub Pages não deixa configurar cabeçalhos e manda Cache-Control: max-age=600, então o navegador podia abrir o jogo de antes do deploy.
+   cache:'no-cache' = pergunta ao servidor (ETag) antes de usar a cópia local e atualiza o cache. Se falhar (offline), segue com o que tiver. */
+const revalidar = path => fetch(path, { cache: 'no-cache' }).catch(() => {});
 function route(){
   const m = location.hash.match(/^#\/([\w-]+)$/);
   const g = m && GAMES[m[1]];
@@ -527,7 +530,12 @@ function route(){
     document.title = g.title + ', jogos do Javarotti';
     $('pname').textContent = g.title;
     $('solo').href = g.path;
-    if (frame.dataset.id !== m[1]) { frame.src = g.path; frame.dataset.id = m[1]; }
+    if (frame.dataset.id !== m[1]) {
+      const id = m[1];
+      frame.dataset.id = id;
+      // revalida o jogo no servidor (304 se não mudou) e só então carrega o iframe, que pega a cópia atualizada
+      revalidar(g.path).then(() => { if (frame.dataset.id === id) frame.src = g.path; });
+    }
     document.body.classList.add('playing');
   } else {
     const was = document.body.classList.contains('playing');
