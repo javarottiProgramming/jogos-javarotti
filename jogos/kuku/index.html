@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Kuku e a Semente do Sol 2.8</title>
+<title>Kuku e a Semente do Sol 2.9</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@ const ASSETS={"raster":{"kuku_face_n":{"src":"data:image/webp;base64,UklGRqrMAAB
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK — Javarotti Game Kit) */
 'use strict';
-const K = window.K = { version: '2.8', /* suba a cada rodada de correções: tela inicial e créditos leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '2.9', /* suba a cada rodada de correções: tela inicial e créditos leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -416,7 +416,7 @@ INP.drawTouch = c => {
 /*==ENGINE:audio==  sintetizador WebAudio: efeitos por função + tracker de música por padrões de texto */
 const AU = K.audio = { c: null, sg: null, mg: null, eg: null, nb: null, sfx: {}, songs: {}, cur: null, name: null, step: 0, next: 0 };
 AU.init = () => {
-  if (AU.c) { if (AU.c.state === 'suspended') AU.c.resume().catch(() => {}); return; }
+  if (AU.c) { if (AU.c.state === 'suspended' && !AU.asleep) AU.c.resume().catch(() => {}); return; }
   try {
     const C = window.AudioContext || window.webkitAudioContext; const c = AU.c = new C();
     const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 6; comp.connect(c.destination);
@@ -429,6 +429,12 @@ AU.init = () => {
     AU.vol(); if (AU.name) { const nm = AU.name; AU.name = null; K.music(nm); }
   } catch (e) { AU.c = null; }
 };
+/* regra 15 (lição Pedrada/Cacos): o áudio PARA ao perder o foco (aba em 2º plano, janela minimizada, alt-tab) e volta ao ganhar o foco; nunca toca em segundo plano */
+AU.asleep = false;
+AU.sleep = () => { AU.asleep = true; if (AU.c && AU.c.state === 'running') AU.c.suspend().catch(() => {}); };
+AU.wake = () => { AU.asleep = false; if (AU.c && AU.c.state === 'suspended') AU.c.resume().catch(() => {}); };
+window.addEventListener('blur', AU.sleep); window.addEventListener('focus', AU.wake); window.addEventListener('pagehide', AU.sleep); window.addEventListener('pageshow', AU.wake);
+document.addEventListener('visibilitychange', () => { if (document.hidden) AU.sleep(); else AU.wake(); });
 const _vc = v => Math.pow(clamp(v, 0, 100) / 100, 1.7);   // 0–100 → ganho (curva perceptiva)
 AU.vol = () => { const o = SAVE.opt; o.snd = o.sv > 0 ? 1 : 0; o.mus = o.mv > 0 ? 1 : 0; if (!AU.c) return; const t = AU.c.currentTime; AU.sg.gain.setTargetAtTime(.9 * _vc(o.sv), t, .02); AU.mg.gain.setTargetAtTime(.5 * _vc(o.mv), t, .02); };
 K.setVol = (key, v) => { const o = SAVE.opt, was = o[key]; o[key] = clamp(Math.round(v / 10) * 10, 0, 100); AU.vol(); if (key === 'mv' && !was && o.mv && AU.name) { const nm = AU.name; AU.name = null; K.music(nm); } };
