@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="data:,">
-<title>Java's Brick 1.0.20</title>
+<title>Java's Brick 1.0.21</title>
 <style>
   html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -17,7 +17,7 @@
 /*==ENGINE:core==  JGK (Javarotti Game Kit) 2D · registros, save, canvas, entrada, cenas, loop */
 // Motor JGK — Javarotti Game Kit. Cada jogo do time usa este mesmo núcleo.
 const K = (window.K = window.K || {});
-K.version = '1.0.20';
+K.version = '1.0.21';
 K.game = "Java's Brick";
 K.W = 800;
 K.H = 600;
@@ -637,7 +637,7 @@ PL.apply = function (id) {
       const base = cur.length ? cur : G.balls;
       base.slice(0, 4).forEach((b) => {
         for (let k = -1; k <= 1; k += 2) {
-          const s = PL.speed(), a = Math.atan2(b.vy, b.vx) + k * 0.45;
+          const s = PL.speed(), a = (b.stuck ? -Math.PI / 2 : Math.atan2(b.vy, b.vx)) + k * 0.45;   // bola grudada: clones saem para cima
           if (G.balls.length < 14) PL.spawnBall(false, b.x, b.y, Math.cos(a) * s, Math.sin(a) * s);
         }
       });
@@ -801,17 +801,21 @@ PL.step = function (dt) {
   for (let i = G.balls.length - 1; i >= 0; i--) {
     const b = G.balls[i];
     if (b.stuck) { b.x = G.paddle.x + b.ox; b.y = PL.py() - PL_PH / 2 - b.r - 1; continue; }
-    const px = b.x, py = b.y;
     b.x += b.vx * dt; b.y += b.vy * dt;
     // paredes e teto
     if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); AU.sfx('wall'); }
     if (b.x > K.W - b.r) { b.x = K.W - b.r; b.vx = -Math.abs(b.vx); AU.sfx('wall'); }
     if (b.y < b.r) { b.y = b.r; b.vy = Math.abs(b.vy); AU.sfx('wall'); }
     // raquete
-    const pl = G.paddle.x - w / 2 - b.r * 0.5, pr = G.paddle.x + w / 2 + b.r * 0.5;
-    if (b.vy > 0 && b.y + b.r >= PL.py() - PL_PH / 2 && py + b.r <= PL.py() - PL_PH / 2 + 4 && b.x >= pl && b.x <= pr) {
+    // colisão com o corpo inteiro da raquete (círculo x retângulo), não só no quadro em que a bola cruza o topo:
+    // bola que chega de lado, ou raquete que desliza por cima dela, também rebate em vez de atravessar
+    const ptop = PL.py() - PL_PH / 2, pbot = ptop + PL_PH;
+    const pl = G.paddle.x - w / 2, pr = G.paddle.x + w / 2;
+    const ccx = K.clamp(b.x, pl, pr), ccy = K.clamp(b.y, ptop, pbot);
+    const hitPaddle = b.vy > 0 && b.y < pbot && (b.x - ccx) * (b.x - ccx) + (b.y - ccy) * (b.y - ccy) <= b.r * b.r;
+    if (hitPaddle) {
       if (G.sticky || G.timers.sticky > 0) {
-        b.stuck = true; b.ox = b.x - G.paddle.x; b.vx = 0; b.vy = 0;
+        b.stuck = true; b.ox = K.clamp(b.x - G.paddle.x, -w / 2, w / 2); b.vx = 0; b.vy = 0;
         AU.sfx('paddle');
         continue;
       }
