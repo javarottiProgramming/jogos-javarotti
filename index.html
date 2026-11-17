@@ -526,8 +526,8 @@ function route(){
     if (!document.body.classList.contains('playing')) scrollY = window.scrollY;
     document.title = g.title + ', jogos do Javarotti';
     $('pname').textContent = g.title;
-    $('solo').href = g.path + '?v=' + g.v;
-    if (frame.dataset.id !== m[1]) { frame.src = g.path + '?v=' + g.v; frame.dataset.id = m[1]; }
+    $('solo').href = g.path;
+    if (frame.dataset.id !== m[1]) { frame.src = g.path; frame.dataset.id = m[1]; }
     document.body.classList.add('playing');
   } else {
     const was = document.body.classList.contains('playing');
