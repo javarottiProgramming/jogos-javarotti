@@ -13,7 +13,7 @@ Cada jogo é **um único arquivo HTML** (o `releases/*.html` do repositório ori
 Os códigos-fonte continuam nos repositórios dos próprios jogos.
 
 ## Como atualizar um jogo
-Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a versão no `badge` do `index.html` e faça push na `main`.
+Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a versão no `badge` do `index.html` **e o campo `v` do jogo no objeto `GAMES`** (ele evita que o navegador mostre a versão antiga em cache dentro do quadro) e faça push na `main`.
 
 ## Como adicionar um jogo novo
 1. `jogos/<id>/index.html` com o HTML do jogo.
