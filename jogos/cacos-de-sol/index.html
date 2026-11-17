@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.0.4</title>
+<title>Cacos de Sol 1.1.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -36,8 +36,8 @@ body.dlgopen #touch,body.uimodal #touch{display:none!important}
 .b-lock{right:calc(var(--R0) + var(--tb) * 3.8 + 40px);bottom:var(--B0);width:calc(var(--tb) * .8);height:calc(var(--tb) * .8);font-size:calc(var(--tb) * .2)}
 .b-int{right:calc(var(--R0) + var(--tb) * 4.6 + 54px);bottom:var(--B0);width:calc(var(--tb) * 1.2);height:calc(var(--tb) * 1.2);background:rgba(255,210,63,.96);display:none}
 .b-pot{left:max(64px,calc(var(--sl) + 3.2rem));top:calc(var(--st) + 11rem);width:calc(var(--tb) * .85);height:calc(var(--tb) * .85);background:rgba(61,220,132,.92)}
-.b-pause{right:calc(var(--sr) + 14.6rem);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75)}
-.b-map{right:calc(var(--sr) + 14.6rem + var(--tb) * .75 + 10px);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75);font-size:calc(var(--tb) * .17)}
+.b-pause{right:calc(var(--sr) + var(--mm,11.5rem) + 3.1rem);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75)}
+.b-map{right:calc(var(--sr) + var(--mm,11.5rem) + 3.1rem + var(--tb) * .75 + 10px);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75);font-size:calc(var(--tb) * .17)}
 .tb.lockd{opacity:.45}
 body.touchmode .hud-bot{display:none}
 body.touchmode .qtrack{position:fixed;left:max(calc(var(--sl) + 19rem),230px);top:calc(var(--st) + 1rem);width:min(22rem,calc(var(--vw,1vw)*30));font-size:.72rem;padding:.25rem .5rem}
@@ -4291,7 +4291,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.0.4', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.1', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -4322,10 +4322,13 @@ const PAL = K.pal = { ink: '#101830', ink2: '#1E2A55', paper: '#F4F1E8', paper2:
 const SAVE_KEY = 'cacosdesol.v1.save';
 /* opt: sv/mv volumes 0-100 · sens 1..10 (padrão 5) · inv (inverter Y) · q 0..2 / qa 1 = automático (só em memória, regra h) · shake · hap · fov · outl (contornos) · shadow
  * game: null | snapshot da partida (K.snapshot) · meta: coisas que sobrevivem ao "novo jogo" (finais, recordes) */
-const SAVE = K.save = { opt: { sv: 100, mv: 70, sens: 5, inv: 0, q: 1, qa: 1, shake: 1, hap: 1, fov: 1, outl: 1, shadow: 1, tsz: 1, lang: 'pt' }, game: null, meta: { ends: 0, best: 0, seen: {}, plays: 0, time: 0 } };
+const SAVE = K.save = { opt: { sv: 100, mv: 70, sens: 5, inv: 0, q: 1, qa: 1, shake: 1, hap: 1, fov: 1, outl: 1, shadow: 1, tsz: 1, mms: 1, lang: 'pt' }, game: null, meta: { ends: 0, best: 0, seen: {}, plays: 0, time: 0 } };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s) { Object.assign(SAVE, s, { opt: Object.assign(SAVE.opt, s.opt || {}), meta: Object.assign(SAVE.meta, s.meta || {}) }); } } catch (e) {}
 SAVE.opt.snd = SAVE.opt.sv > 0 ? 1 : 0; SAVE.opt.mus = SAVE.opt.mv > 0 ? 1 : 0;
 K.qRun = 1; K.qEff = () => SAVE.opt.qa ? Math.min(K.qRun, 2) : SAVE.opt.q;            // qualidade automática só em memória (regra h)
+/* tamanho do minimapa (1.1.0): mms 0 pequeno · 1 médio (padrão, o tamanho de antes) · 2 grande — classe mm0/mm1/mm2 no body muda --mm (CSS em 08-ui) */
+K.MMS = ['pequeno', 'médio', 'grande'];
+K.setMmSize = v => { v = clamp(Math.round(v), 0, 2); SAVE.opt.mms = v; for (let i = 0; i < 3; i++) document.body.classList.toggle('mm' + i, i === v); };
 K.qLabel = () => 'Gráficos: ' + (SAVE.opt.qa ? 'automático' : ['leves', 'médios', 'altos'][SAVE.opt.q]);
 K.qCycle = () => { const o = SAVE.opt; if (o.qa) { o.qa = 0; o.q = 0; } else if (o.q < 2) o.q++; else { o.qa = 1; K.qRun = 1; } K.persist(); if (K.r3 && K.r3.resize) K.r3.resize(); };
 K.persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) {} };
@@ -4433,6 +4436,7 @@ window.addEventListener('keydown', e => {
   if (MOVEKEYS[e.code]) { mvKeys[e.code] = 1; e.preventDefault(); }
   const a = KEYMAP[e.code]; if (a) { KB[a] = 1; LATCH[a] = 1; if (a === 'jump' || a === 'interact') e.preventDefault(); }
   if (K.debug.keys && K.debug.keys[e.code]) K.debug.keys[e.code]();
+  if (e.code !== 'Escape' && (MOVEKEYS[e.code] || KEYMAP[e.code])) IN.relock();   // 1.1.0: andar/pular/rolar também devolve o mouse ao jogo
 });
 window.addEventListener('keyup', e => { delete mvKeys[e.code]; const a = KEYMAP[e.code]; if (a) KB[a] = 0; });
 function clearAll() { for (const k in KB) KB[k] = 0; for (const k in MS) MS[k] = 0; for (const k in TC) TC[k] = 0; for (const k in mvKeys) delete mvKeys[k]; tj.on = false; tj.id = -1; camId = -1; if (tjEl) tjEl.base.style.display = 'none'; }
@@ -4442,8 +4446,15 @@ function playing() { return K.sceneName === 'play' && !K.paused && !K.G_dialog; 
 /* CURSOR (1.0.2): o mouse fica "preso" (pointer lock) só enquanto se joga. Qualquer tela que precise do cursor — diálogo, loja, fabricação,
  * fogueira, pausa, morte, menus — SOLTA o mouse sozinha (IN.freeCursor, chamado a cada passo) e ele volta a aparecer. Antes só a pausa soltava:
  * em fala/loja o cursor sumia e não dava para clicar nos botões. Para voltar a jogar, basta clicar no jogo (mousedown pede o lock de novo). */
+/* 1.1.0 — RELOCK: ao fechar fala/loja/fabricação/fogueira/pausa/morte o mouse VOLTA SOZINHO para o jogo (antes pedia "um clique para entrar": em RPG com muita conversa,
+ * o inimigo chegava e a câmera não mexia). O fechamento acontece dentro de um clique/tecla do jogador, então o navegador autoriza o pedido de pointer lock;
+ * se negar (Esc, aba sem foco), qualquer tecla de jogo ou clique no jogo pede de novo (keydown/mousedown abaixo). IN.relock() é seguro de chamar a qualquer hora. */
+IN.canLock = () => !IN.locked && !IN.touch && !document.body.classList.contains('touchmode') && IN.dev === 'kb' && K.sceneName === 'play' && !K.paused && !K.uiBlock && !K.dlg && !uiOpen() && !!K.G && K.G.pl.alive && !K.debug.nopause && !IN.bot;
+IN._rlT = -9e9;   // um pedido por vez: dois requestPointerLock no mesmo instante fazem o navegador soltar e prender de novo, e o 'soltou' pausava o jogo (achado pelo qa:interface)
+IN.relock = () => { if (!IN.canLock() || performance.now() - IN._rlT < 500) return; IN._rlT = performance.now(); try { window.focus(); const pr = $('gl').requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (er) {} };
+IN.relockSoon = () => setTimeout(IN.relock, 0);   // depois que a tela que fechou terminar de abrir/fechar o que mais precisar
 IN.freeCursor = () => { if (!document.pointerLockElement) return; if (K.paused || K.uiBlock || K.sceneName !== 'play' || uiOpen()) { try { document.exitPointerLock(); } catch (er) {} } };
-document.addEventListener('pointerlockchange', () => { IN.locked = document.pointerLockElement === $('gl'); if (!IN.locked && K.sceneName === 'play' && !K.paused && !K.uiBlock && !uiOpen() && !IN.touch && !K.debug.nopause && K.onUnlock) K.onUnlock(); });
+document.addEventListener('pointerlockchange', () => { IN.locked = document.pointerLockElement === $('gl'); if (!IN.locked && performance.now() - IN._rlT > 400 && K.sceneName === 'play' && !K.paused && !K.uiBlock && !uiOpen() && !IN.touch && !K.debug.nopause && K.onUnlock) K.onUnlock(); });
 document.addEventListener('mousemove', e => { if (!IN.locked) return; const s = MOUSE_BASE * SENS(); IN.look.x += e.movementX * s; IN.look.y += e.movementY * s * (SAVE.opt.inv ? -1 : 1); });
 document.addEventListener('mousedown', e => {
   if (e.target.closest && e.target.closest('#ui .layer.modal, #touch')) return;
@@ -5176,7 +5187,7 @@ W.build = function () {
   W.occupied = []; for (const p of poiList()) if (p.clear) W.occupied.push([p.x, p.z, p.clear]);
   for (const b of biomeList()) for (const rule of (b.scatter || [])) scatter(b, rule, rd);
   W.pois = poiList(); for (const p of W.pois) { if (p.build) { try { p.build(W, p); } catch (e) { console.error('poi ' + p.id, e); K._err = K._err || e; } } }
-  W.finalizeProps(); minimap(); W.built = true;
+  W.finalizeProps(); minimap(); K.safeRings && K.safeRings(W); W.built = true;
 };
 function scatter(b, rule, rd) {
   const def = REG.prop[rule.prop]; if (!def) return; const area = Math.PI * Math.pow(b.r * 1.1, 2), n = Math.round(area / 100 * (rule.density || 1) * 1.6), cell = Math.max(1, rule.minDist || 2); const hash = {}; const sc = rule.scale || def.scale || [.9, 1.2];
@@ -5283,7 +5294,7 @@ K.hurtEnemy = function (e, raw, o) {
   K.emit('hit', { e, d, crit }); return d;
 };
 K.hurtPlayer = function (raw, o) {
-  const G = K.G, p = G.pl; o = o || {}; if (!p.alive || p.inv > 0 || G.noDamage) return 0; if (K.debug.god) return 0;
+  const G = K.G, p = G.pl; o = o || {}; if (!p.alive || p.inv > 0 || G.noDamage) return 0; if (K.debug.god) return 0; if (!o.force && K.safeAt(p.x, p.z)) return 0;   /* área segura (1.1.0): ninguém machuca o jogador aqui dentro */
   let d = Math.max(1, raw * 100 / (100 + p.defv * 3)); if (G.buff && G.buff.guard) d *= .5; if (p.shield > 0) { const a = Math.min(p.shield, d); p.shield -= a; d -= a; if (d <= 0) { K.fx.text(p.x, p.y + 2.2, p.z, 'ESCUDO', { color: '#4DA3FF', size: .9 }); return 0; } }
   p.hp -= d; p.inv = .55; p.hurtT = .3; G.combatT = 5; G.hits = (G.hits || 0) + 1; popNum(p.x, p.y + 2.1, p.z, d, { color: '#FF5A5F', size: 1.15 }); K.sfx('hurt'); K.fx.shake(.28, .22); K.fx.flash('#FF5A5F', .32, .3); K.buzz(40);
   K.fx.burst(p.x, p.y + 1.1, p.z, { n: 8, color: ['#FF5A5F', '#fff'], speed: 4, size: .1 });
@@ -5448,6 +5459,23 @@ K.clearEntities = function () {
   K.r3.clearGroup(K.r3.ents);
 };
 function removeEnt(e) { if (e.mi) K.r3.ents.remove(e.mi.obj); if (e.bar) e.bar = null; }
+/* ---------------------------------------------------------------- ÁREA SEGURA (1.1.0)
+ * K.defPoi('vila', { ..., safe: 24 })  →  círculo de raio 24 m em volta do POI onde NENHUM monstro entra e o jogador não leva dano.
+ * K.safeAt(x,z,pad) devolve o POI seguro que contém o ponto (ou null) · K.safePush(x,z) devolve o ponto mais próximo FORA de qualquer área segura.
+ * Quem vive aqui: seesPlayer/chase (largam a perseguição), repulsão dura em updateEnemies, spawners (não nascem dentro), projéteis hostis (somem na borda),
+ * K.hurtPlayer (ignora dano dentro), anel no chão (K.safeRings), selo no HUD e círculo no minimapa/mapa. Mais de uma área = vários POIs com `safe`. */
+let _safeL = null;
+K.safeList = () => _safeL || (_safeL = Object.values(REG.poi).filter(p => p.safe));
+K.safeAt = function (x, z, pad) { const L = K.safeList(); pad = pad || 0; for (let i = 0; i < L.length; i++) { const p = L[i]; if (Math.hypot(x - p.x, z - p.z) < p.safe + pad) return p; } return null; };
+K.safePush = function (x, z, pad) { const zn = K.safeAt(x, z); if (!zn) return { x, z }; const dx = x - zn.x, dz = z - zn.z, d = Math.hypot(dx, dz) || 1, r = zn.safe + (pad === undefined ? 1.5 : pad); return { x: zn.x + dx / d * r, z: zn.z + dz / d * r }; };
+K.safeRings = function (W_) {
+  /* anel dourado no chão (faixa de 0,7 m seguindo o relevo) — dá para ver de longe onde começa a área segura */
+  const g = W_.safeGroup = new THREE.Group(); K.r3.world.add(g);
+  for (const zn of K.safeList()) { const N = 180, pos = [], idx = [], r0 = zn.safe - .5, r1 = zn.safe + .5;
+    for (let i = 0; i <= N; i++) { const a = i / N * TAU, c = Math.cos(a), s = Math.sin(a); for (const r of [r0, r1]) { const x = zn.x + c * r, z = zn.z + s * r; pos.push(x, W_.h(x, z) + .32, z); } if (i < N) { const k = i * 2; if (i % 2 === 0) idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#FFD23F', transparent: true, opacity: .8, depthWrite: false, side: 2, fog: false })); m.renderOrder = 2; m.userData.safe = 1; g.add(m); }
+};
 /* ---------------------------------------------------------------- criação */
 const barGeo = null;
 K.spawnEnemy = function (id, x, z, o) {
@@ -5455,7 +5483,7 @@ K.spawnEnemy = function (id, x, z, o) {
   const lvl = o.lvl || 1, mi = K.model(d.model || d.id, { tint: d.tint, tintK: d.tintK });
   const hpm = (1 + .2 * (lvl - 1)) * ETUNE.hp * (d.boss ? 1 : 1), e = { kind: 'enemy', def: d, id: d.id, x, z, y: K.world.h(x, z), yaw: o.yaw === undefined ? Math.random() * TAU : o.yaw, vx: 0, vz: 0, kx: 0, kz: 0, r: d.radius || .5, h: d.height || 1.3, st: 'spawn', t: 0, cd: 0, gcd: 1, acd: {}, home: { x, z }, alive: true, mi, phase: -1, lvl,
     maxhp: Math.round(d.hp * hpm), dmg: d.dmg * (1 + .12 * (lvl - 1)) * ETUNE.dmg, spd: d.speed || 3, aggro: false, atk: null, tele: null, lastHurt: -99, spawner: o.spawner || null, inv: 0, bob: Math.random() * 6, strafe: 0, strafeT: 0, stuck: 0, vy: 0, minions: [] };
-  e.hp = e.maxhp; if (d.flying) e.y += (d.hover || 1.8);
+  e.hp = e.maxhp; if (d.flying) e.y += (d.hover || 1.8); if (!d.boss) { const sp = K.safePush(x, z, 3); e.home = { x: sp.x, z: sp.z }; }
   K.r3.ents.add(mi.obj); mi.obj.position.set(x, e.y, z); mi.obj.rotation.y = e.yaw;
   // barra de vida (sprites)
   const bg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x101830, depthTest: false, transparent: true, opacity: .85 })), fg = new THREE.Sprite(new THREE.SpriteMaterial({ color: new THREE.Color(d.boss ? '#FF5A5F' : '#3DDC84'), depthTest: false, transparent: true }));
@@ -5481,7 +5509,7 @@ K.killEnemy = function (e, o) {
 /* ---------------------------------------------------------------- IA */
 /* chefe final só abre depois do altar (passo 6 da principal): antes disso fica protegido e não ataca */
 K.finalOpen = () => { const q = K.G.q.principal; return !!(q && (q.st === 'done' || q.step >= 6)) || !!K.G.flags.finalOpen; };
-function seesPlayer(e) { const p = K.G.pl; if (!p.alive) return false; if (e.def.final && !K.finalOpen()) return false; const d = Math.hypot(p.x - e.x, p.z - e.z), ag = e.def.aggro || 12, nightBonus = K.sky.night > .6 ? 1.15 : 1; return d < ag * nightBonus || (e.aggro && d < (e.def.leash || 32)); }
+function seesPlayer(e) { const p = K.G.pl; if (!p.alive || K.G.inSafe) return false; if (e.def.final && !K.finalOpen()) return false; const d = Math.hypot(p.x - e.x, p.z - e.z), ag = e.def.aggro || 12, nightBonus = K.sky.night > .6 ? 1.15 : 1; return d < ag * nightBonus || (e.aggro && d < (e.def.leash || 32)); }
 function faceTo(e, tx, tz, rate, dt) { e.yaw = angLerp(e.yaw, Math.atan2(tx - e.x, tz - e.z), 1 - Math.exp(-rate * dt)); }
 function walkTo(e, tx, tz, spd, dt) {
   const dx = tx - e.x, dz = tz - e.z, d = Math.hypot(dx, dz) || 1; let mx = dx / d, mz = dz / d;
@@ -5491,6 +5519,7 @@ function walkTo(e, tx, tz, spd, dt) {
 }
 K.updateEnemies = function (dt) {
   const G = K.G, p = G.pl, W_ = K.world;
+  const zs = K.safeAt(p.x, p.z); if (!!zs !== !!G.inSafe) { const first = G.inSafe === undefined; G.inSafe = zs; if (!first || zs) { K.ui.toast(zs ? 'Área segura! Os monstros não passam daqui.' : 'Você saiu da área segura. Olho aberto!', 2.8); K.sfx(zs ? 'ui_ok' : 'ui_volta'); } }
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i], d = e.def; e.t += dt; e.bob += dt;
     if (e.pop !== undefined && e.pop < 1) { e.pop = Math.min(1, e.pop + dt * 3); const s = E.outBack(e.pop); e.mi.obj.scale.setScalar(Math.max(.01, s)); if (e.pop >= 1) { e.pop = undefined; e.st = 'idle'; e.t = 0; } }
@@ -5506,12 +5535,12 @@ K.updateEnemies = function (dt) {
     if (e.spawner && !d.boss && dist > (G.spawnFar || 105)) { removeEnt(e); G.enemies.splice(i, 1); const s = G.spawns[e.spawner]; if (s) s.alive = s.alive.filter(x => x !== e); continue; }
     switch (e.st) {
       case 'idle': {
-        e.mi.play(d.idleAnim || 'idle'); if (!e.wt || e.wt <= 0) { e.wt = R(2, 5); const a = Math.random() * TAU, r = R(2, 6); e.wx = e.home.x + Math.cos(a) * r; e.wz = e.home.z + Math.sin(a) * r; e.wait = Math.random() < .5; } e.wt -= dt;
+        e.mi.play(d.idleAnim || 'idle'); if (!e.wt || e.wt <= 0) { e.wt = R(2, 5); const a = Math.random() * TAU, r = R(2, 6); e.wx = e.home.x + Math.cos(a) * r; e.wz = e.home.z + Math.sin(a) * r; const sp = K.safePush(e.wx, e.wz, 2); e.wx = sp.x; e.wz = sp.z; e.wait = Math.random() < .5; } e.wt -= dt;
         if (!e.wait && !d.still) { const dd = walkTo(e, e.wx, e.wz, e.spd * .35, dt); faceTo(e, e.wx, e.wz, 6, dt); e.mi.play(d.moveAnim || 'walk'); e.mi.ctx.sp = .5; if (dd < .5) e.wait = true; }
         if (seesPlayer(e) && (e.aggro || K.world.los(e.x, e.z, p.x, p.z, e.y + 1, p.y + 1) || dist < 6)) { e.st = 'chase'; e.aggro = true; e.t = 0; K.sfxAt('aviso', e.x, e.z); if (d.boss && !G.bossFight) K.bossStart(e); K.fx.text(e.x, e.y + e.h + .4, e.z, '!', { color: '#FFD23F', size: .8, dur: .6 }); }
         break; }
       case 'chase': {
-        if (!p.alive || dist > (d.leash || 32) + 6 || (!e.aggro && !seesPlayer(e))) { e.st = 'return'; e.aggro = false; break; }
+        if (!p.alive || G.inSafe || dist > (d.leash || 32) + 6 || (!e.aggro && !seesPlayer(e))) { e.st = 'return'; e.aggro = false; break; }
         const keep = d.keep; let ax = p.x, az = p.z, sp = e.spd;
         if (keep) { if (edge < keep[0]) { ax = e.x - (p.x - e.x); az = e.z - (p.z - e.z); sp *= .8; } else if (edge < keep[1]) { e.strafeT = .2; if (!e.strafe) e.strafe = Math.random() < .5 ? 1 : -1; sp *= .5; } else e.strafe = 0; }
         if (!keep || edge >= keep[0] || true) walkTo(e, ax, az, (edge < (d.stopAt === undefined ? 1.0 : d.stopAt) && !keep) ? 0 : sp, dt);
@@ -5520,6 +5549,13 @@ K.updateEnemies = function (dt) {
       case 'return': { walkTo(e, e.home.x, e.home.z, e.spd * 1.2, dt); faceTo(e, e.home.x, e.home.z, 8, dt); e.mi.play(d.moveAnim || 'walk'); e.hp = Math.min(e.maxhp, e.hp + e.maxhp * .12 * dt); if (Math.hypot(e.home.x - e.x, e.home.z - e.z) < 1) { e.st = 'idle'; } else if (seesPlayer(e) && !e.def.noReaggro && dist < (d.aggro || 12) * .8) { e.st = 'chase'; e.aggro = true; } break; }
       case 'hurt': { if (e.t > .32) { e.st = 'chase'; e.gcd = Math.max(e.gcd, .3); } break; }
       case 'windup': case 'active': case 'recover': stepEnemyAtk(e, dt, dist); break;
+    }
+    const sz = K.safeAt(e.x, e.z);
+    if (sz) { /* repulsão: monstro que encosta (ou nasce) na área segura é empurrado para fora e desiste da perseguição */
+      const dx = e.x - sz.x, dz = e.z - sz.z, dd = Math.hypot(dx, dz) || 1, nx = dx / dd, nz = dz / dd;
+      if (dd < sz.safe - 4) W_.move(e, nx * 9 * dt, nz * 9 * dt, { noSlope: true }); else { e.x = sz.x + nx * (sz.safe + .15); e.z = sz.z + nz * (sz.safe + .15); }
+      if (e.st === 'chase' || e.st === 'windup' || e.st === 'active' || e.st === 'idle') { if (e.atk) cancelEnemyAtk(e); e.st = 'return'; e.aggro = false; }
+      e.safeFx = (e.safeFx || 0) - dt; if (e.safeFx <= 0) { e.safeFx = .6; K.fx.ring(e.x, e.z, { r: 1.3, dur: .35, color: '#FFD23F' }); K.fx.burst(e.x, e.y + e.h * .5, e.z, { n: 6, color: ['#FFD23F', '#ffffff'], speed: 3, size: .1, life: .5 }); }
     }
     if (d.flying) { const hover = (d.hover || 1.8) + Math.sin(e.bob * 2.2) * .22; e.y = lerp(e.y, W_.h(e.x, e.z) + hover + (e.atk && e.atk.a.kind === 'jump' ? 0 : 0), 1 - Math.exp(-4 * dt)); }
     else if (!(e.atk && e.atk.leap)) e.y = W_.h(e.x, e.z);
@@ -5606,7 +5642,7 @@ K.updateProjs = function (dt) {
     const q = G.projs[i]; q.t += dt; q.life -= dt; q.vy -= q.grav * dt;
     if (q.homing) { const tg = q.owner === 'p' ? nearestEnemy(q.x, q.z, 14) : p; if (tg) { const dx = tg.x - q.x, dz = tg.z - q.z, dy = (tg.y || 0) + 1 - q.y, d = Math.hypot(dx, dz, dy) || 1, sp = Math.hypot(q.vx, q.vy, q.vz), k = q.homing * dt * 4; q.vx = lerp(q.vx, dx / d * sp, k); q.vy = lerp(q.vy, dy / d * sp, k); q.vz = lerp(q.vz, dz / d * sp, k); } }
     q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt; q.obj.position.set(q.x, q.y, q.z); q.obj.rotation.x += dt * 5; q.obj.rotation.y += dt * 7; if (q.trail && K.frame % 3 === 0) K.fx.burst(q.x, q.y, q.z, { n: 1, color: q.color, speed: .3, size: (q.size || .28) * .6, life: .3, grav: 0 });
-    let dead = q.life <= 0, hitSomething = false;
+    let dead = q.life <= 0, hitSomething = false; if (q.owner !== 'p' && K.safeAt(q.x, q.z)) { dead = true; hitSomething = true; }
     const gh = W_.h(q.x, q.z); if (q.y < gh + .1 && !q.noGround) { if (q.bounce > 0) { q.bounce--; q.y = gh + .15; q.vy = Math.abs(q.vy) * .7; } else { dead = true; hitSomething = true; } }
     if (!dead) { for (const o of W_.nearestCol(q.x, q.z)) { if (o.t === 'c' && Math.hypot(q.x - o.x, q.z - o.z) < o.r + .1 && q.y < gh + 3.2) { dead = true; hitSomething = true; break; } if (o.t === 'b') { const c = Math.cos(o.rot), s = Math.sin(o.rot), dx = q.x - o.x, dz = q.z - o.z, lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) < o.hw && Math.abs(lz) < o.hd && q.y < gh + 4) { dead = true; hitSomething = true; break; } } } }
     if (!dead) {
@@ -5653,7 +5689,7 @@ K.updateSpawners = function (dt) {
     const s = REG.spawn[id], st = G.spawns[id] = G.spawns[id] || { alive: [], t: 0, kills: 0 }; const d = Math.hypot(p.x - s.x, p.z - s.z); st.alive = st.alive.filter(e => e.alive && G.enemies.includes(e));
     if (d > (s.act || 72)) continue; if (s.night === true && K.sky.night < .5) continue; if (s.night === false && K.sky.night > .6) continue;
     st.t -= .8; if (st.alive.length >= (s.max || 3) || st.t > 0 || live >= 34) continue;
-    for (let k = 0; k < 8; k++) { const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * (s.r || 10), x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r; if (!K.world.walkable(x, z) || K.world.h(x, z) < .5 || K.world.slope(x, z) > .8 || Math.hypot(x - p.x, z - p.z) < 16) continue;
+    for (let k = 0; k < 8; k++) { const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * (s.r || 10), x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r; if (!K.world.walkable(x, z) || K.world.h(x, z) < .5 || K.world.slope(x, z) > .8 || Math.hypot(x - p.x, z - p.z) < 16 || K.safeAt(x, z, 2)) continue;
       let id2 = s.enemy; if (s.enemies) { let tot = 0; for (const o of s.enemies) tot += o[1] === undefined ? 1 : o[1]; let rr = Math.random() * tot; for (const o of s.enemies) { rr -= o[1] === undefined ? 1 : o[1]; if (rr <= 0) { id2 = o[0]; break; } } }
       const e = K.spawnEnemy(id2, x, z, { lvl: s.lvl || 1, spawner: id }); if (e) { st.alive.push(e); live++; } break; }
     if (st.alive.length >= (s.max || 3)) st.t = (s.respawn || 45) * .35; else st.t = 1.2;
@@ -5792,7 +5828,7 @@ K.dialogChoose = function (i) {
   if (n.choices && n.do && !n._done) { n.do(K.G); }
   if (done || !D.d.nodes[next]) { K.dialogClose(); return; } D.node = D.d.nodes[next]; K.ui.showDialog(); K.sfx('dialogo');
 };
-K.dialogClose = function () { const D = K.dlg; K.dlg = null; K.uiBlock = false; K.ui.hideDialog(); K.input.clear && K.input.clear(); if (D && D.then) D.then(); };
+K.dialogClose = function () { const D = K.dlg; K.dlg = null; K.uiBlock = false; K.ui.hideDialog(); K.input.clear && K.input.clear(); if (D && D.then) D.then(); K.input.relockSoon && K.input.relockSoon(); };
 K.talkTo = function (n) {
   const G = K.G, d = n.def; K.emit('talk', { npc: d.id }); const id = d.talk ? d.talk(G) : d.dialog;
   if (id && REG.dialog[id]) K.say(id, { npc: n }); else if (d.shop) K.ui.shop(d);
@@ -5836,9 +5872,22 @@ K.css(`
 .hud-tl .row{display:flex;align-items:center;gap:.5rem}
 .lvl{width:3.1rem;height:3.1rem;border-radius:50%;background:var(--sun);color:var(--ink);border:.22rem solid var(--ink);font:400 1.5rem/2.7rem 'Lilita One';text-align:center;box-shadow:.15rem .2rem 0 var(--ink);flex:none}
 .coins{font:400 1.1rem 'Lilita One';color:var(--sun);text-shadow:0 .12rem 0 var(--ink),.1rem 0 0 var(--ink),-.1rem 0 0 var(--ink)}
-.hud-tr{position:absolute;right:calc(var(--sr) + 1.2rem);top:calc(var(--st) + 1rem);width:12.5rem;display:flex;flex-direction:column;align-items:flex-end;gap:.5rem}
-#mm{width:11.5rem;height:11.5rem;border-radius:50%;border:.28rem solid var(--ink);box-shadow:.3rem .4rem 0 rgba(16,24,48,.55);background:var(--ink)}
+body{--mm:11.5rem}body.mm0{--mm:8.2rem}body.mm2{--mm:15.5rem}
+.hud-tr{position:absolute;right:calc(var(--sr) + 1.2rem);top:calc(var(--st) + 1rem);width:calc(var(--mm) + 1rem);display:flex;flex-direction:column;align-items:flex-end;gap:.5rem}
+#mm{width:var(--mm);height:var(--mm);border-radius:50%;border:.28rem solid var(--ink);box-shadow:.3rem .4rem 0 rgba(16,24,48,.55);background:var(--ink)}
 .clock{font:400 1rem 'Lilita One';color:var(--paper);background:var(--ink);border-radius:.6rem;padding:.15rem .6rem}
+.mp-wrap{display:flex;gap:1.1rem;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.mp-left{flex:none}
+.mp-canvas{width:min(36rem,calc(var(--vh,1vh)*70));height:min(36rem,calc(var(--vh,1vh)*70));display:block;border:.25rem solid var(--ink);border-radius:.8rem;background:#1f6fd0}
+.mp-side{flex:1;min-width:15rem;max-width:26rem;font-size:.95rem;line-height:1.3}
+.mp-sec{margin-bottom:.7rem}.mp-sec h3{margin:0 0 .25rem;font:400 1.05rem 'Lilita One';color:var(--coral2)}
+.mp-big{font:400 1.25rem 'Lilita One'}.mp-big small{font:800 .85rem Nunito;color:var(--grey)}
+.mp-leg{display:grid;grid-template-columns:1.5rem 1fr 1.5rem 1fr;gap:.15rem .4rem;font-size:.8rem;font-weight:800;line-height:1.15}
+.mp-list{display:flex;flex-direction:column;gap:.15rem;max-height:calc(var(--vh,1vh)*26);overflow:auto;padding-right:.2rem}
+.mp-row{display:flex;align-items:center;gap:.5rem;padding:.12rem .4rem;border:.14rem solid transparent;border-radius:.5rem;cursor:pointer;font-weight:800;font-size:.9rem}
+.mp-row small{color:var(--grey);font-weight:800}.mp-row.sel,.mp-row.focus{border-color:var(--ink);background:var(--paper2)}
+.mousehint{position:absolute;left:50%;bottom:calc(var(--sb) + 6.4rem);transform:translateX(-50%);font:800 .95rem Nunito;color:var(--ink);background:var(--paper);border:.18rem solid var(--ink);border-radius:.7rem;padding:.2rem .8rem;display:none;pointer-events:none;box-shadow:.15rem .2rem 0 rgba(16,24,48,.45)}
+.safebadge{font:400 .95rem 'Lilita One';color:var(--ink);background:#FFD23F;border:.2rem solid var(--ink);border-radius:.6rem;padding:.05rem .6rem;display:none;box-shadow:.15rem .2rem 0 rgba(16,24,48,.5)}
 .qtrack{background:rgba(244,241,232,.94);color:var(--ink);border:.22rem solid var(--ink);border-radius:.8rem;padding:.4rem .7rem;font-size:.9rem;width:100%;box-sizing:border-box;box-shadow:.25rem .3rem 0 rgba(16,24,48,.5)}
 .qtrack b{font-family:'Lilita One';font-weight:400;display:block;color:var(--coral2)}
 .hud-bot{position:absolute;left:50%;bottom:calc(var(--sb) + 1rem);transform:translateX(-50%);display:flex;gap:.55rem;align-items:flex-end}
@@ -5884,7 +5933,7 @@ document.addEventListener('click', e => { if (!K.dlg || !UI.dlgEl) return; if (e
 UI.clear = function () { for (const l of UI.layers.slice()) { if (!l.keep) l.el.remove(); } UI.layers = UI.layers.filter(l => l.keep); UI.hud = null; UI.nav = null; UI.dlgEl = null; K.dlg = null; K.uiBlock = false; document.body.classList.remove('dlgopen'); };
 /* UI.layer(cls, {modal, onBack, keep}) → div cobrindo a tela; o mais recente é o foco de navegação */
 UI.layer = function (cls, o) { o = o || {}; const el = h('div', 'layer ' + (cls || '') + (o.modal ? ' modal' : ' menu'), ''); UI.root.appendChild(el); const l = { el, onBack: o.onBack, keep: o.keep, modal: o.modal }; UI.layers.push(l); return l; };
-UI.drop = function (l) { l.el.remove(); UI.layers = UI.layers.filter(x => x !== l); UI.focusIdx = 0; };
+UI.drop = function (l) { l.el.remove(); UI.layers = UI.layers.filter(x => x !== l); UI.focusIdx = 0; K.input.relockSoon && K.input.relockSoon(); };
 UI.btn = function (text, cb, o) { o = o || {}; const b = h('button', 'btn ' + (o.cls || ''), text); b.addEventListener('click', e => { e.stopPropagation(); K.sfx('ui_ok'); cb(e); }); if (o.parent) o.parent.appendChild(b); b.dataset.nav = 1; return b; };
 UI.top = () => UI.layers.filter(l => l.el.classList.contains('menu') || l.el.classList.contains('modal')).pop();
 function navItems() { const t = UI.top(); if (!t) return []; return [...t.el.querySelectorAll('[data-nav]')].filter(e => !e.disabled && e.offsetParent !== null); }
@@ -5912,8 +5961,8 @@ UI.hudBuild = function () {
   const tl = h('div', 'hud-tl', '', E_); const r1 = h('div', 'row', '', tl); H.lvl = h('div', 'lvl', '1', r1); const bars = h('div', '', '', r1); bars.style.flex = 1; bars.style.display = 'flex'; bars.style.flexDirection = 'column'; bars.style.gap = '.3rem';
   const mkbar = (col, parent) => { const b = h('div', 'bar', '', parent); const i = h('i', '', '', b); i.style.background = col; const t = h('b', '', '', b); return { b, i, t }; };
   H.hp = mkbar('#FF5A5F', bars); H.mp = mkbar('#4DA3FF', bars); H.st = mkbar('#3DDC84', bars); H.st.b.style.height = '.7rem'; H.xp = mkbar('#FFD23F', tl); H.xp.b.style.height = '.55rem'; H.coins = h('div', 'coins', '', tl);
-  const tr = h('div', 'hud-tr', '', E_); H.mm = h('canvas', '', '', tr); H.mm.id = 'mm'; H.mm.width = H.mm.height = 230; H.clock = h('div', 'clock', '', tr); H.qt = h('div', 'qtrack', '', tr);
-  H.toasts = h('div', 'toasts', '', E_); H.pops = h('div', 'pops', '', E_); H.banner = h('div', 'banner', '', E_); H.prompt = h('div', 'prompt', '', E_); H.lock = h('div', 'lockmark', '', E_);
+  const tr = h('div', 'hud-tr', '', E_); H.mm = h('canvas', '', '', tr); H.mm.id = 'mm'; H.mm.width = H.mm.height = 230; K.setMmSize(SAVE.opt.mms === undefined ? 1 : SAVE.opt.mms); H.clock = h('div', 'clock', '', tr); H.safe = h('div', 'safebadge', '✦ Área segura', tr); H.qt = h('div', 'qtrack', '', tr);
+  H.toasts = h('div', 'toasts', '', E_); H.pops = h('div', 'pops', '', E_); H.banner = h('div', 'banner', '', E_); H.prompt = h('div', 'prompt', '', E_); H.mhint = h('div', 'mousehint', 'Clique no jogo para a câmera seguir o mouse', E_); H.lock = h('div', 'lockmark', '', E_);
   const bb = H.bossbar = h('div', 'bossbar', '<div class="nm"></div>', E_); H.bossBarEl = h('div', 'bar', '', bb); H.bossFill = h('i', '', '', H.bossBarEl); H.bossFill.style.background = '#FF5A5F'; H.bossMarks = h('div', '', '', H.bossBarEl);
   const bot = h('div', 'hud-bot', '', E_); H.slots = {}; for (const [k, lab] of [['pot1', 'V'], ['skill1', 'Q'], ['skill2', 'R'], ['skill3', 'X'], ['pot2', '2']]) { const s = h('div', 'slot', '<small>' + (k.startsWith('pot') ? (k === 'pot1' ? '1' : '2') : lab) + '</small><span></span><div class="cd"></div><span class="n"></span>', bot); H.slots[k] = s; }
   H.vig = h('div', '', '', E_); H.vig.style.cssText = 'position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 8rem 2rem rgba(255,90,95,0);transition:box-shadow .2s';
@@ -5924,6 +5973,7 @@ UI.updateHud = function (dt) {
   set(H.hp, p.hp, p.maxhp); set(H.mp, p.mp, p.maxmp); set(H.st, p.st, p.maxst, ''); set(H.xp, G.xp, K.xpFor(G.lvl), ''); H.lvl.textContent = G.lvl; H.coins.textContent = G.coins + ' cacos' + (G.shardCount ? ' · ' + G.shardCount + '/3 fragmentos' : '');
   H.vig.style.boxShadow = 'inset 0 0 8rem 2rem rgba(255,90,95,' + (p.hp / p.maxhp < .3 ? .45 : p.hurtT > 0 ? .5 : 0) + ')';
   const hr = G.tod | 0, mn = (G.tod % 1 * 60) | 0; H.clock.textContent = (hr < 10 ? '0' : '') + hr + ':' + (mn < 10 ? '0' : '') + mn + (K.sky.night > .6 ? ' ☾' : ' ☀') + ' · dia ' + G.day;
+  H.safe.style.display = G.inSafe ? 'block' : 'none'; const mh = K.input.canLock() && !K.debug.noHint; if (mh !== H._mh) { H._mh = mh; H.mhint.style.display = mh ? 'block' : 'none'; }   // 1.1.0: dica enquanto o mouse está solto
   const T = K.quest.tracked(); G.trackInfo = T; if (T) { const o = T.st && T.st.obj || {}; const pr = (o.n > 1 && (o.type === 'kill' || o.type === 'gather' || o.type === 'collect' || o.type === 'chest')) ? ' (' + (T.s.n || 0) + '/' + o.n + ')' : ''; let dist = ''; if (T.mark) dist = ' · ' + Math.round(Math.hypot(T.mark[0] - p.x, T.mark[1] - p.z)) + ' m'; H.qt.innerHTML = '<b>' + esc(T.d.nome) + '</b>' + esc(T.text) + pr + dist; H.qt.style.display = ''; } else H.qt.style.display = 'none';
   // slots de habilidade e poções
   for (const k of K.slotKeys) { const s = H.slots[k], id = G.slots[k], sk = REG.skill[id]; const sp = s.children[1]; if (!sk) { s.classList.add('lock'); sp.textContent = '·'; continue; } const locked = G.lvl < (sk.lvl || 1); s.classList.toggle('lock', locked || p.mp < (sk.mp || 0)); sp.textContent = locked ? 'Nv' + sk.lvl : (sk.icon || sk.nome[0]); const cd = (p.cd[id] || 0) / (sk.cd || 5); s.children[2].style.height = clamp(cd, 0, 1) * 100 + '%'; s.title = sk.nome; }
@@ -5941,6 +5991,7 @@ function drawMinimap() {
   g.fillStyle = '#1f6fd0'; g.fillRect(0, 0, S, S); if (W_.mapCanvas) { const mc = W_.mapCanvas, k = mc.width / (W_.half * 2); g.imageSmoothingEnabled = true; g.drawImage(mc, (p.x + W_.half - half) * k, (p.z + W_.half - half) * k, view * k, view * k, 0, 0, S, S); }
   const P = (x, z) => [(x - p.x + half) * ppu, (z - p.z + half) * ppu];
   const dot = (x, z, col, r, sq) => { const [px, pz] = P(x, z); if (px < -6 || pz < -6 || px > S + 6 || pz > S + 6) return false; g.fillStyle = col; g.strokeStyle = '#101830'; g.lineWidth = 2; g.beginPath(); if (sq) g.rect(px - r, pz - r, r * 2, r * 2); else g.arc(px, pz, r, 0, TAU); g.fill(); g.stroke(); return true; };
+  for (const zn of K.safeList()) { const [zx, zz] = P(zn.x, zn.z); g.save(); g.strokeStyle = '#FFD23F'; g.lineWidth = 3; g.setLineDash([9, 7]); g.beginPath(); g.arc(zx, zz, zn.safe * ppu, 0, TAU); g.stroke(); g.restore(); }   // área segura (1.1.0)
   for (const d of G.drops) dot(d.x, d.z, d.col, d.id === '_coin' ? 3 : 5, d.id !== '_coin');       // coletáveis SEMPRE aparecem (regra d)
   for (const n of G.nodeList || []) if (!(G.nodes[n.key] > 0)) dot(n.x, n.z, n.def.color || '#3DDC84', 4, true);
   for (const c_ of G.chestList || []) if (!G.opened[c_.c.id]) dot(c_.c.x, c_.c.z, '#FFD23F', 5, true);
@@ -5971,7 +6022,7 @@ UI.hideDialog = function () { if (UI.dlgEl) { UI.dlgEl.remove(); UI.dlgEl = null
 /* ---------------------------------------------------------------- painéis de pausa (inventário, missões, mapa, opções, loja, fabricação) */
 K.paused = false;
 K.pause = function (tab) { if (K.paused || !K.G || K.sceneName !== 'play') return; K.paused = true; K.uiBlock = true; if (document.pointerLockElement) document.exitPointerLock(); K.input.clear(); UI.panelOpen(tab || 'menu'); K.sfx('ui'); };
-K.resume = function () { if (!K.paused) return; K.paused = false; K.uiBlock = false; if (UI.panelL) { UI.drop(UI.panelL); UI.panelL = null; } K.input.clear(); K.saveGame(true); };
+K.resume = function () { if (!K.paused) return; K.paused = false; K.uiBlock = false; if (UI.panelL) { UI.drop(UI.panelL); UI.panelL = null; } K.input.clear(); K.saveGame(true); K.input.relockSoon(); };
 K.onUnlock = () => { if (K.sceneName === 'play' && !K.paused && !K.dlg && K.G && K.G.pl.alive) K.pause(); };
 UI.panelOpen = function (tab) {
   if (UI.panelL) { UI.drop(UI.panelL); } const l = UI.panelL = UI.layer('pause', { modal: true, onBack: () => { if (tab !== 'menu' && UI.fromMenu) { UI.panelOpen('menu'); } else K.resume(); } }); UI.fromMenu = tab !== 'menu' && UI.lastTab === 'menu'; UI.lastTab = tab;
@@ -6002,14 +6053,87 @@ UI.questPanel = function (l) {
   const sec = (t, ids) => { h('h3', '', t, p); if (!ids.length) h('div', '', '<i>Nenhuma.</i>', p); ids.forEach(id => { const d = REG.quest[id], s = G.q[id], st = d.steps[s.step]; const c = h('div', 'card', '', p); c.style.textAlign = 'left'; c.style.marginBottom = '.4rem'; c.dataset.nav = 1; c.innerHTML = '<b style="font-family:\'Lilita One\';font-size:1.1rem">' + esc(d.nome) + '</b> <small>(' + ({ main: 'principal', side: 'secundária', sandbox: 'livre' }[d.tipo] || d.tipo) + ')</small><br>' + esc(s.st === 'done' ? d.desc || '' : (st ? st.text : '')); if (s.st === 'active') c.addEventListener('click', () => { G.track = id; K.sfx('ui_ok'); UI.panelOpen('quests'); }); if (G.track === id && s.st === 'active') c.classList.add('sel'); }); };
   sec('Ativas (toque para acompanhar)', act); sec('Concluídas', done);
 };
+/* MAPA-MÚNDI (1.1.0): refeito para ser lido de relance. Antes: bolinhas amarelas iguais para tudo (inclusive cada ponto da trilha), nomes uns em cima dos outros e
+ * nenhuma pista de onde o jogador está ou para onde ir. Agora: nome de cada bioma escrito no chão, ícone próprio por tipo de lugar (vila, fragmento, chefe, acampamento,
+ * santuário, ruína, fogueira), trilhas em tracejado, rótulos sem sobreposição, "Você" e "Objetivo" com linha ligando os dois, bússola, área segura, e ao lado:
+ * onde você está, objetivo, legenda e a lista de lugares (clique/toque num lugar para destacá-lo no mapa). Chefes derrotados ganham ✓. */
+const MAP_INK = '#101830', MAP_PAPER = '#F4F1E8';
+function mapIcon(g, kind, x, y, r, done) {
+  g.save(); g.translate(x, y); g.lineWidth = Math.max(2, r * .2); g.strokeStyle = MAP_INK; g.lineJoin = 'round'; g.beginPath();
+  if (kind === 'vila') { g.rect(-r * .8, -r * .1, r * 1.6, r * .95); g.fillStyle = MAP_PAPER; g.fill(); g.stroke(); g.beginPath(); g.moveTo(-r * 1.05, -r * .1); g.lineTo(0, -r * 1.05); g.lineTo(r * 1.05, -r * .1); g.closePath(); g.fillStyle = '#FF5A5F'; g.fill(); g.stroke(); g.fillStyle = MAP_INK; g.fillRect(-r * .18, r * .25, r * .36, r * .6); }
+  else if (kind === 'fragmento') { g.moveTo(0, -r * 1.15); g.lineTo(r * .85, 0); g.lineTo(0, r * 1.15); g.lineTo(-r * .85, 0); g.closePath(); g.fillStyle = done ? '#3DDC84' : '#FFD23F'; g.fill(); g.stroke(); g.beginPath(); g.moveTo(0, -r * 1.15); g.lineTo(0, r * 1.15); g.moveTo(-r * .85, 0); g.lineTo(r * .85, 0); g.lineWidth = Math.max(1, r * .08); g.stroke(); }
+  else if (kind === 'chefe') { for (let i = 0; i < 16; i++) { const a = -Math.PI / 2 + i * Math.PI / 8, rr = i % 2 ? r * .62 : r * 1.25; g[i ? 'lineTo' : 'moveTo'](Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fillStyle = done ? '#3DDC84' : '#FF5A5F'; g.fill(); g.stroke(); }
+  else if (kind === 'acampamento') { g.moveTo(0, -r * 1.0); g.lineTo(r * 1.0, r * .75); g.lineTo(-r * 1.0, r * .75); g.closePath(); g.fillStyle = '#2BD4C8'; g.fill(); g.stroke(); g.fillStyle = MAP_INK; g.fillRect(-r * .16, r * .2, r * .32, r * .55); }
+  else if (kind === 'santuario') { g.arc(0, 0, r * .95, 0, TAU); g.fillStyle = '#4DA3FF'; g.fill(); g.stroke(); g.beginPath(); g.arc(0, 0, r * .32, 0, TAU); g.fillStyle = '#fff'; g.fill(); }
+  else if (kind === 'ruina') { g.rect(-r * .8, -r * .8, r * 1.6, r * 1.6); g.fillStyle = '#9AA6BD'; g.fill(); g.stroke(); g.beginPath(); g.moveTo(-r * .3, -r * .8); g.lineTo(-r * .3, 0); g.lineTo(r * .3, 0); g.lineTo(r * .3, -r * .8); g.fillStyle = MAP_INK; g.fill(); }
+  else if (kind === 'fogueira') { g.moveTo(0, -r * 1.15); g.bezierCurveTo(r * .9, -r * .2, r * .9, r * .9, 0, r * .95); g.bezierCurveTo(-r * .9, r * .9, -r * .9, -r * .2, 0, -r * 1.15); g.fillStyle = '#FF8A3D'; g.fill(); g.stroke(); g.beginPath(); g.arc(0, r * .35, r * .32, 0, TAU); g.fillStyle = '#FFE08A'; g.fill(); }
+  else if (kind === 'objetivo') { g.rotate(Math.PI / 4); g.rect(-r * .8, -r * .8, r * 1.6, r * 1.6); g.fillStyle = '#FF5A5F'; g.fill(); g.stroke(); g.rotate(-Math.PI / 4); g.fillStyle = '#fff'; g.font = "bold " + Math.round(r * 1.3) + "px 'Lilita One',sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('!', 0, r * .08); }
+  else if (kind === 'voce') { g.moveTo(0, -r * 1.1); g.lineTo(r * .85, r * .95); g.lineTo(0, r * .5); g.lineTo(-r * .85, r * .95); g.closePath(); g.fillStyle = '#fff'; g.fill(); g.stroke(); }
+  if (done && (kind === 'fragmento' || kind === 'chefe')) { g.beginPath(); g.moveTo(-r * .45, 0); g.lineTo(-r * .1, r * .4); g.lineTo(r * .5, -r * .4); g.lineWidth = Math.max(2, r * .26); g.strokeStyle = '#fff'; g.stroke(); }
+  g.restore();
+}
+const MAP_KIND = { vila: ['Vila', 'vila'], fragmento: ['Fragmento do sol (chefe)', 'fragmento'], chefe: ['Chefe final', 'chefe'], acampamento: ['Acampamento / oásis', 'acampamento'], santuario: ['Santuário', 'santuario'], ruina: ['Ruínas', 'ruina'], fogueira: ['Fogueira (salva o jogo)', 'fogueira'] };
 UI.mapPanel = function (l) {
-  const G = K.G, W_ = K.world, p = panelFrame(l, 'Mapa da Ilha', 40); const c = h('canvas', '', '', p); const S = 560; c.width = c.height = S; c.style.cssText = 'width:min(34rem,calc(var(--vh,1vh)*70));height:min(34rem,calc(var(--vh,1vh)*70));display:block;margin:0 auto;border:.25rem solid var(--ink);border-radius:.8rem;background:#1f6fd0';
-  const g = c.getContext('2d'); g.drawImage(W_.mapCanvas, 0, 0, S, S); const P = (x, z) => [(x / (W_.half * 2) + .5) * S, (z / (W_.half * 2) + .5) * S];
-  for (const po of (W_.pois || [])) { const [x, z] = P(po.x, po.z); g.fillStyle = '#FFD23F'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.beginPath(); g.arc(x, z, 8, 0, TAU); g.fill(); g.stroke(); if (['vila', 'fragmento', 'chefe'].includes(po.kind)) { const nm = (po.nome || po.id).replace(/^(Clareira|Covil|Trono|Cratera|Vila) (do|da|de) /, ''); g.font = "bold 17px 'Lilita One',sans-serif"; g.fillStyle = '#101830'; g.textAlign = x > S * .75 ? 'right' : x < S * .25 ? 'left' : 'center'; g.lineWidth = 5; g.strokeStyle = '#F4F1E8'; g.strokeText(nm, x, z - 14); g.fillText(nm, x, z - 14); } }
-  for (const cp of (G.camps || [])) { const [x, z] = P(cp.c.x, cp.c.z); g.fillStyle = '#FF8A3D'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.fillRect(x - 6, z - 6, 12, 12); g.strokeRect(x - 6, z - 6, 12, 12); }
-  const T = G.trackInfo; if (T && T.mark) { const [x, z] = P(T.mark[0], T.mark[1]); g.save(); g.translate(x, z); g.rotate(Math.PI / 4); g.fillStyle = '#FF5A5F'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.fillRect(-9, -9, 18, 18); g.strokeRect(-9, -9, 18, 18); g.restore(); }
-  const [px, pz] = P(G.pl.x, G.pl.z); g.save(); g.translate(px, pz); g.rotate(-G.pl.yaw + Math.PI); g.fillStyle = '#fff'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, -12); g.lineTo(9, 10); g.lineTo(0, 5); g.lineTo(-9, 10); g.closePath(); g.fill(); g.stroke(); g.restore();
-  h('div', '', '<small>Losango vermelho: objetivo · quadrado laranja: fogueira · círculo amarelo: lugar importante</small>', p).style.textAlign = 'center';
+  const G = K.G, W_ = K.world, p = panelFrame(l, 'Mapa da Ilha', 64); const wrap = h('div', 'mp-wrap', '', p), left = h('div', 'mp-left', '', wrap), side = h('div', 'mp-side', '', wrap);
+  const c = h('canvas', '', '', left), S = 720; c.width = c.height = S; c.className = 'mp-canvas'; const g = c.getContext('2d');
+  const H2 = W_.half * 2, P = (x, z) => [(x / H2 + .5) * S, (z / H2 + .5) * S], PL = G.pl;
+  const bossOf = po => { let b = null, bd = 30; for (const bb of (W_.bosses || [])) { const d = Math.hypot(bb.x - po.x, bb.z - po.z); if (d < bd) { bd = d; b = bb; } } return b; };
+  const places = (W_.pois || []).filter(po => po.kind !== 'trilha' && po.kind !== 'trilha_oculta').map(po => { const b = (po.kind === 'fragmento' || po.kind === 'chefe') ? bossOf(po) : null; return { po, kind: po.kind, nome: po.nome || po.id, done: !!(b && G.flags['boss_' + b.id]), d: Math.hypot(po.x - PL.x, po.z - PL.z) }; });
+  const short = nm => nm.replace(/^(Clareira|Covil|Trono|Cratera) (do|da|de) /, '');
+  const T = G.trackInfo, tm = T && T.mark; let hl = null;
+  const draw = () => {
+    g.clearRect(0, 0, S, S); g.imageSmoothingEnabled = true; g.drawImage(W_.mapCanvas, 0, 0, S, S);
+    /* nomes dos biomas, escritos grandes no chão */
+    g.save(); g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = "400 34px 'Lilita One',sans-serif"; if ('letterSpacing' in g) g.letterSpacing = '5px';
+    for (const b of Object.values(REG.biome)) { const [x, z] = P((b.mapLabel || b.center)[0], (b.mapLabel || b.center)[1]), nm = (b.short || b.nome.split(' ')[0]).toUpperCase(); g.lineWidth = 7; g.strokeStyle = 'rgba(16,24,48,.5)'; g.strokeText(nm, x, z); g.fillStyle = 'rgba(244,241,232,.85)'; g.fillText(nm, x, z); }
+    g.restore();
+    /* trilhas: tracejado de papel com contorno de tinta */
+    const trails = {}; for (const po of (W_.pois || [])) { const m = /^trilha_([a-z]+)(\d+)$/.exec(po.id); if (m) (trails[m[1]] = trails[m[1]] || []).push([+m[2], po]); }
+    g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; for (const k in trails) { const pts = trails[k].sort((a, b) => a[0] - b[0]).map(o => P(o[1].x, o[1].z)); const vp = REG.poi.vila; if (vp) pts.unshift(P(vp.x, vp.z)); g.beginPath(); pts.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](x, z)); g.setLineDash([]); g.strokeStyle = MAP_INK; g.lineWidth = 8; g.stroke(); g.setLineDash([12, 9]); g.strokeStyle = MAP_PAPER; g.lineWidth = 4.5; g.stroke(); } g.restore();
+    /* área segura */
+    for (const zn of K.safeList()) { const [x, z] = P(zn.x, zn.z), r = zn.safe / H2 * S; g.save(); g.beginPath(); g.arc(x, z, r, 0, TAU); g.fillStyle = 'rgba(255,210,63,.22)'; g.fill(); g.setLineDash([10, 8]); g.lineWidth = 3.5; g.strokeStyle = '#FFD23F'; g.stroke(); g.restore(); }
+    /* ícones (do menor para o maior, para o importante ficar por cima) */
+    const order = { ruina: 0, santuario: 1, acampamento: 2, fragmento: 3, chefe: 4, vila: 5 }, sz = { vila: 17, chefe: 15, fragmento: 13, acampamento: 11, santuario: 10, ruina: 10 };
+    const placed = [], rects = [], hit = (a) => rects.some(b => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]);
+    const items = places.slice().sort((a, b) => (order[a.kind] || 0) - (order[b.kind] || 0));
+    for (const it of items) { const [x, z] = P(it.po.x, it.po.z); mapIcon(g, it.kind, x, z, sz[it.kind] || 11, it.done); rects.push([x - 14, z - 14, x + 14, z + 14]); placed.push([it, x, z]); }
+    for (const cp of (G.camps || [])) { const [x, z] = P(cp.c.x, cp.c.z); mapIcon(g, 'fogueira', x, z, 9); rects.push([x - 10, z - 10, x + 10, z + 10]); }
+    /* você e objetivo (entram nos obstáculos de rótulo antes dos nomes) */
+    const [px, pz] = P(PL.x, PL.z); rects.push([px - 14, pz - 14, px + 14, pz + 14]);
+    /* objetivo: se cair em cima de você ou de outro ícone (ex.: a Vovó na vila, no começo do jogo) o losango sai para o lado, preso ao ponto verdadeiro por uma haste (1.1.1) */
+    let ox = 0, oz = 0, otx = 0, otz = 0, moved = false;
+    if (tm) { [otx, otz] = P(tm[0], tm[1]); ox = otx; oz = otz; const near = (x, z, d) => Math.hypot(otx - x, otz - z) < d;
+      if (near(px, pz, 42) || placed.some(([, x, z]) => near(x, z, 36)) || (G.camps || []).some(cp => { const [x, z] = P(cp.c.x, cp.c.z); return near(x, z, 26); })) { ox = clamp(otx + 38, 22, S - 22); oz = clamp(otz - 46, 22, S - 22); moved = true; }
+      rects.push([ox - 16, oz - 16, ox + 16, oz + 16]); }
+    /* rótulos dos lugares: o mais importante primeiro, 8 posições candidatas, pula o que não couber (o nome sempre está na lista ao lado) */
+    g.save(); g.textBaseline = 'middle'; g.lineJoin = 'round';
+    const lab = [...placed].sort((a, b) => (order[b[0].kind] || 0) - (order[a[0].kind] || 0));
+    const hlIt = hl && hl.it;
+    for (const [it, x, z] of lab) { const major = it.kind === 'vila' || it.kind === 'chefe' || it.kind === 'fragmento', f = major ? 21 : 15;
+      g.font = "400 " + f + "px 'Lilita One',sans-serif"; const nm = short(it.nome), w = g.measureText(nm).width, gap = (sz[it.kind] || 11) + 8, hgt = f + 4;
+      const cand = [[0, -gap - hgt / 2], [0, gap + hgt / 2], [gap + w / 2, 0], [-gap - w / 2, 0], [gap * .8 + w / 2, -gap], [-gap * .8 - w / 2, -gap], [gap * .8 + w / 2, gap], [-gap * .8 - w / 2, gap], [0, -gap * 2 - hgt], [0, gap * 2 + hgt], [gap * 1.6 + w / 2, -gap * 1.2], [-gap * 1.6 - w / 2, -gap * 1.2], [gap * 1.6 + w / 2, gap * 1.2], [-gap * 1.6 - w / 2, gap * 1.2]]; let done_ = false; const force = major || it === hlIt;
+      for (let i = 0; i < cand.length + (force ? 1 : 0); i++) { const [dx, dz] = cand[i < cand.length ? i : 1], cx = clamp(x + dx, w / 2 + 6, S - w / 2 - 6), cz = clamp(z + dz, hgt / 2 + 4, S - hgt / 2 - 4), r = [cx - w / 2 - 3, cz - hgt / 2, cx + w / 2 + 3, cz + hgt / 2]; if (i < cand.length && hit(r)) continue; rects.push(r); done_ = true; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = MAP_PAPER; g.strokeText(nm, cx, cz); g.fillStyle = MAP_INK; g.fillText(nm, cx, cz); break; } if (!done_) console.warn('MAPLABEL sem lugar: ' + nm); }
+    g.restore();
+    /* lugar destacado pela lista */
+    if (hl) { const [x, z] = P(hl.it.po.x, hl.it.po.z); g.save(); g.lineWidth = 5; g.strokeStyle = '#FF5A5F'; g.setLineDash([]); g.beginPath(); g.arc(x, z, 27, 0, TAU); g.stroke(); g.lineWidth = 2.5; g.strokeStyle = MAP_PAPER; g.beginPath(); g.arc(x, z, 31, 0, TAU); g.stroke(); g.restore(); }
+    /* linha jogador → objetivo */
+    if (tm) { if (moved) { g.save(); g.lineCap = 'round'; g.lineWidth = 6; g.strokeStyle = MAP_INK; g.beginPath(); g.moveTo(otx, otz); g.lineTo(ox, oz); g.stroke(); g.lineWidth = 3; g.strokeStyle = '#FF5A5F'; g.stroke(); g.beginPath(); g.arc(otx, otz, 6, 0, TAU); g.fillStyle = '#FF5A5F'; g.fill(); g.lineWidth = 3; g.strokeStyle = MAP_INK; g.stroke(); g.restore(); } g.save(); g.setLineDash([3, 9]); g.lineCap = 'round'; g.lineWidth = 5; g.strokeStyle = MAP_INK; g.beginPath(); g.moveTo(px, pz); g.lineTo(ox, oz); g.stroke(); g.lineWidth = 3; g.strokeStyle = '#FF5A5F'; g.stroke(); g.restore(); mapIcon(g, 'objetivo', ox, oz, 13); }
+    g.save(); g.translate(px, pz); g.rotate(-PL.yaw + Math.PI); mapIcon(g, 'voce', 0, 0, 11); g.restore();
+    g.save(); g.font = "400 17px 'Lilita One',sans-serif"; g.textAlign = 'center'; g.lineWidth = 6; g.lineJoin = 'round'; g.strokeStyle = MAP_INK; g.strokeText('VOCÊ', px, pz + 28); g.fillStyle = '#fff'; g.fillText('VOCÊ', px, pz + 28); g.restore();
+    /* bússola (norte é para cima) */
+    g.save(); g.translate(S - 46, 46); g.beginPath(); g.arc(0, 0, 30, 0, TAU); g.fillStyle = 'rgba(244,241,232,.92)'; g.fill(); g.lineWidth = 3.5; g.strokeStyle = MAP_INK; g.stroke(); g.beginPath(); g.moveTo(0, -23); g.lineTo(7, 4); g.lineTo(0, 0); g.lineTo(-7, 4); g.closePath(); g.fillStyle = '#FF5A5F'; g.fill(); g.lineWidth = 2; g.stroke(); g.fillStyle = MAP_INK; g.font = "400 15px 'Lilita One',sans-serif"; g.textAlign = 'center'; g.fillText('N', 0, 21); g.restore();
+  };
+  /* coluna do lado: onde estou · objetivo · legenda · lugares */
+  const reg = K.world.region(PL.x, PL.z), sec = (t, parent) => { const d = h('div', 'mp-sec', '<h3>' + t + '</h3>', parent || side); return d; };
+  const s1 = sec('Você está em'); h('div', 'mp-big', esc(reg.nome) + (G.inSafe ? ' <small>· área segura</small>' : ''), s1);
+  if (T) { const s2 = sec('Objetivo'); h('div', '', '<b>' + esc(T.d.nome) + '</b><br>' + esc(T.text) + (tm ? ' <small>· ' + Math.round(Math.hypot(tm[0] - PL.x, tm[1] - PL.z)) + ' m</small>' : ''), s2); }
+  const sl = sec('Legenda'), lg = h('div', 'mp-leg', '', sl); const legItem = (kind, txt) => { const cv = h('canvas', '', '', lg), li = cv; cv.width = cv.height = 34; mapIcon(cv.getContext('2d'), kind, 17, 17, kind === 'vila' ? 11 : 9); const t = h('span', '', txt, lg); li.style.cssText = 'width:1.6rem;height:1.6rem'; t.style.alignSelf = 'center'; };
+  for (const k of ['voce']) legItem(k, 'Você (a seta aponta para onde olha)'); if (tm) legItem('objetivo', 'Objetivo da missão'); for (const k in MAP_KIND) legItem(MAP_KIND[k][1], MAP_KIND[k][0]);
+  { const cv = h('canvas', '', '', lg); cv.width = cv.height = 34; const q = cv.getContext('2d'); q.setLineDash([5, 4]); q.lineWidth = 3.5; q.strokeStyle = '#E0B52A'; q.beginPath(); q.arc(17, 17, 12, 0, TAU); q.fillStyle = 'rgba(255,210,63,.35)'; q.fill(); q.stroke(); cv.style.cssText = 'width:1.6rem;height:1.6rem'; h('span', '', 'Área segura (monstros não entram)', lg).style.alignSelf = 'center'; }
+  const sp = sec('Lugares (toque para destacar)'), ls = h('div', 'mp-list', '', sp); const KIND_ORDER = { vila: 0, chefe: 1, fragmento: 2, acampamento: 3, santuario: 4, ruina: 5 };
+  places.slice().sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || a.d - b.d).forEach(it => { const r = h('div', 'mp-row', '', ls); r.dataset.nav = 1; const cv = h('canvas', '', '', r); cv.width = cv.height = 34; mapIcon(cv.getContext('2d'), it.kind, 17, 17, it.kind === 'vila' ? 11 : 9, it.done); cv.style.cssText = 'width:1.5rem;height:1.5rem;flex:none'; h('span', '', esc(it.nome) + (it.done ? ' ✓' : ''), r).style.flex = 1; h('small', '', Math.round(it.d) + ' m', r);
+    r.addEventListener('click', () => { hl = (hl && hl.it === it) ? null : { it }; ls.querySelectorAll('.mp-row').forEach(x => x.classList.remove('sel')); if (hl) r.classList.add('sel'); K.sfx('ui'); draw(); }); });
+  draw();
 };
 /* opções (regras e, h, i): volumes, sensibilidade, gráficos, "Zerar progresso" com confirmação; opção do jogador é sagrada */
 UI.optPanel = function (l, back) {
@@ -6020,6 +6144,10 @@ UI.optPanel = function (l, back) {
   tog('Inverter eixo Y', 'inv'); tog('Contornos', 'outl'); tog('Sombras', 'shadow'); tog('Vibração', 'hap'); tog('Tremor de câmera', 'shake');
   const q = UI.btn(K.qLabel(), () => { K.qCycle(); q.textContent = K.qLabel(); }, { cls: 'small', parent: p }); q.style.margin = '.25rem .25rem 0 0';
   row('Campo de visão', rng_('fov', .85, 1.2, .05, v => { o.fov = v; }));
+  /* tamanho do minimapa (1.1.0): 3 botões, o escolhido fica destacado; vale na hora (e vale no mapa da pausa de fundo) */
+  const mmr = h('div', 'row', '', p); mmr.style.margin = '.5rem 0'; const mml = h('span', '', 'Minimapa', mmr); mml.style.cssText = 'width:11rem;flex:none'; const mmb = [];
+  const mmUpd = () => mmb.forEach((b, i) => { b.classList.toggle('pri', i === (o.mms === undefined ? 1 : o.mms)); b.classList.toggle('ghost', i !== (o.mms === undefined ? 1 : o.mms)); });
+  K.MMS.forEach((n, i) => { const b = UI.btn(n, () => { K.setMmSize(i); K.persist(); mmUpd(); }, { cls: 'small', parent: mmr }); b.dataset.mm = i; mmb.push(b); }); mmUpd();
   const z = UI.btn('Zerar progresso', () => { const c = h('div', 'panel', '<h2>Zerar o progresso?</h2><p>Apaga a partida salva, finais e recordes. As opções são mantidas.</p>', l.el); c.style.cssText += ';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:24rem;text-align:center;background:#fff'; const r = h('div', 'row', '', c); r.style.justifyContent = 'center'; UI.btn('Cancelar', () => { c.remove(); setFocus(0); }, { parent: r, cls: 'aqua' }); UI.btn('Zerar tudo', () => { K.resetSave(); c.remove(); K.ui.toast && K.ui.toast('Progresso zerado.'); if (K.sceneName !== 'play') K.go('title'); }, { parent: r, cls: 'pri' }); setFocus(0); }, { cls: 'pri small', parent: p }); z.style.marginTop = '.8rem';
 };
 UI.shop = function (npcDef) {
@@ -6136,7 +6264,7 @@ SC('credits', {
     const inn = this.inn = h('div', '', '', box); inn.style.cssText = 'position:absolute;left:0;right:0;top:100%;text-align:center;color:#F4F1E8;text-shadow:.1rem .14rem 0 #101830;line-height:1.5';
     inn.innerHTML = (K.creditsHTML ? K.creditsHTML() : `<div style="font:400 3.4rem/1 'Lilita One';color:#FFD23F">CACOS DE SOL</div><div style="font:400 1.3rem 'Lilita One'">A Ilha Quebrada · v${K.version}</div><br><br>
 <div style="font:400 1.1rem 'Lilita One';color:#aef3ff">Desenvolvido e Dirigido por</div><div style="font:400 2rem 'Lilita One'">Pedro Javarotti</div><br><br>
-<div style="font:400 1.1rem 'Lilita One';color:#aef3ff">Feito por um time de IA</div><div style="font-size:1.1rem">Gerente: Claude Sonnet · esforço alto<br>Agentes: Claude Sonnet · esforço médio, até 10 em paralelo<br>Heróis, monstros, chefes, mundo, itens, missões, áudio e menus<br>— tudo modelado e animado por código em three.js —</div><br><br>
+<div style="font:400 1.1rem 'Lilita One';color:#aef3ff">Feito por um time de IA</div><div style="font-size:1.1rem">Gerente: Claude Sonnet · esforço alto<br>Agentes: Claude Sonnet · esforço médio, até 10 em paralelo<br>— tudo modelado e animado por código em three.js —</div><br><br>
 <div style="font:400 1.1rem 'Lilita One';color:#aef3ff">Motor</div><div style="font:400 1.6rem 'Lilita One'">Motor JGK · Javarotti Game Kit</div><div style="font-size:1rem">1º jogo 3D do time · three.js</div><br><br><div style="font:400 1.6rem 'Lilita One';color:#FFD23F">Obrigado por jogar!</div>`);
     const b = K.ui.btn('Voltar', () => K.go('title'), { cls: 'small', parent: l.el }); b.style.cssText = 'position:absolute;right:calc(var(--sr) + 1.5rem);bottom:calc(var(--sb) + 1rem)';
     const hint = h('div', '', 'segure qualquer tecla / toque para acelerar', l.el); hint.style.cssText = 'position:absolute;right:calc(var(--sr) + 1.5rem);bottom:calc(var(--sb) + 4rem);font:800 .8rem Nunito;color:#F4F1E8;text-shadow:.06rem .08rem 0 #101830';
@@ -6647,7 +6775,7 @@ K.defProp('anel_runas', { variants: 3, scale: [1, 1], build: (mk, i) => {
 
 /* =====================================================================  BIOMAS */
 const FLOWER_SPOTS = (x, z) => vnoise(x * .9, z * .9, 5);
-K.defBiome('campos', { nome: 'Campos de Raio de Sol', center: [0, 42], r: 46, music: 'vila', musicNight: true, fog: '#d6f0ff',
+K.defBiome('campos', { nome: 'Campos de Raio de Sol', center: [0, 42], r: 46, mapLabel: [-24, 72], music: 'vila', musicNight: true, fog: '#d6f0ff',
   fx: { color: '#FFF3A0', rate: 4, up: .2, grav: -.08, life: 4, size: .07 },
   height: (x, z, w) => (fbm(x * .04 + 5, z * .04, 3, 12) - .5) * 2.6,
   ground: (x, z, h, s, n) => {
@@ -6667,7 +6795,7 @@ K.defBiome('campos', { nome: 'Campos de Raio de Sol', center: [0, 42], r: 46, mu
     { prop: 'palmeira', density: .55, minDist: 5, minH: .4, maxH: 1.5, maxSlope: .9, edge: .8 },
     { prop: 'concha', density: 1.0, minDist: 2.4, minH: .3, maxH: 1.2, maxSlope: 1, edge: .8 },
     { prop: 'rocha_praia', density: .25, minDist: 6, minH: .3, maxH: 1.4, maxSlope: 1, edge: .8 }] });
-K.defBiome('floresta', { nome: 'Floresta Murmúrio', center: [-64, 6], r: 48, music: 'floresta', musicNight: true, fog: '#a6e6c8', fogMul: .85,
+K.defBiome('floresta', { nome: 'Floresta Murmúrio', center: [-64, 6], r: 48, mapLabel: [-62, 14], music: 'floresta', musicNight: true, fog: '#a6e6c8', fogMul: .85,
   fx: { color: '#FFD23F', rate: 6, up: .15, grav: 0, life: 3.6, size: .1 },
   height: (x, z, w) => (fbm(x * .05, z * .05, 3, 4) - .5) * 5,
   ground: (x, z, h, s, n) => {
@@ -6683,7 +6811,7 @@ K.defBiome('floresta', { nome: 'Floresta Murmúrio', center: [-64, 6], r: 48, mu
     { prop: 'flor', variant: 3, density: .5, minDist: 3, cluster: [.1, .1, .5] },
     { prop: 'concha', density: .5, minDist: 3, minH: .3, maxH: 1.2, edge: .8 }, { prop: 'rocha_praia', density: .25, minDist: 6, minH: .3, maxH: 1.4, maxSlope: 1, edge: .8 }] });
 const OASIS = [56, 44];
-K.defBiome('dunas', { nome: 'Dunas Quebradas', center: [68, 22], r: 46, music: 'dunas', musicNight: true, fog: '#ffe9b8',
+K.defBiome('dunas', { nome: 'Dunas Quebradas', center: [68, 22], r: 46, mapLabel: [68, 15], music: 'dunas', musicNight: true, fog: '#ffe9b8',
   fx: { color: '#F4E6B0', rate: 6, up: .08, grav: 0, life: 3, size: .08 },
   height: (x, z, w, h) => { let v = Math.sin(x * .12 + z * .05) * 1.4 + Math.sin(z * .09) * .8 + Math.abs(Math.sin(x * .07 - z * .11)) * 1.1; const d = Math.hypot(x - OASIS[0], z - OASIS[1]);
     if (d < 11) { const hh = h + v * w, t = 1 - smooth(2, 11, d); v = (lerp(hh, -1.2, t) - h) / Math.max(w, .05); } return v; },
@@ -6707,7 +6835,7 @@ const dry = (W, x, z, m) => W.h(x, z) > (m === undefined ? .7 : m);
 K.defPoi('altar_sol', { x: 0, z: 22, nome: 'Altar do Sol', kind: 'santuario', clear: 7, region: 7, build: W => {
   W.place('anel_runas', 0, 22, { v: 1, rot: 0, noCol: true, y: W.h(0, 22) + .05 }); W.place('altar', 0, 22, { rot: 0, s: 1, v: 0 });
   for (const [x, z] of [[-4.6, 18.2], [4.6, 18.2]]) W.place('lampiao', x, z, { v: 1 }); } });
-K.defPoi('vila', { x: 0, z: 32, nome: 'Vila Raio de Sol', kind: 'vila', flat: { r: 15, r2: 26, h: 2.3 }, clear: 22, region: 24, build: W => {
+K.defPoi('vila', { x: 0, z: 32, nome: 'Vila Raio de Sol', kind: 'vila', flat: { r: 15, r2: 26, h: 2.3 }, clear: 22, region: 24, safe: 24, build: W => {   // safe (1.1.0): área segura — monstros não entram, jogador não leva dano
   const homes = [[-15, 24, 0], [17, 24, 3], [-18, 34, 1], [19, 36, 4], [-12, 47, 5], [11, 46, 2], [-8, 17, 3], [9, 17, 0]];
   homes.forEach(([x, z, v]) => W.place('casa', x, z, { rot: tilt(x, z, 0, 32) + R(-.12, .12), v, s: 1 }));
   W.place('forja', 11.8, 39.6, { rot: tilt(11.8, 39.6, 0, 32) }); W.place('barraca', -11.8, 39.6, { rot: tilt(-11.8, 39.6, 0, 32) });
@@ -6814,7 +6942,7 @@ const mixHex = (a, b, t) => { const A = hexRGB(a), B = hexRGB(b); return '#' + A
 const GAP = Math.PI / 2;   // direção sul (a vila) vista da cratera: buraco na borda
 
 K.defBiome('montanha', {
-  nome: 'Montanha de Cristal', center: MC, r: 46,
+  nome: 'Montanha de Cristal', center: MC, r: 46, mapLabel: [6, -60],
   height: (x, z, w) => {
     const dp = Math.min(dTrilha(x, z), dClareira(x, z)), c = smooth(4, 10.5, dp);
     const nn = fbm(x * .045 + 3, z * .045, 4, 9), ridge = Math.pow(smooth(.42, .7, nn), 1.2), det = fbm(x * .13, z * .13, 2, 5) - .5;
@@ -8713,25 +8841,12 @@ K.css(`
 .cr-end{font:400 2rem 'Lilita One';color:var(--sun)}
 `);
 K.creditsHTML = function () {
-  const role = (t, d) => '<div><b>' + t + '</b>' + d + '</div>';
   return '<div class="cr">'
     + '<div class="cr-sec"><div class="cr-logo">CACOS<br>DE SOL</div><div class="cr-ver">A Ilha Quebrada · v' + K.version + '</div></div>'
     + '<div class="cr-sec"><span class="cr-h">Desenvolvido e Dirigido por</span><div class="cr-big">Pedro Javarotti</div></div>'
     + '<div class="cr-sec"><span class="cr-h">Feito por um time de IA</span>'
     + '<div class="cr-note" style="margin-top:.7rem">Gerente: <b>Claude Sonnet</b> · esforço alto<br>Agentes: <b>Claude Sonnet</b> · esforço médio, até 10 em paralelo</div>'
-    + '<div class="cr-role">'
-    + role('Gerente', 'Motor, mundo vivo, combate, integração e revisão de tudo.')
-    + role('Herói e NPCs', 'Faísca, vovó Brasa, Tonho, Lica, capitão Zé, Pipa e o gato Mingau.')
-    + role('Monstros', 'A bicharada de cada bioma, cada um com seu golpe anunciado.')
-    + role('Chefes', 'Os grandalhões da ilha, com fases e muita pose exagerada.')
-    + role('Mundo', 'Terreno, biomas, vila, ruínas, cristais e céu.')
-    + role('Itens', 'Armas, amuletos, poções, materiais e receitas.')
-    + role('Missões', 'A trilha dos cacos de sol e as tarefas dos moradores.')
-    + role('Diálogos', 'Falas, humor bobo e a história da Ilha Quebrada.')
-    + role('Áudio', 'Músicas e efeitos sintetizados por código.')
-    + role('Menus', 'Título, diorama, créditos e a cara de papel da interface.')
-    + role('QA', 'Cacou bug com piloto automático e olho humano.')
-    + '</div><div class="cr-note" style="margin-top:.8rem">Tudo modelado e animado por código, sem imagem nenhuma.</div></div>'
+    + '<div class="cr-note" style="margin-top:.6rem">Tudo modelado e animado por código, sem imagem nenhuma.<br>Quem faz o quê está no portfólio Javarotti.</div></div>'
     + '<div class="cr-sec"><span class="cr-h c">Motor</span><div class="cr-mid">Motor JGK · Javarotti Game Kit</div><div class="cr-note">1º jogo 3D do time Javarotti</div></div>'
     + '<div class="cr-sec"><span class="cr-h p">Biblioteca</span><div class="cr-mid">three.js</div><div class="cr-note">Renderização 3D no navegador</div></div>'
     + '<div class="cr-sec"><span class="cr-h">Agradecimentos</span><div class="cr-note" style="margin-top:.7rem">Ao Pedro, testador de todas as horas,<br>e a você, que juntou os cacos até o fim.</div></div>'

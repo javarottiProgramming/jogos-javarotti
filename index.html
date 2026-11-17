@@ -125,6 +125,7 @@
   dl.rows>div:last-child{border-bottom:1px solid var(--ink-soft)}
   dl.rows dt{font-weight:900}
   dl.rows dd{margin:0}
+  dl.rows dd small{display:block;margin-top:4px;font-size:.9rem;font-weight:700;color:var(--ink-soft)}
   @media (min-width:640px){dl.rows>div{grid-template-columns:minmax(120px,160px) 1fr}}
 
 
@@ -239,7 +240,7 @@
       <article class="game cacos">
         <button class="poster" type="button" data-play="cacos-de-sol" aria-label="Jogar Cacos de Sol">
           <img src="assets/cacos-de-sol.jpg" width="960" height="540" alt="Tela inicial do Cacos de Sol: título amarelo e coral ao lado do menu, com uma ilha flutuante de casinhas coloridas e o herói no centro, sob um céu alaranjado">
-          <span class="ver" aria-hidden="true">v1.0.4</span>
+          <span class="ver" aria-hidden="true">v1.1.1</span>
         </button>
         <h2>Cacos de Sol</h2>
         <p>RPG de ação em 3D numa ilha aberta que se quebrou em pedaços. Explore campos, floresta, dunas e a montanha de cristal, converse com a vila, fabrique armas e poções, vença os chefes e junte os fragmentos do sol antes de enfrentar o Rei Estilhaço.</p>
@@ -284,24 +285,31 @@
         <div>
           <h3>O time Javarotti</h3>
           <p>Um gerente e até dez agentes trabalhando ao mesmo tempo. O gerente escreve o motor e as ferramentas, divide o trabalho em ondas e confere tudo antes de aceitar. Cada agente cuida de uma parte, mexe só nos próprios arquivos e entrega um relatório dizendo o que não conseguiu testar.</p>
+          <p>Os papéis não são fixos. Jogo a jogo eu e o gerente escolhemos quem entra: num jogo pequeno um agente acumula vários papéis, num jogo grande um papel se divide em dois ou mais (no Cacos de Sol, por exemplo, o mundo teve dois cenógrafos e os monstros, dois artistas). Abaixo está o que cada papel faz e no que ele pode se transformar conforme o jogo.</p>
+          <h4>No comando</h4>
+          <dl class="rows">
+            <div><dt>Gerente</dt><dd>Escreve o motor e as ferramentas de teste, divide o trabalho em ondas, integra o que cada agente entrega e confere no jogo, no cenário real, antes de aceitar. Cuida também da versão, do histórico de mudanças e do git.<small>Pode virar: líder de ondas, quando o jogo é grande e o trabalho se divide em várias frentes.</small></dd></div>
+          </dl>
           <h4>Base do time</h4>
           <dl class="rows">
-            <div><dt>Pesquisador</dt><dd>Levanta referências de controles, menus, animação e desempenho antes de começar.</dd></div>
-            <div><dt>Animador do herói</dt><dd>Dá movimento ao personagem, forma por forma, a partir do desenho original.</dd></div>
-            <div><dt>Artista de criaturas</dt><dd>Desenha inimigos, NPCs e chefes no estilo do herói.</dd></div>
-            <div><dt>Cenógrafo</dt><dd>Monta os mundos: céu, camadas de fundo que rolam sem emenda, chão e decoração.</dd></div>
-            <div><dt>Artista de itens e HUD</dt><dd>Faz coletáveis, objetos, projéteis, efeitos e a interface na tela.</dd></div>
-            <div><dt>Level designer</dt><dd>Desenha as fases, os segredos e a curva de dificuldade.</dd></div>
-            <div><dt>Programador de gameplay</dt><dd>Dá vida aos chefes, aos inimigos especiais e aos eventos.</dd></div>
-            <div><dt>Designer de menus</dt><dd>Cria título, seleção de fases, opções e créditos.</dd></div>
-            <div><dt>Som e história</dt><dd>Cuida da trilha, dos efeitos, das cutscenes e das falas.</dd></div>
-            <div><dt>QA e playtester</dt><dd>Joga todas as fases e telas, caça bugs e aponta o que não foi testado.</dd></div>
+            <div><dt>Pesquisador</dt><dd>Levanta referências de controles, menus, animação e desempenho antes de começar.<small>Pode virar: pesquisador de gênero (plataforma, tiro, RPG) ou de técnica, quando o jogo usa algo novo.</small></dd></div>
+            <div><dt>Animador do herói</dt><dd>Dá movimento ao personagem, forma por forma, a partir do desenho original.<small>Nos jogos 3D vira animador de poses: pivôs nas juntas, andar, golpes, rolar e cair, sem esqueleto importado.</small></dd></div>
+            <div><dt>Artista de criaturas</dt><dd>Desenha inimigos, NPCs e chefes no estilo do herói.<small>No RPG 3D se divide em monstros, chefes e NPCs, cada grupo com o seu agente.</small></dd></div>
+            <div><dt>Cenógrafo</dt><dd>Monta os mundos: céu, camadas de fundo que rolam sem emenda, chão e decoração.<small>No 3D vira cenógrafo de mundo: terreno, biomas, vila, ruínas e ciclo de dia e noite. Em mundo grande são dois, um por região.</small></dd></div>
+            <div><dt>Artista de itens e HUD</dt><dd>Faz coletáveis, objetos, projéteis, efeitos e a interface na tela.<small>No RPG também desenha os ícones de inventário e dos itens que caem no chão.</small></dd></div>
+            <div><dt>Level designer</dt><dd>Desenha as fases, os segredos e a curva de dificuldade.<small>Em mundo aberto vira designer de mundo: onde ficam os lugares, os caminhos, os baús e os ninhos de monstros.</small></dd></div>
+            <div><dt>Programador de gameplay</dt><dd>Dá vida aos chefes, aos inimigos especiais e aos eventos.<small>Pode cuidar também de combate, câmera e dos controles de toque e gamepad.</small></dd></div>
+            <div><dt>Designer de menus</dt><dd>Cria título, seleção de fases, opções e créditos.<small>No RPG ainda faz inventário, mapa, missões e loja, tudo com a mesma cara de papel.</small></dd></div>
+            <div><dt>Som e história</dt><dd>Cuida da trilha, dos efeitos, das cutscenes e das falas.<small>Se divide em compositor e roteirista quando o jogo pede.</small></dd></div>
+            <div><dt>QA e playtester</dt><dd>Joga todas as fases e telas, caça bugs e aponta o que não foi testado.<small>No 3D também testa com piloto automático, em celular emulado e em várias proporções de tela.</small></dd></div>
           </dl>
           <h4>Quando o jogo pede</h4>
           <dl class="rows">
             <div><dt>Compositor</dt><dd>Assume a trilha e os efeitos quando o jogo pede som próprio.</dd></div>
             <div><dt>Roteirista</dt><dd>Assume a história, as cutscenes e as falas quando o enredo é longo.</dd></div>
-            <div><dt>Modelador 3D</dt><dd>Modela e anima personagens, inimigos e cenário em 3D.</dd></div>
+            <div><dt>Modelador 3D</dt><dd>Modela e anima personagens, inimigos e cenário em 3D, tudo por código, sem imagem importada.</dd></div>
+            <div><dt>Designer de RPG</dt><dd>Cuida do que faz um RPG girar: itens, armas, amuletos, habilidades, receitas de fabricação, loja, missões e a curva de nível. Confere que tudo funciona do nível 1 ao 20.<small>Em RPG grande se divide em itens e habilidades de um lado e missões e falas dos moradores do outro.</small></dd></div>
+            <div><dt>Engenheiro de motor 3D</dt><dd>Cuida do módulo de motor 3D do JGK: renderização com three.js, terreno e água, câmera, colisão, animação por poses, inteligência dos inimigos e as ferramentas de teste. Quando uma lição vale para outros jogos, ele leva para o kit.<small>Pode ser o próprio gerente, quando o motor ainda está sendo escrito.</small></dd></div>
           </dl>
         </div>
       </div>
@@ -340,7 +348,7 @@
 const GAMES = {
   kuku:    { title: 'Kuku e a Semente do Sol', path: 'jogos/kuku/', v: '2.8' },
   pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/', v: '1.1.5' },
-  'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/', v: '1.0.4' },
+  'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/', v: '1.1.1' },
   'javas-brick':  { title: "Java's Brick",      path: 'jogos/javas-brick/', v: '1.0.21' }
 };
 
