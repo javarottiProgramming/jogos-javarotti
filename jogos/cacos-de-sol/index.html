@@ -4450,11 +4450,12 @@ function playing() { return K.sceneName === 'play' && !K.paused && !K.G_dialog; 
  * o inimigo chegava e a câmera não mexia). O fechamento acontece dentro de um clique/tecla do jogador, então o navegador autoriza o pedido de pointer lock;
  * se negar (Esc, aba sem foco), qualquer tecla de jogo ou clique no jogo pede de novo (keydown/mousedown abaixo). IN.relock() é seguro de chamar a qualquer hora. */
 IN.canLock = () => !IN.locked && !IN.touch && !document.body.classList.contains('touchmode') && IN.dev === 'kb' && K.sceneName === 'play' && !K.paused && !K.uiBlock && !K.dlg && !uiOpen() && !!K.G && K.G.pl.alive && !K.debug.nopause && !IN.bot;
-IN._rlT = -9e9;   // um pedido por vez: dois requestPointerLock no mesmo instante fazem o navegador soltar e prender de novo, e o 'soltou' pausava o jogo (achado pelo qa:interface)
-IN.relock = () => { if (!IN.canLock() || performance.now() - IN._rlT < 500) return; IN._rlT = performance.now(); try { window.focus(); const pr = $('gl').requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (er) {} };
+IN._rlT = -9e9; IN._rlP = false;   // um pedido por vez ENQUANTO o anterior está pendente: dois requestPointerLock no mesmo instante fazem o navegador soltar e prender de novo, e o 'soltou' pausava o jogo (achado pelo qa:interface). Pendente = até pointerlockchange/error (ou 700 ms); um relock legítimo logo depois passa.
+IN.relock = () => { if (!IN.canLock() || IN._rlP) return; IN._rlP = true; IN._rlT = performance.now(); setTimeout(() => { IN._rlP = false; }, 700); try { window.focus(); const pr = $('gl').requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (er) {} };
 IN.relockSoon = () => setTimeout(IN.relock, 0);   // depois que a tela que fechou terminar de abrir/fechar o que mais precisar
 IN.freeCursor = () => { if (!document.pointerLockElement) return; if (K.paused || K.uiBlock || K.sceneName !== 'play' || uiOpen()) { try { document.exitPointerLock(); } catch (er) {} } };
-document.addEventListener('pointerlockchange', () => { IN.locked = document.pointerLockElement === $('gl'); if (!IN.locked && performance.now() - IN._rlT > 400 && K.sceneName === 'play' && !K.paused && !K.uiBlock && !uiOpen() && !IN.touch && !K.debug.nopause && K.onUnlock) K.onUnlock(); });
+document.addEventListener('pointerlockerror', () => { IN._rlP = false; });
+document.addEventListener('pointerlockchange', () => { IN._rlP = false; IN.locked = document.pointerLockElement === $('gl'); if (!IN.locked && performance.now() - IN._rlT > 400 && K.sceneName === 'play' && !K.paused && !K.uiBlock && !uiOpen() && !IN.touch && !K.debug.nopause && K.onUnlock) K.onUnlock(); });
 document.addEventListener('mousemove', e => { if (!IN.locked) return; const s = MOUSE_BASE * SENS(); IN.look.x += e.movementX * s; IN.look.y += e.movementY * s * (SAVE.opt.inv ? -1 : 1); });
 document.addEventListener('mousedown', e => {
   if (e.target.closest && e.target.closest('#ui .layer.modal, #touch')) return;
