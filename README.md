@@ -15,6 +15,8 @@ Os códigos-fonte continuam nos repositórios dos próprios jogos.
 ## Como atualizar um jogo
 Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a versão no `badge` do `index.html` **e o campo `v` do jogo no objeto `GAMES`** (ele evita que o navegador mostre a versão antiga em cache dentro do quadro) e faça push na `main`.
 
+**Histórico:** a cada versão nova, acrescente uma linha **no topo** da lista do jogo no objeto `HIST` do script (`['versão', 'AAAA-MM-DDThh:mm' em horário de Brasília, 'uma frase']`). É o que o link *histórico* de cada cartão mostra; a versão do topo aparece como "atual". As frases vêm do `CHANGELOG.md` de cada jogo.
+
 ## Como adicionar um jogo novo
 1. `jogos/<id>/index.html` com o HTML do jogo.
 2. `assets/<id>.jpg` com a capa (960×540).
