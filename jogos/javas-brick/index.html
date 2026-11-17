@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="data:,">
-<title>Java's Brick 1.0.15</title>
+<title>Java's Brick 1.0.16</title>
 <style>
   html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -17,7 +17,7 @@
 /*==ENGINE:core==  JGK (Javarotti Game Kit) 2D · registros, save, canvas, entrada, cenas, loop */
 // Motor JGK — Javarotti Game Kit. Cada jogo do time usa este mesmo núcleo.
 const K = (window.K = window.K || {});
-K.version = '1.0.15';
+K.version = '1.0.16';
 K.game = "Java's Brick";
 K.W = 800;
 K.H = 600;
@@ -135,8 +135,18 @@ K.fsIcon = function (g) {
 };
 document.addEventListener('fullscreenchange', () => K.fit());
 
+// layout lógico: menus ficam em 800x600; a fase (cena com wide:true) usa o formato real da tela em paisagem
+// (altura menor + largura maior => tudo fica maior e o campo preenche o celular deitado)
+K.layout = function () {
+  const a = window.innerWidth / Math.max(1, window.innerHeight);
+  if (K.cur && K.cur.wide && a > 1.34) {
+    K.H = 520;
+    K.W = Math.max(800, Math.min(1120, Math.round(520 * a)));
+  } else { K.W = 800; K.H = 600; }
+};
 K.fit = function () {
   K.lastW = window.innerWidth; K.lastH = window.innerHeight;
+  K.layout();
   const s = Math.min(window.innerWidth / K.W, window.innerHeight / K.H);
   const cssW = Math.floor(K.W * s), cssH = Math.floor(K.H * s);
   K.cv.style.width = cssW + 'px';
@@ -245,6 +255,7 @@ K.go = function (id, arg) {
   if (K.cur && K.cur.leave) K.cur.leave();
   K.cur = K.scenes[id];
   K.focus = 0;
+  K.fit();
   if (K.cur && K.cur.enter) K.cur.enter(arg);
 };
 
@@ -475,7 +486,7 @@ window.addEventListener('pagehide', () => AU.sleep());
 const PL = (K.play = {});
 // grade: 12 colunas por padrão; fases avançadas podem usar até 20 (mosaicos de palavras)
 let PL_COLS = 12, PL_CW = 64, PL_CH = 30, PL_X0 = 16, PL_Y0 = 84, PL_BW = 56, PL_BH = 22;
-const PL_PY = 556, PL_PH = 14;            // raquete
+const PL_PH = 14;                         // raquete (a altura do centro dela é K.H - 44)
 const PL_STEP = 1 / 120;                  // passo fixo
 const PL_DEFAULT_LEGEND = {
   '1': 'basico', '2': 'dupla', '3': 'tripla', '#': 'indestrutivel', '*': 'explosivo', G: 'nucleo',
@@ -498,7 +509,7 @@ PL.start = function (levelId) {
   PL_COLS = Math.min(20, Math.max(1, def.cols || 12));
   PL_CW = Math.floor(768 / PL_COLS);
   PL_BW = PL_CW - 8;
-  PL_X0 = Math.floor((800 - PL_CW * PL_COLS) / 2);
+  PL_X0 = Math.floor((K.W - PL_CW * PL_COLS) / 2);
   const bricks = [];
   def.rows.forEach((row, r) => {
     for (let c = 0; c < PL_COLS; c++) {
@@ -522,7 +533,7 @@ PL.start = function (levelId) {
   PL.G = {
     id: levelId, def, world, tune: Object.assign({ speed: 1, drop: 0.15, lives: 3 }, def.tune || {}),
     bricks, balls: [], drops: [], bullets: [], parts: [], floats: [],
-    paddle: { x: 400, w: 110 }, lives: 0, score: 0, timers: {}, shield: 0,
+    paddle: { x: K.W / 2, w: 110 }, vw: K.W, lives: 0, score: 0, timers: {}, shield: 0,
     t: 0, mode: 'ready', modeT: 0, shake: 0, hits: 0, msg: '', msgT: 0,
     sticky: false, laserCd: 0, acc: 0, paused: false,
   };
@@ -536,7 +547,7 @@ PL.start = function (levelId) {
 PL.spawnBall = function (stuck, x, y, vx, vy) {
   const G = PL.G;
   G.balls.push({
-    x: x === undefined ? G.paddle.x : x, y: y === undefined ? PL_PY - 12 : y,
+    x: x === undefined ? G.paddle.x : x, y: y === undefined ? (K.H - 44) - 12 : y,
     vx: vx || 0, vy: vy || 0, r: 7, stuck: !!stuck, ox: 0,
   });
 };
@@ -625,7 +636,7 @@ PL.pickDrop = function () {
 PL.brickX = function (b) {
   if (!b.move) return b.baseX;
   const x = b.baseX + Math.sin(PL.G.t * b.move.speed) * b.move.amp;
-  return K.clamp(x, 4, 800 - 4 - PL_BW);
+  return K.clamp(x, 4, K.W - 4 - PL_BW);
 };
 
 PL.breakable = function (b) { return !b.dead && b.hp !== Infinity; };
@@ -696,6 +707,13 @@ PL.step = function (dt) {
       ball.vy = (ball.vy < 0 ? -1 : 1) * Math.sqrt(Math.max(0, sp * sp - ball.vx * ball.vx));
     });
   }
+  // tela girou / mudou de formato no meio da fase: recentraliza tudo na nova largura
+  if (G.vw !== K.W) {
+    const dx = (K.W - G.vw) / 2;
+    G.bricks.forEach((b) => { b.baseX += dx; b.x += dx; });
+    [G.balls, G.drops, G.bullets, G.parts, G.floats].forEach((l) => l.forEach((o) => { o.x += dx; }));
+    G.paddle.x += dx; PL_X0 += dx; G.vw = K.W;
+  }
   for (const k of Object.keys(G.timers)) if (G.timers[k] > 0) G.timers[k] -= dt;
   G.timers.shield = G.timers.shield || 0;
   if (G.timers.shield <= 0) G.shield = 0;
@@ -705,14 +723,14 @@ PL.step = function (dt) {
   if (K.in.keys['ArrowLeft'] || K.in.keys['a']) { G.paddle.x -= 640 * dt; K.in.active = false; }
   if (K.in.keys['ArrowRight'] || K.in.keys['d']) { G.paddle.x += 640 * dt; K.in.active = false; }
   if (K.in.active) G.paddle.x = K.in.x;
-  G.paddle.x = K.clamp(G.paddle.x, w / 2, 800 - w / 2);
+  G.paddle.x = K.clamp(G.paddle.x, w / 2, K.W - w / 2);
   // tiro da raquete
   if (G.timers.laser > 0) {
     G.laserCd -= dt;
     if (G.laserCd <= 0) {
       G.laserCd = 0.35;
-      G.bullets.push({ x: G.paddle.x - w / 2 + 8, y: PL_PY - 10 });
-      G.bullets.push({ x: G.paddle.x + w / 2 - 8, y: PL_PY - 10 });
+      G.bullets.push({ x: G.paddle.x - w / 2 + 8, y: (K.H - 44) - 10 });
+      G.bullets.push({ x: G.paddle.x + w / 2 - 8, y: (K.H - 44) - 10 });
       AU.sfx('laser');
     }
   }
@@ -722,16 +740,16 @@ PL.step = function (dt) {
   const s = PL.speed();
   for (let i = G.balls.length - 1; i >= 0; i--) {
     const b = G.balls[i];
-    if (b.stuck) { b.x = G.paddle.x + b.ox; b.y = PL_PY - PL_PH / 2 - b.r - 1; continue; }
+    if (b.stuck) { b.x = G.paddle.x + b.ox; b.y = (K.H - 44) - PL_PH / 2 - b.r - 1; continue; }
     const px = b.x, py = b.y;
     b.x += b.vx * dt; b.y += b.vy * dt;
     // paredes e teto
     if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); AU.sfx('wall'); }
-    if (b.x > 800 - b.r) { b.x = 800 - b.r; b.vx = -Math.abs(b.vx); AU.sfx('wall'); }
+    if (b.x > K.W - b.r) { b.x = K.W - b.r; b.vx = -Math.abs(b.vx); AU.sfx('wall'); }
     if (b.y < b.r) { b.y = b.r; b.vy = Math.abs(b.vy); AU.sfx('wall'); }
     // raquete
     const pl = G.paddle.x - w / 2 - b.r * 0.5, pr = G.paddle.x + w / 2 + b.r * 0.5;
-    if (b.vy > 0 && b.y + b.r >= PL_PY - PL_PH / 2 && py + b.r <= PL_PY - PL_PH / 2 + 4 && b.x >= pl && b.x <= pr) {
+    if (b.vy > 0 && b.y + b.r >= (K.H - 44) - PL_PH / 2 && py + b.r <= (K.H - 44) - PL_PH / 2 + 4 && b.x >= pl && b.x <= pr) {
       if (G.sticky || G.timers.sticky > 0) {
         b.stuck = true; b.ox = b.x - G.paddle.x; b.vx = 0; b.vy = 0;
         AU.sfx('paddle');
@@ -742,13 +760,13 @@ PL.step = function (dt) {
       const vy = -Math.sqrt(Math.max(s * s * 0.12, s * s - vx * vx));
       b.vx = vx || (Math.random() < 0.5 ? -1 : 1) * 0.001; b.vy = vy;
       PL.guardAngle(b);
-      b.y = PL_PY - PL_PH / 2 - b.r;
+      b.y = (K.H - 44) - PL_PH / 2 - b.r;
       AU.sfx('paddle');
     }
     // queda
-    if (b.y > 600 + b.r) {
+    if (b.y > K.H + b.r) {
       if (G.shield > 0) {
-        G.shield -= 1; b.y = 586 - b.r; b.vy = -Math.abs(b.vy);
+        G.shield -= 1; b.y = K.H - 14 - b.r; b.vy = -Math.abs(b.vy);
         AU.sfx('shield');
         G.msg = 'Escudo Aurora segurou a bola!'; G.msgT = 1.2;
         continue;
@@ -795,10 +813,10 @@ PL.step = function (dt) {
   for (let i = G.drops.length - 1; i >= 0; i--) {
     const d = G.drops[i];
     d.y += 96 * dt; d.t += dt;   // queda clara: dá para ler o poder e ir pegar
-    if (Math.abs(d.x - G.paddle.x) < w / 2 + 12 && d.y > PL_PY - 14 && d.y < PL_PY + 14) {
+    if (Math.abs(d.x - G.paddle.x) < w / 2 + 12 && d.y > (K.H - 44) - 14 && d.y < (K.H - 44) + 14) {
       PL.apply(d.id); G.drops.splice(i, 1); continue;
     }
-    if (d.y > 620) G.drops.splice(i, 1);
+    if (d.y > K.H + 20) G.drops.splice(i, 1);
   }
   // partículas e textos
   G.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; p.t -= dt; });
@@ -894,8 +912,8 @@ PL.drawSky = function (g, world) {
   const n = [0, 16, 26][K.q];
   const t = performance.now() / 1000;
   for (let i = 0; i < n; i++) {
-    const x = (i * 97 + 13) % 800, y = (i * 53 + 7) % 600;
-    if (x > 40 && x < 760) continue;
+    const x = (i * 97 + 13) % K.W, y = (i * 53 + 7) % K.H;
+    if (x > PL_X0 - 4 && x < K.W - PL_X0 + 4) continue;
     const tw = K.q ? 0.14 + 0.12 * Math.sin(t * 2 + i) : 0.18;
     g.fillStyle = 'rgba(255,255,255,' + tw + ')';
     g.fillRect(x, y, 2, 2);
@@ -912,7 +930,7 @@ PL.draw = function (g) {
   // bordas da área de jogo
   g.strokeStyle = 'rgba(255,255,255,0.25)';
   g.lineWidth = 2;
-  g.strokeRect(2, 62, 796, 530);
+  g.strokeRect(2, 62, K.W - 4, K.H - 70);
   // blocos
   G.bricks.forEach((b) => {
     if (b.dead) return;
@@ -933,7 +951,7 @@ PL.draw = function (g) {
     K.txt(g, pw.name, d.x, d.y + 26, { font: 'bold 11px system-ui, Segoe UI, Arial', color: pw.good === false ? '#ffb3b3' : '#fff7d6' });
   });
   // raquete
-  const w = G.paddle.w, px = G.paddle.x - w / 2, py = PL_PY - PL_PH / 2;
+  const w = G.paddle.w, px = G.paddle.x - w / 2, py = (K.H - 44) - PL_PH / 2;
   g.save();
   const pg = g.createLinearGradient(0, py, 0, py + PL_PH);
   pg.addColorStop(0, '#ffffff');
@@ -964,7 +982,7 @@ PL.draw = function (g) {
   // escudo
   if (G.shield > 0) {
     g.save(); g.strokeStyle = 'rgba(120,255,220,0.8)'; g.lineWidth = 4;
-    g.beginPath(); g.moveTo(0, 590); g.lineTo(800, 590); g.stroke(); g.restore();
+    g.beginPath(); g.moveTo(0, K.H - 10); g.lineTo(K.W, K.H - 10); g.stroke(); g.restore();
   }
   // partículas e textos
   G.parts.forEach((p) => {
@@ -989,9 +1007,9 @@ PL.banner = function (g, txt, yFrac) {
   g.textAlign = 'center'; g.textBaseline = 'middle';
   const w = g.measureText(txt).width + 36;
   g.fillStyle = 'rgba(10,10,30,0.7)';
-  g.beginPath(); g.roundRect(400 - w / 2, 600 * yFrac - 18, w, 36, 18); g.fill();
+  g.beginPath(); g.roundRect(K.W / 2 - w / 2, K.H * yFrac - 18, w, 36, 18); g.fill();
   g.fillStyle = '#ffffff';
-  g.fillText(txt, 400, 600 * yFrac);
+  g.fillText(txt, K.W / 2, K.H * yFrac);
   g.restore();
 };
 
@@ -999,18 +1017,18 @@ PL.drawHud = function (g) {
   const G = PL.G;
   g.save();
   g.fillStyle = 'rgba(0,0,0,0.25)';
-  g.fillRect(0, 0, 800, 56);
+  g.fillRect(0, 0, K.W, 56);
   g.fillStyle = '#ffffff';
   g.font = 'bold 18px system-ui, Segoe UI, Arial';
   g.textAlign = 'left'; g.textBaseline = 'middle';
   g.fillText(G.def.name, 16, 20);
   g.textAlign = 'center';
-  g.fillText('Pontos ' + K.fmt(G.score), 400, 28);
+  g.fillText('Pontos ' + K.fmt(G.score), K.W / 2, 28);
   g.textAlign = 'right';
-  g.fillText('♥ ' + G.lives, 720, 28);
+  g.fillText('♥ ' + G.lives, K.W - 80, 28);
   // botão de pausa (toque)
   // botão de pausa só existe durante a jogada (nas sobreposições ele atrapalharia o foco do teclado)
-  if (G.mode === 'play' || G.mode === 'ready') K.btn(g, 752, 12, 36, 32, 'II', () => PL.pause(), { size: 16, top: '#fff', bot: '#d9dde8' });
+  if (G.mode === 'play' || G.mode === 'ready') K.btn(g, K.W - 48, 12, 36, 32, 'II', () => PL.pause(), { size: 16, top: '#fff', bot: '#d9dde8' });
   // poderes ativos: barras
   let x = 16;
   const bars = [['laser', 'Lança'], ['fire', 'Raio'], ['sticky', 'Ímã'], ['wide', 'Expansão'], ['narrow', 'Pacote'], ['slow', 'Mel'], ['bonus', 'Bônus']];
@@ -1034,7 +1052,7 @@ PL.press = function (x, y) {
   if (!G || G.paused || G.mode === 'over' || G.mode === 'clear' || G.mode === 'pause') return;
   // qualquer bola grudada (ímã ou começo da fase) solta no toque
   if (G.balls.some((b) => b.stuck)) PL.launch();
-  if (G.mode === 'play' && y < 60 && x > 700) PL.pause();
+  if (G.mode === 'play' && y < 60 && x > K.W - 100) PL.pause();
 };
 PL.pause = function () {
   const G = PL.G;
@@ -1088,7 +1106,7 @@ function ui_title(g, text, y) {
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
   g.shadowColor = 'rgba(255,210,63,' + (0.45 + Math.sin(t * 2) * 0.15) + ')'; g.shadowBlur = 18;
   g.lineWidth = 8; g.strokeStyle = 'rgba(40,10,60,0.92)';
-  g.strokeText(text, UI_CX, y); g.fillStyle = '#ffe36b'; g.fillText(text, UI_CX, y);
+  g.strokeText(text, K.W / 2, y); g.fillStyle = '#ffe36b'; g.fillText(text, K.W / 2, y);
   g.restore();
 }
 function ui_small(g, text, x, y, align) {
@@ -1317,6 +1335,7 @@ K.defScene('credits', {
 
 // ---- cena de jogo: fase + sobreposições (pausa, vitória, derrota) ----
 K.defScene('play', {
+  wide: true,
   enter(id) {
     this.id = id;
     PL.start(id);
@@ -1333,29 +1352,29 @@ K.defScene('play', {
     PL.draw(g);
     if (G.mode === 'pause') {
       g.save(); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, K.W, K.H); g.restore();
-      K.panel(g, 240, 170, 320, 100);
+      K.panel(g, K.W / 2 - 160, 170, 320, 100);
       ui_title(g, 'Pausado', 220);
-      ui_btn(g, UI_CX - UI_BW / 2, 280, UI_BW, UI_BH, 'Continuar', () => PL.resume(), { primary: true });
-      ui_btn(g, UI_CX - UI_BW / 2, 352, UI_BW, UI_BH, 'Repetir fase', () => K.go('play', this.id));
-      ui_btn(g, UI_CX - UI_BW / 2, 424, UI_BW, UI_BH, 'Menu', () => K.go('select'));
+      ui_btn(g, K.W / 2 - UI_BW / 2, 280, UI_BW, UI_BH, 'Continuar', () => PL.resume(), { primary: true });
+      ui_btn(g, K.W / 2 - UI_BW / 2, 352, UI_BW, UI_BH, 'Repetir fase', () => K.go('play', this.id));
+      ui_btn(g, K.W / 2 - UI_BW / 2, 424, UI_BW, UI_BH, 'Menu', () => K.go('select'));
     }
     if (G.mode === 'clear') {
       g.save(); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, K.W, K.H); g.restore();
-      K.panel(g, 240, 150, 320, 130);
+      K.panel(g, K.W / 2 - 160, 150, 320, 130);
       ui_title(g, 'Fase limpa!', 200);
-      ui_small(g, 'Pontos: ' + K.fmt(G.score) + ' · Recorde: ' + K.fmt(K.save.best[this.id] || 0), 400, 260);
+      ui_small(g, 'Pontos: ' + K.fmt(G.score) + ' · Recorde: ' + K.fmt(K.save.best[this.id] || 0), K.W / 2, 260);
       const nx = PL.next();
-      if (nx) ui_btn(g, UI_CX - UI_BW / 2, 300, UI_BW, UI_BH, 'Próxima fase', () => ui_enter(nx), { primary: true });
-      ui_btn(g, UI_CX - UI_BW / 2, nx ? 372 : 300, UI_BW, UI_BH, 'Repetir', () => K.go('play', this.id));
-      ui_btn(g, UI_CX - UI_BW / 2, nx ? 444 : 372, UI_BW, UI_BH, 'Menu', () => K.go('select'));
+      if (nx) ui_btn(g, K.W / 2 - UI_BW / 2, 300, UI_BW, UI_BH, 'Próxima fase', () => ui_enter(nx), { primary: true });
+      ui_btn(g, K.W / 2 - UI_BW / 2, nx ? 372 : 300, UI_BW, UI_BH, 'Repetir', () => K.go('play', this.id));
+      ui_btn(g, K.W / 2 - UI_BW / 2, nx ? 444 : 372, UI_BW, UI_BH, 'Menu', () => K.go('select'));
     }
     if (G.mode === 'over') {
       g.save(); g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(0, 0, K.W, K.H); g.restore();
-      K.panel(g, 240, 150, 320, 130);
+      K.panel(g, K.W / 2 - 160, 150, 320, 130);
       ui_title(g, 'Fim de jogo', 220);
-      ui_small(g, 'Pontos: ' + K.fmt(G.score), 400, 260);
-      ui_btn(g, UI_CX - UI_BW / 2, 300, UI_BW, UI_BH, 'Tentar de novo', () => K.go('play', this.id), { primary: true });
-      ui_btn(g, UI_CX - UI_BW / 2, 372, UI_BW, UI_BH, 'Menu', () => K.go('select'));
+      ui_small(g, 'Pontos: ' + K.fmt(G.score), K.W / 2, 260);
+      ui_btn(g, K.W / 2 - UI_BW / 2, 300, UI_BW, UI_BH, 'Tentar de novo', () => K.go('play', this.id), { primary: true });
+      ui_btn(g, K.W / 2 - UI_BW / 2, 372, UI_BW, UI_BH, 'Menu', () => K.go('select'));
     }
   },
   // clique/toque na tela de jogo: solta a bola grudada (o motor chama press ao descer o ponteiro)
