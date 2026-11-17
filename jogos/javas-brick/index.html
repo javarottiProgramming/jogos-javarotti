@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="data:,">
-<title>Java's Brick 1.0.18</title>
+<title>Java's Brick 1.0.19</title>
 <style>
   html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -17,7 +17,7 @@
 /*==ENGINE:core==  JGK (Javarotti Game Kit) 2D · registros, save, canvas, entrada, cenas, loop */
 // Motor JGK — Javarotti Game Kit. Cada jogo do time usa este mesmo núcleo.
 const K = (window.K = window.K || {});
-K.version = '1.0.18';
+K.version = '1.0.19';
 K.game = "Java's Brick";
 K.W = 800;
 K.H = 600;
@@ -144,6 +144,12 @@ K.layout = function () {
     K.W = Math.max(800, Math.min(1400, Math.round(520 * a)));
   } else { K.W = 800; K.H = 600; }
 };
+// modo toque (celular/tablet): na fase, só os 2 botões de seta controlam a raquete.
+// liga com ponteiro "grosso" (pointer: coarse), com o primeiro toque fora da fase ou com ?touch=1 na URL (teste no PC)
+K.touch = false;
+try {
+  K.touch = /[?&]touch=1/.test(location.search) || !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+} catch (e) { /* ok */ }
 K.wide = function () { return K.H < 600; };   // layout widescreen ativo
 K.ox = function () { return (K.W - 800) / 2; };   // folga lateral para conteúdo desenhado em 800 de largura
 K.fit = function () {
@@ -169,19 +175,54 @@ function K_toL(e) {
   const r = K.cv.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width * K.W, y: (e.clientY - r.top) / r.height * K.H };
 }
+// botões de direção da fase (modo toque): registrados a cada quadro pela fase, como os botões de menu
+K.pads = [];                       // {x,y,w,h,dir: -1 | 1}
+K.pad = { l: false, r: false };    // quais setas estão seguradas agora
+const K_padPtr = new Map();        // pointerId -> direção que esse dedo está segurando
+function K_padAt(x, y) {
+  const m = 12;                    // folga em volta do botão, para o dedo não escapar
+  const p = K.pads.find((q) => x >= q.x - m && x <= q.x + q.w + m && y >= q.y - m && y <= q.y + q.h + m);
+  return p ? p.dir : 0;
+}
+function K_padSync() {
+  let l = false, r = false;
+  K_padPtr.forEach((d) => { if (d < 0) l = true; else r = true; });
+  K.pad.l = l; K.pad.r = r;
+}
+function K_padClear() { K_padPtr.clear(); K_padSync(); }
 K.cv.addEventListener('pointerdown', (e) => {
+  // primeiro toque de verdade fora da fase liga o modo toque (não muda a fase no meio da partida)
+  if (e.pointerType === 'touch' && !K.touch && K.cur !== K.scenes.play) { K.touch = true; K.fit(); }
   const p = K_toL(e);
-  K.in.x = p.x; K.in.y = p.y; K.in.active = true; K.in.down = true;
   try { K.cv.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
   AU.init();
   e.preventDefault();
+  if (K.touch && K.pads.length) {
+    const d = K_padAt(p.x, p.y);
+    if (d) { K_padPtr.set(e.pointerId, d); K_padSync(); return; }   // dedo na seta: só move a raquete
+  }
+  K.in.x = p.x; K.in.y = p.y; K.in.active = true; K.in.down = true;
   if (K.cur && K.cur.press) K.cur.press(p.x, p.y);
 });
 K.cv.addEventListener('pointermove', (e) => {
   const p = K_toL(e);
+  if (K_padPtr.has(e.pointerId)) {            // o dedo pode deslizar de uma seta para a outra
+    const d = K_padAt(p.x, p.y);
+    if (d) K_padPtr.set(e.pointerId, d); else K_padPtr.delete(e.pointerId);
+    K_padSync();
+    return;
+  }
   K.in.x = p.x; K.in.y = p.y; K.in.active = true;
 });
+function K_padUp(e) {
+  if (!K_padPtr.has(e.pointerId)) return false;
+  K_padPtr.delete(e.pointerId); K_padSync();
+  return true;
+}
+window.addEventListener('pointercancel', (e) => { K_padUp(e); });
+window.addEventListener('blur', K_padClear);
 window.addEventListener('pointerup', (e) => {
+  if (K_padUp(e)) return;
   if (!K.in.down) return;
   K.in.down = false;
   const p = K_toL(e);
@@ -257,6 +298,7 @@ K.go = function (id, arg) {
   if (K.cur && K.cur.leave) K.cur.leave();
   K.cur = K.scenes[id];
   K.focus = 0;
+  K_padClear();
   K.fit();
   if (K.cur && K.cur.enter) K.cur.enter(arg);
 };
@@ -292,6 +334,7 @@ function K_frame(now) {
   if (window.innerWidth !== K.lastW || window.innerHeight !== K.lastH) K.fit();
   K.buttons = K.buttons.length ? K.buttons : [];
   K.buttons.length = 0;
+  K.pads.length = 0;
   if (K.cur) {
     K.frameSample(dt);
     if (K.cur.update) K.cur.update(dt);
@@ -488,7 +531,18 @@ window.addEventListener('pagehide', () => AU.sleep());
 const PL = (K.play = {});
 // grade: 12 colunas por padrão; fases avançadas podem usar até 20 (mosaicos de palavras)
 let PL_COLS = 12, PL_CW = 64, PL_CH = 30, PL_X0 = 16, PL_Y0 = 84, PL_BW = 56, PL_BH = 22;
-const PL_PH = 14;                         // raquete (a altura do centro dela é K.H - 44)
+const PL_PH = 14;                         // raquete (a altura do centro dela é PL.py())
+// geometria vertical da fase. No modo toque (K.touch) sobra uma faixa embaixo do campo para os 2 botões de seta,
+// então a raquete e o chão sobem e a grade de blocos se ajusta (PL.fitRows)
+PL.strip = function () { return K.touch ? (K.wide() ? 78 : 96) : 0; };
+PL.floor = function () { return K.H - PL.strip(); };                 // chão do campo: a bola que passa dele se perde
+PL.py = function () { return PL.floor() - (K.touch ? 30 : 44); };   // altura do centro da raquete
+// altura de cada linha de blocos: 30 px; no modo toque encolhe (até 20) para a última linha ficar acima da raquete
+PL.fitRows = function (nrows) {
+  PL_CH = 30;
+  if (K.touch) PL_CH = K.clamp(Math.floor((PL.py() - 70 - PL_Y0) / Math.max(1, nrows)), 20, 30);
+  PL_BH = PL_CH - 8;
+};
 const PL_STEP = 1 / 120;                  // passo fixo
 const PL_DEFAULT_LEGEND = {
   '1': 'basico', '2': 'dupla', '3': 'tripla', '#': 'indestrutivel', '*': 'explosivo', G: 'nucleo',
@@ -512,6 +566,7 @@ PL.start = function (levelId) {
   PL_CW = Math.floor(768 / PL_COLS);
   PL_BW = PL_CW - 8;
   PL_X0 = Math.floor((K.W - PL_CW * PL_COLS) / 2);
+  PL.fitRows(def.rows.length);
   const bricks = [];
   def.rows.forEach((row, r) => {
     for (let c = 0; c < PL_COLS; c++) {
@@ -535,7 +590,7 @@ PL.start = function (levelId) {
   PL.G = {
     id: levelId, def, world, tune: Object.assign({ speed: 1, drop: 0.15, lives: 3 }, def.tune || {}),
     bricks, balls: [], drops: [], bullets: [], parts: [], floats: [],
-    paddle: { x: K.W / 2, w: 110 }, vw: K.W, lives: 0, score: 0, timers: {}, shield: 0,
+    paddle: { x: K.W / 2, w: 110 }, vw: K.W, vh: K.H, lives: 0, score: 0, timers: {}, shield: 0,
     t: 0, mode: 'ready', modeT: 0, shake: 0, hits: 0, msg: '', msgT: 0,
     sticky: false, laserCd: 0, acc: 0, paused: false,
   };
@@ -549,7 +604,7 @@ PL.start = function (levelId) {
 PL.spawnBall = function (stuck, x, y, vx, vy) {
   const G = PL.G;
   G.balls.push({
-    x: x === undefined ? G.paddle.x : x, y: y === undefined ? (K.H - 44) - 12 : y,
+    x: x === undefined ? G.paddle.x : x, y: y === undefined ? PL.py() - 12 : y,
     vx: vx || 0, vy: vy || 0, r: 7, stuck: !!stuck, ox: 0,
   });
 };
@@ -695,6 +750,23 @@ PL.burst = function (x, y, color, n) {
 };
 
 // ---- passo de física ----
+// tela girou / mudou de formato no meio da fase: recentraliza tudo na nova largura e reencaixa as linhas na nova altura
+PL.relayout = function () {
+  const G = PL.G;
+  if (G.vw !== K.W) {
+    const dx = (K.W - G.vw) / 2;
+    G.bricks.forEach((b) => { b.baseX += dx; b.x += dx; });
+    [G.balls, G.drops, G.bullets, G.parts, G.floats].forEach((l) => l.forEach((o) => { o.x += dx; }));
+    G.paddle.x += dx; PL_X0 += dx; G.vw = K.W;
+  }
+  if (G.vh !== K.H) {
+    PL.fitRows(G.def.rows.length);
+    G.bricks.forEach((b) => { b.y = PL_Y0 + b.r * PL_CH; });
+    G.balls.forEach((b) => { if (b.stuck) b.y = PL.py() - PL_PH / 2 - b.r - 1; });
+    G.vh = K.H;
+  }
+};
+
 PL.step = function (dt) {
   const G = PL.G;
   G.t += dt;
@@ -709,13 +781,6 @@ PL.step = function (dt) {
       ball.vy = (ball.vy < 0 ? -1 : 1) * Math.sqrt(Math.max(0, sp * sp - ball.vx * ball.vx));
     });
   }
-  // tela girou / mudou de formato no meio da fase: recentraliza tudo na nova largura
-  if (G.vw !== K.W) {
-    const dx = (K.W - G.vw) / 2;
-    G.bricks.forEach((b) => { b.baseX += dx; b.x += dx; });
-    [G.balls, G.drops, G.bullets, G.parts, G.floats].forEach((l) => l.forEach((o) => { o.x += dx; }));
-    G.paddle.x += dx; PL_X0 += dx; G.vw = K.W;
-  }
   for (const k of Object.keys(G.timers)) if (G.timers[k] > 0) G.timers[k] -= dt;
   G.timers.shield = G.timers.shield || 0;
   if (G.timers.shield <= 0) G.shield = 0;
@@ -724,15 +789,16 @@ PL.step = function (dt) {
   G.paddle.w = w;
   if (K.in.keys['ArrowLeft'] || K.in.keys['a']) { G.paddle.x -= 640 * dt; K.in.active = false; }
   if (K.in.keys['ArrowRight'] || K.in.keys['d']) { G.paddle.x += 640 * dt; K.in.active = false; }
-  if (K.in.active) G.paddle.x = K.in.x;
+  if (K.touch) G.paddle.x += PL.padDir() * 640 * dt;   // no toque, só as setas movem a raquete
+  else if (K.in.active) G.paddle.x = K.in.x;
   G.paddle.x = K.clamp(G.paddle.x, w / 2, K.W - w / 2);
   // tiro da raquete
   if (G.timers.laser > 0) {
     G.laserCd -= dt;
     if (G.laserCd <= 0) {
       G.laserCd = 0.35;
-      G.bullets.push({ x: G.paddle.x - w / 2 + 8, y: (K.H - 44) - 10 });
-      G.bullets.push({ x: G.paddle.x + w / 2 - 8, y: (K.H - 44) - 10 });
+      G.bullets.push({ x: G.paddle.x - w / 2 + 8, y: PL.py() - 10 });
+      G.bullets.push({ x: G.paddle.x + w / 2 - 8, y: PL.py() - 10 });
       AU.sfx('laser');
     }
   }
@@ -742,7 +808,7 @@ PL.step = function (dt) {
   const s = PL.speed();
   for (let i = G.balls.length - 1; i >= 0; i--) {
     const b = G.balls[i];
-    if (b.stuck) { b.x = G.paddle.x + b.ox; b.y = (K.H - 44) - PL_PH / 2 - b.r - 1; continue; }
+    if (b.stuck) { b.x = G.paddle.x + b.ox; b.y = PL.py() - PL_PH / 2 - b.r - 1; continue; }
     const px = b.x, py = b.y;
     b.x += b.vx * dt; b.y += b.vy * dt;
     // paredes e teto
@@ -751,7 +817,7 @@ PL.step = function (dt) {
     if (b.y < b.r) { b.y = b.r; b.vy = Math.abs(b.vy); AU.sfx('wall'); }
     // raquete
     const pl = G.paddle.x - w / 2 - b.r * 0.5, pr = G.paddle.x + w / 2 + b.r * 0.5;
-    if (b.vy > 0 && b.y + b.r >= (K.H - 44) - PL_PH / 2 && py + b.r <= (K.H - 44) - PL_PH / 2 + 4 && b.x >= pl && b.x <= pr) {
+    if (b.vy > 0 && b.y + b.r >= PL.py() - PL_PH / 2 && py + b.r <= PL.py() - PL_PH / 2 + 4 && b.x >= pl && b.x <= pr) {
       if (G.sticky || G.timers.sticky > 0) {
         b.stuck = true; b.ox = b.x - G.paddle.x; b.vx = 0; b.vy = 0;
         AU.sfx('paddle');
@@ -762,13 +828,13 @@ PL.step = function (dt) {
       const vy = -Math.sqrt(Math.max(s * s * 0.12, s * s - vx * vx));
       b.vx = vx || (Math.random() < 0.5 ? -1 : 1) * 0.001; b.vy = vy;
       PL.guardAngle(b);
-      b.y = (K.H - 44) - PL_PH / 2 - b.r;
+      b.y = PL.py() - PL_PH / 2 - b.r;
       AU.sfx('paddle');
     }
     // queda
-    if (b.y > K.H + b.r) {
+    if (b.y > PL.floor() + b.r) {
       if (G.shield > 0) {
-        G.shield -= 1; b.y = K.H - 14 - b.r; b.vy = -Math.abs(b.vy);
+        G.shield -= 1; b.y = PL.floor() - 14 - b.r; b.vy = -Math.abs(b.vy);
         AU.sfx('shield');
         G.msg = 'Escudo Aurora segurou a bola!'; G.msgT = 1.2;
         continue;
@@ -815,10 +881,10 @@ PL.step = function (dt) {
   for (let i = G.drops.length - 1; i >= 0; i--) {
     const d = G.drops[i];
     d.y += 96 * dt; d.t += dt;   // queda clara: dá para ler o poder e ir pegar
-    if (Math.abs(d.x - G.paddle.x) < w / 2 + 12 && d.y > (K.H - 44) - 14 && d.y < (K.H - 44) + 14) {
+    if (Math.abs(d.x - G.paddle.x) < w / 2 + 12 && d.y > PL.py() - 14 && d.y < PL.py() + 14) {
       PL.apply(d.id); G.drops.splice(i, 1); continue;
     }
-    if (d.y > K.H + 20) G.drops.splice(i, 1);
+    if (d.y > PL.floor() + 20) G.drops.splice(i, 1);
   }
   // partículas e textos
   G.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; p.t -= dt; });
@@ -832,7 +898,7 @@ PL.step = function (dt) {
     G.lives -= 1;
     AU.sfx('lose');
     if (G.lives <= 0) { G.mode = 'over'; G.modeT = 0; AU.stop(); }
-    else { G.mode = 'ready'; G.msg = 'Vidas: ' + G.lives + ' · toque para soltar'; G.msgT = 2; PL.spawnBall(true); }
+    else { G.mode = 'ready'; G.msg = 'Vidas: ' + G.lives + (K.touch ? ' · as duas setas soltam a bola' : ' · toque para soltar'); G.msgT = 2; PL.spawnBall(true); }
   }
   if (G.mode === 'play' && !G.bricks.some((b) => PL.breakable(b))) {
     G.mode = 'clear'; G.modeT = 0; AU.sfx('win'); AU.stop();
@@ -873,11 +939,19 @@ PL.next = function () {
   return i >= 0 && i + 1 < PL.order.length ? PL.order[i + 1] : null;
 };
 
+// setas do modo toque: direção segurada (-1, 0, 1) e o gesto de soltar a bola (as duas setas juntas)
+PL.padDir = function () { return (K.pad.r ? 1 : 0) - (K.pad.l ? 1 : 0); };
+PL.padLaunch = function () {
+  const G = PL.G;
+  if (K.touch && K.pad.l && K.pad.r && G.balls.some((b) => b.stuck)) PL.launch();
+};
+
 // ---- roda o tempo fixo ----
 PL.update = function (dt) {
   const G = PL.G;
   if (!G) return;
   if (G.mode === 'clear' || G.mode === 'over') { G.modeT += dt; return; }
+  PL.relayout();
   if (G.paused) return;
   G.acc += dt;
   while (G.acc >= PL_STEP) {
@@ -885,11 +959,16 @@ PL.update = function (dt) {
     if (G.mode === 'ready') {
       G.balls.forEach((b) => { if (b.stuck) b.x = G.paddle.x + b.ox; });
       G.t += PL_STEP;
-      if (G.paddle) G.paddle.x = K.clamp(G.paddle.x, 60, 740);
-      if (K.in.active) G.paddle.x = K.in.x;
+      if (K.touch) {
+        G.paddle.x = K.clamp(G.paddle.x + PL.padDir() * 640 * PL_STEP, G.paddle.w / 2, K.W - G.paddle.w / 2);
+      } else {
+        if (G.paddle) G.paddle.x = K.clamp(G.paddle.x, 60, K.W - 60);
+        if (K.in.active) G.paddle.x = K.in.x;
+      }
+      PL.padLaunch();
       continue;
     }
-    if (G.mode === 'play') PL.step(PL_STEP);
+    if (G.mode === 'play') { PL.padLaunch(); PL.step(PL_STEP); }
   }
 };
 
@@ -932,7 +1011,7 @@ PL.draw = function (g) {
   // bordas da área de jogo
   g.strokeStyle = 'rgba(255,255,255,0.25)';
   g.lineWidth = 2;
-  g.strokeRect(2, 62, K.W - 4, K.H - 70);
+  g.strokeRect(2, 62, K.W - 4, PL.floor() - 70);
   // blocos
   G.bricks.forEach((b) => {
     if (b.dead) return;
@@ -953,7 +1032,7 @@ PL.draw = function (g) {
     K.txt(g, pw.name, d.x, d.y + 26, { font: 'bold 11px system-ui, Segoe UI, Arial', color: pw.good === false ? '#ffb3b3' : '#fff7d6' });
   });
   // raquete
-  const w = G.paddle.w, px = G.paddle.x - w / 2, py = (K.H - 44) - PL_PH / 2;
+  const w = G.paddle.w, px = G.paddle.x - w / 2, py = PL.py() - PL_PH / 2;
   g.save();
   const pg = g.createLinearGradient(0, py, 0, py + PL_PH);
   pg.addColorStop(0, '#ffffff');
@@ -984,7 +1063,7 @@ PL.draw = function (g) {
   // escudo
   if (G.shield > 0) {
     g.save(); g.strokeStyle = 'rgba(120,255,220,0.8)'; g.lineWidth = 4;
-    g.beginPath(); g.moveTo(0, K.H - 10); g.lineTo(K.W, K.H - 10); g.stroke(); g.restore();
+    g.beginPath(); g.moveTo(0, PL.floor() - 10); g.lineTo(K.W, PL.floor() - 10); g.stroke(); g.restore();
   }
   // partículas e textos
   G.parts.forEach((p) => {
@@ -998,9 +1077,44 @@ PL.draw = function (g) {
   g.globalAlpha = 1;
   g.restore();
   PL.drawHud(g);
+  if (K.touch) PL.drawPads(g);
   // mensagens e estado "pronto"
   if (G.msgT > 0) PL.banner(g, G.msg, 0.4);
-  if (G.mode === 'ready') PL.banner(g, 'Toque ou aperte espaço para soltar a bola', 0.82);
+  if (G.mode === 'ready') {
+    if (K.touch) PL.banner(g, 'Aperte as duas setas juntas para soltar a bola', (PL.py() - 58) / K.H);
+    else PL.banner(g, 'Toque ou aperte espaço para soltar a bola', 0.82);
+  }
+};
+
+// faixa de controle do modo toque: seta para a esquerda no canto inferior esquerdo, seta para a direita no direito,
+// as duas abaixo da raquete. Só elas são registradas como toque de movimento (K.pads); o resto da tela não move a raquete.
+PL.drawPads = function (g) {
+  const G = PL.G;
+  const top = PL.floor(), sh = PL.strip();
+  g.save();
+  g.fillStyle = 'rgba(8,6,24,0.55)';
+  g.fillRect(0, top, K.W, sh);
+  g.fillStyle = 'rgba(255,255,255,0.18)';
+  g.fillRect(0, top, K.W, 2);
+  const live = G.mode === 'play' || G.mode === 'ready';
+  const bh = sh - 14, bw = Math.min(200, Math.round(K.W * 0.24)), by = top + 7;
+  [[-1, 14, K.pad.l], [1, K.W - 14 - bw, K.pad.r]].forEach(([dir, bx, on]) => {
+    if (live) K.pads.push({ x: bx, y: by, w: bw, h: bh, dir });
+    const grad = g.createLinearGradient(0, by, 0, by + bh);
+    grad.addColorStop(0, on ? '#ffffff' : '#ffe9a6');
+    grad.addColorStop(1, on ? '#ffd23f' : '#f3b33d');
+    g.fillStyle = grad;
+    g.beginPath(); g.roundRect(bx, by, bw, bh, 16); g.fill();
+    g.lineWidth = on ? 4 : 2; g.strokeStyle = on ? '#ffffff' : '#3b2350'; g.stroke();
+    // seta
+    const cx = bx + bw / 2, cy = by + bh / 2, a = Math.min(bh * 0.34, 26);
+    g.fillStyle = '#2b1740';
+    g.beginPath();
+    g.moveTo(cx + dir * a, cy); g.lineTo(cx - dir * a * 0.8, cy - a * 0.95);
+    g.lineTo(cx - dir * a * 0.35, cy); g.lineTo(cx - dir * a * 0.8, cy + a * 0.95);
+    g.closePath(); g.fill();
+  });
+  g.restore();
 };
 
 PL.banner = function (g, txt, yFrac) {
@@ -1052,8 +1166,8 @@ PL.drawHud = function (g) {
 PL.press = function (x, y) {
   const G = PL.G;
   if (!G || G.paused || G.mode === 'over' || G.mode === 'clear' || G.mode === 'pause') return;
-  // qualquer bola grudada (ímã ou começo da fase) solta no toque
-  if (G.balls.some((b) => b.stuck)) PL.launch();
+  // qualquer bola grudada (ímã ou começo da fase) solta no toque; no modo toque só as duas setas juntas soltam
+  if (!K.touch && G.balls.some((b) => b.stuck)) PL.launch();
   if (G.mode === 'play' && y < 60 && x > K.W - 100) PL.pause();
 };
 PL.pause = function () {
