@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.0.3</title>
+<title>Cacos de Sol 1.0.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@ html,body{height:100%;margin:0;background:#101830;overflow:hidden;-webkit-user-s
 #tjoy{position:absolute;left:0;top:18%;width:42%;bottom:0;touch-action:none}
 #tcam{position:absolute;right:0;top:0;width:58%;bottom:0;touch-action:none}
 /* 1.0.2: durante uma fala os botões/analógico de toque SOMEM (não cobrem a caixa nem engolem o toque) — o toque vai para a caixa de diálogo e passa a fala */
-body.dlgopen #touch{display:none!important}
+body.dlgopen #touch,body.uimodal #touch{display:none!important}
 #tbase{position:fixed;width:9.5rem;height:9.5rem;margin:-4.75rem 0 0 -4.75rem;border:.3rem solid rgba(244,241,232,.7);border-radius:50%;background:rgba(16,24,48,.28);pointer-events:none}
 #tknob{position:absolute;left:50%;top:50%;width:4rem;height:4rem;border-radius:50%;background:var(--paper);border:.25rem solid var(--ink);transform:translate(-50%,-50%)}
 .tb{position:absolute;border:.28rem solid var(--ink);border-radius:50%;background:rgba(244,241,232,.82);color:var(--ink);font:400 1.15rem 'Lilita One',system-ui,sans-serif;width:5rem;height:5rem;display:grid;place-items:center;padding:0;touch-action:none;box-shadow:.25rem .3rem 0 rgba(16,24,48,.55)}
@@ -4291,7 +4291,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.0.3', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.0.4', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -4435,7 +4435,7 @@ window.addEventListener('keydown', e => {
   if (K.debug.keys && K.debug.keys[e.code]) K.debug.keys[e.code]();
 });
 window.addEventListener('keyup', e => { delete mvKeys[e.code]; const a = KEYMAP[e.code]; if (a) KB[a] = 0; });
-function clearAll() { for (const k in KB) KB[k] = 0; for (const k in MS) MS[k] = 0; for (const k in TC) TC[k] = 0; for (const k in mvKeys) delete mvKeys[k]; tj.on = false; tj.id = -1; if (tjEl) tjEl.base.style.display = 'none'; }
+function clearAll() { for (const k in KB) KB[k] = 0; for (const k in MS) MS[k] = 0; for (const k in TC) TC[k] = 0; for (const k in mvKeys) delete mvKeys[k]; tj.on = false; tj.id = -1; camId = -1; if (tjEl) tjEl.base.style.display = 'none'; }
 window.addEventListener('blur', clearAll); document.addEventListener('visibilitychange', () => { if (document.hidden) clearAll(); });   // toques não ficam presos (lição Kuku 2.7)
 /* mouse */
 function playing() { return K.sceneName === 'play' && !K.paused && !K.G_dialog; }
@@ -4495,6 +4495,8 @@ function pollPad(dt) {
 
 /* ---- poll/post: fecha as ações do passo ---- */
 IN.poll = function (dt) {
+  /* 1.0.4: com mapa/pausa/loja/morte abertos os controles de toque SOMEM (body.uimodal). Antes o analógico e a área da câmera (z-index acima da UI) engoliam o toque e o botão Voltar não respondia no celular. */
+  const ui = uiOpen() || !!K.dlg; if (ui !== IN._ui) { IN._ui = ui; document.body.classList.toggle('uimodal', ui); if (ui) clearAll(); }
   IN.freeCursor(); pollPad(dt); const bot = IN.bot ? IN.bot(dt) : null;
   let mx = (mvKeys.KeyD || mvKeys.ArrowRight ? 1 : 0) - (mvKeys.KeyA || mvKeys.ArrowLeft ? 1 : 0), my = (mvKeys.KeyW || mvKeys.ArrowUp ? 1 : 0) - (mvKeys.KeyS || mvKeys.ArrowDown ? 1 : 0);
   mx += PD.mx || 0; my += PD.my || 0; if (tj.on) { mx += tj.x; my -= tj.y; }
@@ -4931,7 +4933,7 @@ const HUM = ANIMS.humanoid = {
   run: { loop: true, dur: .56, fn: (p, c) => { const s = sn(p * TAU), a = 1.05 * (c.sp || 1); return { root: [0, 0, 0, 0, Math.abs(s) * .08, 0], legL: [s * a, 0, 0], legR: [-s * a, 0, 0], armL: [-s * a * 1.0 - .3, 0, -.1], armR: [s * a * 1.0 - .3, 0, .1], torso: [.2, s * .12, 0], head: [-.12, 0, 0] }; } },
   jump: { loop: false, dur: .5, rate: 18, fn: p => ({ legL: [-.5, 0, 0], legR: [.3, 0, 0], armL: [-2.2, 0, -.3], armR: [-2.2, 0, .3], torso: [-.05, 0, 0] }) },
   fall: { loop: true, dur: .6, fn: (p) => ({ legL: [-.3, 0, 0], legR: [.3, 0, 0], armL: [-1.4, 0, -.7], armR: [-1.4, 0, .7], torso: [.1, 0, 0] }) },
-  roll: { loop: false, dur: .5, rate: 30, fn: p => ({ root: [-p * TAU, 0, 0, 0, .35 * sn(p * PI), 0], armL: [-2.6, 0, -.2], armR: [-2.6, 0, .2], legL: [-1.5, 0, 0], legR: [-1.5, 0, 0], torso: [.5, 0, 0], head: [.4, 0, 0] }) },
+  roll: { loop: false, dur: .5, rate: 30, fn: p => { const a = p * TAU, C = .85; /* cambalhota PARA A FRENTE girando em volta do CENTRO do corpo (C ≈ meia altura), não dos pés: antes o herói girava pelos pés e a cabeça afundava no chão (1.0.4) */ return { root: [a, 0, 0, 0, C * (1 - cs(a)) + .24 * sn(p * PI), -C * sn(a)], armL: [-2.6, 0, -.2], armR: [-2.6, 0, .2], legL: [-1.5, 0, 0], legR: [-1.5, 0, 0], torso: [.5, 0, 0], head: [.4, 0, 0] }; } },
   /* golpes: p 0–.3 prepara · .3–.55 corta (janela de dano) · .55–1 recupera. O jogo fixa o tempo de cada golpe; a anim só acompanha p. */
   atk1: { loop: false, dur: .42, rate: 42, fn: p => { const w = smooth(0, .3, p), s = smooth(.3, .52, p), r = smooth(.58, 1, p), k = (w - s) * (1 - r); return { torso: [.1, .9 * k - .5 * s * (1 - r) + 0, 0], armR: [-1.1 - .5 * w + 1.3 * s * (1 - r) * 0, .0, .9 * w - 1.8 * s], armL: [-.4, 0, -.6], legL: [.35 * s, 0, 0], legR: [-.4 * s, 0, 0], root: [0, -.3 * w + .9 * s * (1 - r), 0, 0, 0, .25 * s * (1 - r)] }; } },
   atk2: { loop: false, dur: .4, rate: 42, fn: p => { const w = smooth(0, .3, p), s = smooth(.3, .52, p), r = smooth(.58, 1, p); return { torso: [.05, -.7 * w + 1.3 * s * (1 - r), 0], armR: [-1.0, .3, -1.0 * w + 1.9 * s * (1 - r)], armL: [-.5, 0, .5], legL: [-.3 * s, 0, 0], legR: [.35 * s, 0, 0], root: [0, .3 * w - .6 * s * (1 - r), 0, 0, 0, .25 * s * (1 - r)] }; } },
@@ -4987,6 +4989,7 @@ function play(inst, n, a) {
   a = a || {}; let d = inst.animDef(n), nm = n;
   if (!d) { const alt = n.replace(/^atk\d*|^atk_.*/, 'attack'); d = inst.animDef(alt) || inst.animDef(n.startsWith('atk') ? 'atk1' : 'idle') || inst.animDef('idle'); nm = n; }
   if (!d) return; if (inst.name === n && !a.restart && d.loop) { if (a.speed) inst.speed = a.speed; return; }
+  /* ao trocar de animação, rotações acumuladas (cambalhota/giro: ±2π) voltam para -π..π — senão o modelo "desgira" a volta inteira girando pelos pés e afunda no chão */ for (const k in inst.pr) { const c = inst.pr[k].c; for (let i = 0; i < 3; i++) if (c[i] === c[i] && Math.abs(c[i]) > PI) c[i] -= TAU * Math.round(c[i] / TAU); }
   inst.name = n; inst.cur = d; inst.t = 0; inst.loop = d.loop !== false && a.loop !== false; inst.dur = a.dur || d.dur || 1; inst.rate = a.rate || d.rate || 14; inst.speed = a.speed || 1; inst.done = false; inst.hold = a.hold !== undefined ? a.hold : true;
 }
 function upd(inst, dt, snap) {
@@ -5088,6 +5091,7 @@ W.push = function (p, r) {
   for (let pass = 0; pass < 3; pass++) { const ix = Math.floor(p.x / CS), iz = Math.floor(p.z / CS);
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const l = W.col[ck(ix + a, iz + b)]; if (!l) continue;
       for (const o of l) { if (o.off) continue;
+        if (o.top !== undefined && p.y > o.top - .08) continue;       /* 1.0.4: colisor BAIXO (cerca, muro, tronco…) não segura quem está acima do topo — dá para pular por cima e ficar em pé nele */
         if (o.t === 'c') { const dx = p.x - o.x, dz = p.z - o.z, rr = r + o.r, d2 = dx * dx + dz * dz; if (d2 < rr * rr) { const d = Math.sqrt(d2) || .001; p.x = o.x + dx / d * rr; p.z = o.z + dz / d * rr; hit = true; } }
         else { const c = Math.cos(o.rot), s = Math.sin(o.rot), dx = p.x - o.x, dz = p.z - o.z, lx = dx * c - dz * s, lz = dx * s + dz * c; const cx = clamp(lx, -o.hw, o.hw), cz = clamp(lz, -o.hd, o.hd), ex = lx - cx, ez = lz - cz, d2 = ex * ex + ez * ez;
           if (d2 < r * r) { let nx, nz; if (d2 > 1e-6) { const d = Math.sqrt(d2); nx = ex / d * (r - d); nz = ez / d * (r - d); } else { const px = o.hw - Math.abs(lx), pz = o.hd - Math.abs(lz); if (px < pz) { nx = sign(lx) * (px + r); nz = 0; } else { nx = 0; nz = sign(lz) * (pz + r); } }
@@ -5102,6 +5106,15 @@ W.move = function (e, dx, dz, o) {
   if (!o.ghost && W.push(e, e.r || .4)) ok = false;
   return ok;
 };
+/* superfície de apoio em (x,z): o chão ou o TOPO de um colisor baixo (o.top, definido em W.place pela altura real do modelo) se o corpo (y) já está em cima dele.
+ * Só quem está acima do topo (menos 0,35 de tolerância) é apoiado; vindo de baixo, o colisor continua sólido. */
+W.surface = function (x, z, y) {
+  let best = W.h(x, z); const l = W.col[ck(Math.floor(x / CS), Math.floor(z / CS))]; if (!l) return best;
+  for (const o of l) { if (o.off || o.top === undefined || o.top <= best || y < o.top - .35) continue;
+    if (o.t === 'c') { const dx = x - o.x, dz = z - o.z, rr = o.r + .2; if (dx * dx + dz * dz < rr * rr) best = o.top; }
+    else { const c = Math.cos(o.rot), sn_ = Math.sin(o.rot), dx = x - o.x, dz = z - o.z, lx = dx * c - dz * sn_, lz = dx * sn_ + dz * c; if (Math.abs(lx) <= o.hw + .2 && Math.abs(lz) <= o.hd + .2) best = o.top; } }
+  return best;
+};
 W.nearestCol = (x, z, rad) => { const out = []; const ix = Math.floor(x / CS), iz = Math.floor(z / CS); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const l = W.col[ck(ix + a, iz + b)]; if (l) for (const o of l) if (!o.off) out.push(o); } return out; };
 /* raio de visão chão-a-chão: não bate em colisores baixos; só relevo+caixas altas (aprox.) */
 W.los = (x0, z0, x1, z1, y0, y1) => { const n = Math.max(2, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 1.5)); for (let i = 1; i < n; i++) { const t = i / n, x = lerp(x0, x1, t), z = lerp(z0, z1, t), y = lerp(y0 === undefined ? 1 : y0, y1 === undefined ? 1 : y1, t) + W.h(x0, z0) * (1 - t) + W.h(x1, z1) * t; if (W.h(x, z) > y) return false; } return true; };
@@ -5112,12 +5125,14 @@ function propBuild(id) {
   const def = REG.prop[id]; if (!def) return null; if (def._b) return def._b; def._b = [];
   const nv = def.variants || 1; for (let i = 0; i < nv; i++) { const g = mk.bake(m => def.build(m, i, rng(i * 77 + 3))); def._b.push(g); } return def._b;
 }
+/* altura real do modelo assado (m, sem escala) — vira o "topo" do colisor em W.place */
+function propH(id, v) { const bk = propBuild(id); if (!bk) return 99; const g = bk[v % bk.length]; if (g._h === undefined) { let m = 0; for (const part of ['vc', 'sway', 'glow']) { const geo = g[part]; if (!geo) continue; if (!geo.boundingBox) geo.computeBoundingBox(); m = Math.max(m, geo.boundingBox.max.y); } g._h = m; } return g._h; }
 /* W.place('arvore', x, z, {rot, s (escala), v (variante), y (altura extra), noCol}) → { col } */
 W.place = function (id, x, z, o) {
   o = o || {}; const def = REG.prop[id]; if (!def) { console.warn('prop inexistente: ' + id); return null; }
   const v = o.v !== undefined ? o.v : (Math.random() * (def.variants || 1) | 0), s = o.s || (def.scale ? R(def.scale[0], def.scale[1]) : 1), rot = o.rot !== undefined ? o.rot : Math.random() * TAU, y = (o.y !== undefined ? o.y : W.h(x, z) + (def.sink || 0));
   const key = id + '#' + v + '#' + Math.floor(x / 40) + ',' + Math.floor(z / 40); (W.chunks[key] = W.chunks[key] || { id, v, list: [] }).list.push([x, y, z, rot, s, o.tilt || 0]);
-  let col = null; if (def.collide && !o.noCol) { const c = def.collide; col = c.box ? W.addBox(x, z, c.box[0] * s, c.box[1] * s, rot) : W.addCircle(x, z, c.r * s); } return { col };
+  let col = null; if (def.collide && !o.noCol) { const c = def.collide; col = c.box ? W.addBox(x, z, c.box[0] * s, c.box[1] * s, rot) : W.addCircle(x, z, c.r * s); if (col && !o.tilt) col.top = y + propH(id, v) * s; } return { col };
 };
 W.finalizeProps = function () {
   /* cada célula de 32×32 m vira poucas malhas ESTÁTICAS fundidas (1 chamada de desenho por material em vez de uma por prop/variante): é o que segura o nº de draw calls */
@@ -5373,7 +5388,7 @@ function updPlayer(dt) {
   // aplicar movimento
   if (p.vx || p.vz) { const ok = W_.move(p, p.vx * dt, p.vz * dt); if (!ok) p.stuck += dt; else p.stuck = 0; }
   // vertical
-  const gh = W_.h(p.x, p.z);
+  const gh = W_.surface(p.x, p.z, p.y);      // chão ou topo de cerca/muro/pedra baixa (1.0.4: dá para pular por cima e pousar em cima)
   if (p.air || p.y > gh + .08) { p.vy -= GRAV * dt; p.y += p.vy * dt; p.air = true; if (p.y <= gh) { p.y = gh; if (p.vy < -6) { K.sfx('pouso'); K.fx.burst(p.x, p.y + .1, p.z, { n: 6, color: '#ffffff', speed: 2, size: .1, up: 1 }); } p.vy = 0; p.air = false; } }
   else { p.y = gh; p.vy = 0; }
   if (W_.h(p.x, p.z) < W_.sea - .2 && p.y < W_.sea + .1 && !p.wet) { p.wet = true; K.fx.burst(p.x, W_.sea + .1, p.z, { n: 10, color: ['#aef3ff', '#ffffff'], speed: 3, size: .12 }); K.sfx('splash'); } else if (p.y > W_.sea + .6) p.wet = false;
