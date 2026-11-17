@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.5</title>
+<title>Pedrada de Palito 1.1.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.5', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.1.7', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -540,16 +540,18 @@ function ik(root, tgt, a, b, out) {
 }
 const POSE0 = { bob: 0, lean: 0, hx: 0, tilt: 0, hdx: 0, rot: 0, dy: 0, sy: 1, footL: [-.14, 0], footR: [.14, 0], handL: [-.24, -.78], handR: [.24, -.78], face: null };
 const mixPose = (a, b) => Object.assign({}, a, b);
+/* 1.1.7 — espessura de traço PADRONIZADA: o `lw` do look (4,5 a 9) varia o personagem, mas comprimido em 40 % (antes o traço ia de 3,7 % a 7 % da altura do corpo). Em px do desenho canônico (size 1). */
+const LWN = look => { const r = (look.lw || 5.5) / 5.5; return 5.5 * (1 + (r - 1) * .4); };
 /* resolve a pose em coordenadas de canvas (J) */
 function solve(look, pose) {
-  const W = look.cell[0], H = look.cell[1], u = (H - 26) / 2.3 * (look.size || 1), cx = W / 2, y0 = H - 12, p = mixPose(POSE0, pose);
+  const W = look.cell[0], H = look.cell[1], u = (H - 26) / 2.3, cx = W / 2, y0 = H - 12, p = mixPose(POSE0, pose);
   const X = x => cx + x * u, Y = y => y0 - y * u, P = q => [X(q[0]), Y(q[1])];
   const hr = .27 * (look.head || 1), tor = .72 * (look.torso || 1), hip = [p.hx, .96 + p.bob], neck = [hip[0] + p.lean, hip[1] + tor], sh = [neck[0] - p.lean * .3, neck[1] - .07];
   const ta = p.tilt * Math.PI / 180, hv = [p.hdx + Math.sin(ta) * (.06 + hr), (.06 + hr) * Math.cos(ta)], head = [neck[0] + hv[0], neck[1] + hv[1]];
   const lh = [hip[0] + p.footL[0], p.footL[1]], rh = [hip[0] + p.footR[0], p.footR[1]];
   const kL = ik(hip, lh, LEG[0], LEG[1], -1), kR = ik(hip, rh, LEG[0], LEG[1], 1);
   const aL = ik(sh, [sh[0] + p.handL[0], sh[1] + p.handL[1]], ARM[0], ARM[1], -1), aR = ik(sh, [sh[0] + p.handR[0], sh[1] + p.handR[1]], ARM[0], ARM[1], 1);
-  return { u, cx, y0, W, H, p, lw: (look.lw || 5.5) * (look.size || 1), hr: hr * u, hip: P(hip), neck: P(neck), sh: P(sh), head: P(head), tilt: ta,
+  return { u, cx, y0, W, H, p, sz: look.size || 1, lw: LWN(look), hr: hr * u, hip: P(hip), neck: P(neck), sh: P(sh), head: P(head), tilt: ta,
     kneeL: P(kL.mid), footL: P(kL.end), kneeR: P(kR.mid), footR: P(kR.end), elbL: P(aL.mid), handL: P(aL.end), elbR: P(aR.mid), handR: P(aR.end) };
 }
 K.stick = { solve };
@@ -592,7 +594,7 @@ const HELD = {
 K.stick.ACC = ACC; K.stick.HELD = HELD;
 /* ---- rosto ---- */
 function face(c, J, L, p) {
-  const [x, y] = J.head, r = J.hr, f = p.face || L.face || 'angry', ex = r * .42, ey = y - r * .1; c.lineCap = 'round'; c.fillStyle = PAL.ink; c.strokeStyle = PAL.ink; c.lineWidth = 2.6 * (L.size || 1);
+  const [x, y] = J.head, r = J.hr, f = p.face || L.face || 'angry', ex = r * .42, ey = y - r * .1; c.lineCap = 'round'; c.fillStyle = PAL.ink; c.strokeStyle = PAL.ink; c.lineWidth = 2.6;
   if (f === 'x') { for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x + s * ex - 4, ey - 4); c.lineTo(x + s * ex + 4, ey + 4); c.moveTo(x + s * ex + 4, ey - 4); c.lineTo(x + s * ex - 4, ey + 4); c.stroke(); } c.beginPath(); c.arc(x, y + r * .5, 3.5, 0, TAU); c.stroke(); return; }
   for (const s of [-1, 1]) { c.beginPath(); c.arc(x + s * ex, ey, f === 'o' ? 3.6 : 2.8, 0, TAU); c.fill(); }
   if (f === 'angry' || f === 'grr') { c.lineWidth = 3.2; for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x + s * ex * 1.8, ey - 9); c.lineTo(x + s * ex * .2, ey - 4); c.stroke(); } }
@@ -605,10 +607,11 @@ function face(c, J, L, p) {
 }
 /* ---- desenho completo ---- */
 function drawStick(c, look, pose) {
-  const J = solve(look, pose), p = J.p, ink = look.ink || PAL.ink, edge = look.edge || '#fff', ew = 2.6;
+  const J = solve(look, pose), p = J.p, ink = look.ink || PAL.ink, edge = look.edge || '#fff', ew = .45 * J.lw;   // 1.1.7: borda de papel proporcional ao traço (era 2,6 px fixos)
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  if (J.sz !== 1) { c.translate(J.cx, J.y0); c.scale(J.sz, J.sz); c.translate(-J.cx, -J.y0); }   // 1.1.7: `size` é uma escala global do desenho: rosto, acessórios e itens na mão crescem/encolhem junto com o corpo
   // sombra no chão
-  c.fillStyle = 'rgba(20,20,43,.3)'; c.beginPath(); c.ellipse(J.cx, J.y0 + 1, J.u * .5 * (look.size || 1), J.u * .1, 0, 0, TAU); c.fill();
+  c.fillStyle = 'rgba(20,20,43,.3)'; c.beginPath(); c.ellipse(J.cx, J.y0 + 1, J.u * .5, J.u * .1, 0, 0, TAU); c.fill();
   if (p.rot || p.dy || p.sy !== 1) { const dir = look.dieDir || 1; c.translate(J.cx, J.y0); c.rotate(p.rot * Math.PI / 180 * dir); c.scale(1, p.sy); c.translate(-J.cx, -J.y0 + p.dy * J.u); }   // o encaixe na célula é feito em bakeLook (fitDie)
   const limbs = (w, colL, colT, colA) => {
     c.lineWidth = w; c.strokeStyle = colL; c.beginPath(); c.moveTo(...J.hip); c.lineTo(...J.kneeL); c.lineTo(...J.footL); c.moveTo(...J.hip); c.lineTo(...J.kneeR); c.lineTo(...J.footR); c.stroke();
@@ -646,24 +649,53 @@ function defaultAnims(L) {
 }
 K.stick.pose = (look, anim, i) => { const L = typeof look === 'string' ? K.looks[look].def : look, A = Object.assign(defaultAnims(L), L.anims || {}), a = A[anim] || A.idle; return mixPose(POSE0, a[(i | 0) % a.length]); };
 K.stick.frameCount = (look, anim) => { const L = typeof look === 'string' ? K.looks[look].def : look, A = Object.assign(defaultAnims(L), L.anims || {}); return (A[anim] || A.idle).length; };
+/* quadros de queda (corpo girado) saem da célula: desenha numa tela 3× maior (k× a mais para a versão alta), mede a caixa opaca e ENCAIXA na célula (reduz se preciso, centraliza, apoia na base)
+   1.0.3: tela 3× e figura no CENTRO (antes 2× no canto: o corpo deitado passava da borda e a CABEÇA saía cortada). 1.1.6: virou função de módulo com fator k (k=1 = quadro de sempre) */
+function fitDieC(L, pose, k, id) {
+  const W = L.cell[0], H = L.cell[1], BW = W * 3 * k, BH = H * 3 * k, big = mkCanvas(BW, BH), bc = big.getContext('2d'); bc.scale(k, k); bc.translate(W, H); try { drawStick(bc, L, pose); } catch (e) { console.error('look ' + id + ' die', e); }
+  const px = bc.getImageData(0, 0, BW, BH).data; let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
+  for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) if (px[(y * BW + x) * 4 + 3] >= 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (k === 1 && (x0 <= 0 || y0 <= 0 || x1 >= BW - 1 || y1 >= BH - 1)) console.warn('look ' + id + ': quadro de queda tocou a borda da tela de medição');
+  const cn = mkCanvas(W * k, H * k), c = cn.getContext('2d'); if (x1 < 0) return cn; const bw = x1 - x0 + 1, bh = y1 - y0 + 1, s = Math.min(1, (W * k - 6 * k) / bw, (H * k - 6 * k) / bh), dw = bw * s, dh = bh * s;
+  c.drawImage(big, x0, y0, bw, bh, Math.round(W * k / 2 - dw / 2), Math.round(H * k - 4 * k - dh), dw, dh); return cn;
+}
+/* 1.1.6 — VERSÃO ALTA dos quadros dos bots (gráficos Médio/Alto): desenhada em SS× a célula, com a borda SUAVE do canvas (sem o recorte duro de papel) e uma cadeia de mipmaps
+   (cor pré-multiplicada, média 2×2). O raycaster escolhe o nível pelo tamanho na tela e amostra bilinear: de longe o traço fino vira cinza em vez de sumir, e o contorno não serrilha.
+   Feito sob demanda (1ª vez que o quadro aparece) e descartado a cada fase (K.dropHi) para não pesar no celular. Baixo continua no caminho antigo (alpha duro, vizinho mais próximo). */
+const SS = 2;
+K.hiFrame = f => {
+  if (f.hi) return f.hi; if (!f._pose) return null;
+  const L = f._L, ss = L._ss || SS, W = f.w * ss, H = f.h * ss; let cn;
+  if (f._die) cn = fitDieC(L, f._pose, ss, f._id); else { cn = mkCanvas(W, H); const c = cn.getContext('2d'); c.scale(ss, ss); try { drawStick(c, L, f._pose); } catch (e) { console.error('look ' + f._id + ' alta', e); } }
+  const src = cn.getContext('2d').getImageData(0, 0, W, H).data, d0 = new Uint32Array(W * H);
+  for (let i = 0, n = W * H; i < n; i++) { const a = src[i * 4 + 3]; d0[i] = a ? ((((src[i * 4] * a / 255) | 0) | (((src[i * 4 + 1] * a / 255) | 0) << 8) | (((src[i * 4 + 2] * a / 255) | 0) << 16) | (a << 24)) >>> 0) : 0; }
+  const mips = [d0], mw = [W], mh = [H];
+  while (mh[mh.length - 1] > 16 && mw[mw.length - 1] > 8) {
+    const pw = mw[mw.length - 1], ph = mh[mh.length - 1], p = mips[mips.length - 1], w = pw >> 1, h = ph >> 1, q = new Uint32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (2 * y) * pw + 2 * x, a = p[i], b = p[i + 1], c = p[i + pw], e = p[i + pw + 1];
+      q[y * w + x] = ((((a & 255) + (b & 255) + (c & 255) + (e & 255)) >> 2) | (((((a >> 8) & 255) + ((b >> 8) & 255) + ((c >> 8) & 255) + ((e >> 8) & 255)) >> 2) << 8) | (((((a >> 16) & 255) + ((b >> 16) & 255) + ((c >> 16) & 255) + ((e >> 16) & 255)) >> 2) << 16) | ((((a >>> 24) + (b >>> 24) + (c >>> 24) + (e >>> 24)) >> 2) << 24)) >>> 0; }
+    mips.push(q); mw.push(w); mh.push(h);
+  }
+  return f.hi = { mips, mw, mh };
+};
+K.dropHi = () => { for (const id in K.looks) for (const an in K.looks[id].frames) for (const f of K.looks[id].frames[an]) f.hi = null; };
+K.stdBody = .65;   // altura do corpo de um humano comum em mundo (1 = altura de parede)
+/* maior `scale` entre os bots que usam o look (inclusive os looks de fase dos chefes); 1 se nenhum */
+function lookWorldScale(id) { let sc = 0; for (const b in K.botDefs || {}) { const d = K.botDefs[b], s = d.scale || 1; if ((d.look || b) === id || (d.phases || []).some(ph => ph && ph.look === id)) sc = Math.max(sc, s); } return sc || 1; }
 function bakeLook(id) {
   const L = Object.assign({ cell: [96, 128], hgt: .85 }, _D.look[id]); L.cell = L.cell || [96, 128];
+  /* 1.1.7 — PADRONIZAÇÃO: altura do corpo (pé até o topo da cabeça) em mundo = K.stdBody × look.rel, calculada pelo desenho (assim todo humano comum mede igual, seja qual for `size`/`head`/`torso`).
+     `rel` (1 = humano comum; 1,3 = brutamontes; 0,5 = enxame; ~1,6 = chefe) substitui o `hgt` chutado. Sem `rel`, vale o `hgt` do look (compatível com jogo antigo). A escala do bot (K.defBot scale) entra na conta. */
+  const ws = lookWorldScale(id); L._ws = ws;
+  if (L.rel !== undefined) { const J0 = solve(L, K.stick.pose(L, 'idle', 0)), body = (J0.y0 - (J0.head[1] - J0.hr)) * J0.sz / L.cell[1]; L.hgt = K.stdBody * L.rel / (body * ws); }
+  L._ss = ws * (L.rel || 1) >= 1.3 ? 3 : 2;   // chefe grande: quadro alto em 3× a célula (mesma nitidez de um palito comum)
   const out = {}, names = ['idle', 'walk', 'attack', 'hurt', 'die'];
   const W = L.cell[0], H = L.cell[1];
-  /* quadros de queda (corpo girado) saem da célula: desenha numa tela 2× maior, mede a caixa opaca e ENCAIXA na célula (reduz se preciso, centraliza, apoia na base) */
-  const fitDie = pose => {
-    /* 1.0.3: tela 3× e figura no CENTRO. Antes era 2× com a figura no canto: o corpo deitado (≈2,3 u de comprimento, mais chifres/chapéu) passava da borda e a CABEÇA saía cortada */
-    const BW = W * 3, BH = H * 3, big = mkCanvas(BW, BH), bc = big.getContext('2d'); bc.translate(W, H); try { drawStick(bc, L, pose); } catch (e) { console.error('look ' + id + ' die', e); }
-    const px = bc.getImageData(0, 0, BW, BH).data; let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
-    for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) if (px[(y * BW + x) * 4 + 3] >= 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-    if (x0 <= 0 || y0 <= 0 || x1 >= BW - 1 || y1 >= BH - 1) console.warn('look ' + id + ': quadro de queda tocou a borda da tela de medição');
-    const cn = mkCanvas(W, H), c = cn.getContext('2d'); if (x1 < 0) return cn; const bw = x1 - x0 + 1, bh = y1 - y0 + 1, s = Math.min(1, (W - 6) / bw, (H - 6) / bh), dw = bw * s, dh = bh * s;
-    c.drawImage(big, x0, y0, bw, bh, Math.round(W / 2 - dw / 2), Math.round(H - 4 - dh), dw, dh); return cn;
-  };
-  for (const n of names) { out[n] = []; const cnt = K.stick.frameCount(L, n); for (let i = 0; i < cnt; i++) { let cn = mkCanvas(W, H), c = cn.getContext('2d'); if (n === 'die') { cn = fitDie(K.stick.pose(L, n, i)); c = cn.getContext('2d'); } else { try { drawStick(c, L, K.stick.pose(L, n, i)); } catch (e) { console.error('look ' + id + ' ' + n + i, e); } } out[n].push({ w: W, h: H, d: cut(c, W, H) }); } }
+  const fitDie = pose => fitDieC(L, pose, 1, id);
+  for (const n of names) { out[n] = []; const cnt = K.stick.frameCount(L, n); for (let i = 0; i < cnt; i++) { let cn = mkCanvas(W, H), c = cn.getContext('2d'); const pose = K.stick.pose(L, n, i); if (n === 'die') { cn = fitDie(pose); c = cn.getContext('2d'); } else { try { drawStick(c, L, pose); } catch (e) { console.error('look ' + id + ' ' + n + i, e); } } out[n].push({ w: W, h: H, d: cut(c, W, H), _L: L, _pose: pose, _die: n === 'die', _id: id }); } }
   /* 1.0.6: ONDE FICA A CABEÇA no mundo, medida do boneco de verdade (fração de hgt, pé = 0). Antes o tiro-na-cabeça usava um número chutado (> 68% de 88% da altura)
      e a pedra, saindo mais baixa que a mira e caindo pela gravidade, nunca chegava lá. headLo = base da cabeça (tolerância de pescoço), headHi = topo (inclui chapéu/coroa). */
-  let headLo = .62, headHi = .8, headR = .09; try { const J = solve(L, K.stick.pose(L, 'idle', 0)), zf = row => (H - 12 - row) / H; headLo = zf(J.head[1] + J.hr * .9); headHi = zf(J.head[1] - J.hr * 1.4); headR = J.hr / H; } catch (e) { console.error('look ' + id + ' cabeça', e); }
+  let headLo = .62, headHi = .8, headR = .09; try { const J = solve(L, K.stick.pose(L, 'idle', 0)), zf = row => (J.y0 - row) * J.sz / H; headLo = zf(J.head[1] + J.hr * .9); headHi = zf(J.head[1] - J.hr * 1.4); headR = J.hr * J.sz / H; } catch (e) { console.error('look ' + id + ' cabeça', e); }
   K.looks[id] = { id, def: L, headLo, headHi, headR, frames: out, hgt: L.hgt, aspect: L.cell[0] / L.cell[1], fps: Object.assign({ walk: 7, attack: 4, die: 8, idle: 2 }, L.fps || {}) };
 }
 K.bake = () => { for (const id in _D.tex) bakeTex(id); for (const id in _D.spr) bakeSpr(id); for (const id in _D.look) bakeLook(id); _baked = true; };
@@ -673,14 +705,37 @@ K.blit = (c, f, x, y, sc) => { let cn = f._cn; if (!cn) { cn = f._cn = mkCanvas(
 /*==ENGINE:render3d==  raycaster estilo Doom: paredes texturizadas (DDA), chão e teto com textura, névoa, billboards com z-buffer. Software, num buffer de baixa resolução esticado sem suavização.
  * K.r3.render(c, cam, world, sprites)  cam={x,y,a,pitch,fov}  world={w,h,cells(Int8/Uint8 Array: 0 = vazio; >0 = tipo de parede), walls:{tipo:'idTextura'}, floor, ceil, fog:[r,g,b], fogDist, light}
  * sprites: [{x,y, f(frame {w,h,d}), hgt(altura no mundo), z(altura do pé), flash(0..1 branco), tint, glow, alpha}] */
-const R3 = K.r3 = { W: 320, H: 180, scale: 3, img: null, buf: null, cn: null, cx: null, zb: null };
+const R3 = K.r3 = { mipBias: 1.5, W: 320, H: 180, scale: 3, img: null, buf: null, cn: null, cx: null, zb: null };
 R3.resize = () => {
-  const sc = [4, 3, 2.4][QEFF()] || 3; R3.scale = sc; const W = Math.max(160, Math.round(VW / sc)), H = Math.round(VH / sc);
-  if (R3.W === W && R3.H === H && R3.img) return; R3.W = W; R3.H = H;
+  const sc = [4, 3, 2][QEFF()] || 3; R3.scale = sc; const W = Math.max(160, Math.round(VW / sc)), H = Math.round(VH / sc);   // 1.1.6: Alto de 2,4 para 2 (mais pixels = personagem mais nítido de longe)
+  if (R3.W === W && R3.H === H && R3.img) return; R3.W = W; R3.H = H; R3.ra = new Int32Array(H + 2); R3.rb = new Int32Array(H + 2); R3.rf = new Float32Array(H + 2);
   R3.cn = K.mkCanvas(W, H); R3.cx = R3.cn.getContext('2d'); R3.img = R3.cx.createImageData(W, H); R3.buf = new Uint32Array(R3.img.data.buffer); R3.zb = new Float32Array(W);
 };
 const PACK = (r, g, b) => (0xFF000000 | (b << 16) | (g << 8) | r) >>> 0;
 const FOGCACHE = {};
+/* 1.1.6 — sprite de bot com alpha suave: escolhe o mipmap cujo tamanho é ≥ o da tela (minificação < 2×), amostra bilinear em cor pré-multiplicada e mistura a borda com o fundo.
+   Mesmos efeitos do caminho duro (névoa k, tint, flash, alpha global al). */
+function softSprite(buf, W, zb, s, hi, tY, xa, xb, yt, yb, ya, yz, k, fr, fg, fb, fl, al, tint) {
+  const rows = yb - yt; let lv = 0; const need = rows * R3.mipBias; while (lv + 1 < hi.mips.length && hi.mh[lv + 1] >= need) lv++;
+  const md = hi.mips[lv], mw = hi.mw[lv], mh = hi.mh[lv], isw = mw / (xb - xa), ish = mh / rows, ra = R3.ra, rb = R3.rb, rf = R3.rf;
+  for (let y = ya; y < yz; y++) { const v = (y - yt + .5) * ish - .5, vi = Math.floor(v); ra[y] = vi < 0 ? 0 : vi > mh - 1 ? mh - 1 : vi; rb[y] = vi + 1 < 0 ? 0 : vi + 1 > mh - 1 ? mh - 1 : vi + 1; rf[y] = v - vi; }
+  for (let x = Math.max(0, xa); x < Math.min(W, xb); x++) {
+    if (tY >= zb[x]) continue; let u = (x - xa + .5) * isw - .5; if (s.flip) u = mw - 1 - u; const ui = Math.floor(u), fu = u - ui, ua = ui < 0 ? 0 : ui > mw - 1 ? mw - 1 : ui, ub = ui + 1 < 0 ? 0 : ui + 1 > mw - 1 ? mw - 1 : ui + 1;
+    for (let y = ya; y < yz; y++) {
+      const fv = rf[y], o0 = ra[y] * mw, o1 = rb[y] * mw, c00 = md[o0 + ua], c10 = md[o0 + ub], c01 = md[o1 + ua], c11 = md[o1 + ub];
+      const w00 = (1 - fu) * (1 - fv), w10 = fu * (1 - fv), w01 = (1 - fu) * fv, w11 = fu * fv;
+      const A = (c00 >>> 24) * w00 + (c10 >>> 24) * w10 + (c01 >>> 24) * w01 + (c11 >>> 24) * w11; if (A < 6) continue;
+      const q = 255 / A;
+      let r = Math.min(255, ((c00 & 255) * w00 + (c10 & 255) * w10 + (c01 & 255) * w01 + (c11 & 255) * w11) * q), g = Math.min(255, (((c00 >> 8) & 255) * w00 + ((c10 >> 8) & 255) * w10 + ((c01 >> 8) & 255) * w01 + ((c11 >> 8) & 255) * w11) * q), b = Math.min(255, (((c00 >> 16) & 255) * w00 + ((c10 >> 16) & 255) * w10 + ((c01 >> 16) & 255) * w01 + ((c11 >> 16) & 255) * w11) * q);
+      if (tint) { r *= tint[0]; g *= tint[1]; b *= tint[2]; }
+      if (fl) { r += (255 - r) * fl; g += (255 - g) * fl; b += (255 - b) * fl; }
+      r = fr + (r - fr) * k; g = fg + (g - fg) * k; b = fb + (b - fb) * k;
+      const ea = A / 255 * al, i = y * W + x;
+      if (ea < .985) { const o = buf[i], orr = o & 255, og = (o >> 8) & 255, ob = (o >> 16) & 255; r = orr + (r - orr) * ea; g = og + (g - og) * ea; b = ob + (b - ob) * ea; }
+      buf[i] = PACK(r | 0, g | 0, b | 0);
+    }
+  }
+}
 R3.render = (c, cam, wd, sprites) => {
   if (!R3.img) R3.resize();
   const W = R3.W, H = R3.H, buf = R3.buf, zb = R3.zb, cells = wd.cells, mw = wd.w, mh = wd.h;
@@ -715,6 +770,7 @@ R3.render = (c, cam, wd, sprites) => {
     for (let y = ya; y < yb; y++, ty += step) { const col = td[((ty | 0) & tm) * ts + tx]; buf[y * W + x] = PACK(fr + ((col & 255) - fr) * f | 0, fg + (((col >> 8) & 255) - fg) * f | 0, fb + (((col >> 16) & 255) - fb) * f | 0); }
   }
   /* ---- sprites (do mais longe ao mais perto) ---- */
+  const soft = QEFF() >= 1;   // 1.1.6: Médio e Alto desenham os bots com borda suave + mipmaps; Baixo fica no recorte duro
   const inv = 1 / (plx * dy - dx * ply);
   const list = [];
   for (const s of sprites) { const rx = s.x - px, ry = s.y - py, tX = inv * (dy * rx - dx * ry), tY = inv * (-ply * rx + plx * ry); if (tY > .08) list.push({ s, tX, tY }); }
@@ -724,6 +780,8 @@ R3.render = (c, cam, wd, sprites) => {
     const yb = horizon + (.5 - (s.z || 0)) * H / tY, yt = yb - sh, xa = Math.round(sxc - sw / 2), xb = Math.round(sxc + sw / 2); if (xb < 0 || xa >= W || sw < 1) continue;
     const k = s.glow ? 1 : clamp(1 - tY / fogD, .1, 1) * light, fl = s.flash || 0, al = s.alpha === undefined ? 1 : s.alpha, fd = f.d, fw = f.w, fh = f.h;
     const ya = Math.max(0, Math.round(yt)), yz = Math.min(H, Math.round(yb)), isw = fw / (xb - xa), ish = fh / (yb - yt), tint = s.tint;
+    const hi = soft && f._pose ? (f.hi || K.hiFrame(f)) : null;
+    if (hi) { softSprite(buf, W, zb, s, hi, tY, xa, xb, yt, yb, ya, yz, k, fr, fg, fb, fl, al, tint); continue; }
     for (let x = Math.max(0, xa); x < Math.min(W, xb); x++) {
       if (tY >= zb[x]) continue; const tx = Math.min(fw - 1, ((x - xa) * isw) | 0), tcx = s.flip ? fw - 1 - tx : tx;
       for (let y = ya; y < yz; y++) {
@@ -1251,7 +1309,8 @@ function drawHud(c) {
 K.defScene('play', {
   fps: true, paused: false,
   enter(args) {
-    args = args || {}; const L = K.levelById(args.level || '1'); this.paused = false; loadLevel(L); K.music(K.audio.songs[G.W.music] ? G.W.music : (K.audio.songs[G.W.base] ? G.W.base : 'caderno'));   // 1.1.0: mundo sem música própria (ainda) usa a do mundo base K.input.enabled = true;
+    args = args || {}; const L = K.levelById(args.level || '1'); this.paused = false; if (K.dropHi) K.dropHi(); loadLevel(L);   // 1.1.6: solta os quadros em alta resolução da fase anterior
+    K.music(K.audio.songs[G.W.music] ? G.W.music : (K.audio.songs[G.W.base] ? G.W.base : 'caderno'));   // 1.1.0: mundo sem música própria (ainda) usa a do mundo base K.input.enabled = true;
     K.input.lock();   // 1.1.4: o clique/tecla que abriu a fase ainda vale como gesto: já entra com o mouse mirando
     return K.preload ? K.preload() : null;
   },
@@ -1533,7 +1592,7 @@ K.defScene('gallery', {
     c.beginPath(); c.arc(hx, hy, 9 * s, 0, TAU2); c.lineWidth = 8; c.strokeStyle = '#fff'; c.stroke(); c.fillStyle = PAL.yellow2; c.fill(); c.lineWidth = 3.5; c.strokeStyle = I; c.stroke();
     c.fillStyle = I; for (const [a, b] of [[-3, -3], [3, 2]]) { c.beginPath(); c.arc(hx + a, hy + b, 1.8, 0, TAU2); c.fill(); }
   };
-  K.defLook('palito', { size: 0.96, hgt: 0.89, skin: '#FFE3DA', shirt: '#6E7B91', acc: ['cap'], accCol: PAL.red, face: 'angry', held: club, attack: 'swing', lw: 6,
+  K.defLook('palito', { rel: 1, size: 0.96, hgt: 0.89, skin: '#FFE3DA', shirt: '#6E7B91', acc: ['cap'], accCol: PAL.red, face: 'angry', held: club, attack: 'swing', lw: 6,
     anims: {
       walk: walk({ lean: .05, hr: [.3, -.5], arm: .1 }),
       attack: [{ lean: -.1, handR: [.3, .5], handL: [-.35, .5], footL: [-.22, 0], footR: [.22, 0], bob: -.03, face: 'grr' }, { lean: .18, handR: [.34, -.55], handL: [-.15, -.4], bob: -.12, footL: [-.24, 0], footR: [.24, 0] }],
@@ -1545,7 +1604,7 @@ K.defScene('gallery', {
     if (J.p.lean < .12) return; c.lineCap = 'round'; c.lineWidth = 3;
     for (let i = 0; i < 3; i++) { const y = J.neck[1] + 8 + i * 14; c.beginPath(); c.moveTo(J.cx - 24 - i * 2, y); c.lineTo(J.cx - 37 - i * 2, y); c.stroke(); }
   };
-  K.defLook('corredor', { skin: '#FFE3DA', shirt: PAL.yellow, pants: PAL.blue2, acc: ['bandana'], accCol: PAL.red, face: 'grr', attack: 'swing', size: .92, lw: 5.5, held: fist,
+  K.defLook('corredor', { rel: 1, skin: '#FFE3DA', shirt: PAL.yellow, pants: PAL.blue2, acc: ['bandana'], accCol: PAL.red, face: 'grr', attack: 'swing', size: .92, lw: 5.5, held: fist,
     anims: {
       idle: [{ lean: .12, footL: [-.22, 0], footR: [.22, 0], handL: [-.3, -.4], handR: [.3, -.4] }, { lean: .14, bob: .03, footL: [-.22, 0], footR: [.22, 0], handL: [-.3, -.4], handR: [.3, -.4] }],
       walk: walk({ st: .2, lift: .42, lean: .26, bob: .07, arm: .3, x: .06, tilt: 6, hl: [-.28, -.4], hr: [.28, -.4] }),
@@ -1565,7 +1624,7 @@ K.defScene('gallery', {
     c.lineWidth = 9; c.strokeStyle = '#fff'; c.stroke(); c.fillStyle = PAL.blue; c.fill(); c.lineWidth = 4; c.strokeStyle = I; c.stroke();
     c.fillStyle = '#fff'; c.fillRect(x - 4, y - 20, 8, 32); c.fillRect(x - 12, y - 12, 24, 7); c.strokeRect(x - 4, y - 20, 8, 32);
   };
-  K.defLook('gordao', { size: 0.92, hgt: 0.89, skin: '#FFE3DA', shirt: PAL.blue2, pants: I, acc: ['helmet', 'belt'], accCol: '#8A94A8', face: 'angry', head: 1.15, torso: 1.12, lw: 8, held: mallet, heldHand: 'R', attack: 'swing', extra: bigShield,
+  K.defLook('gordao', { rel: 1.3, size: 0.92, hgt: 0.89, skin: '#FFE3DA', shirt: PAL.blue2, pants: I, acc: ['helmet', 'belt'], accCol: '#8A94A8', face: 'angry', head: 1.15, torso: 1.12, lw: 8, held: mallet, heldHand: 'R', attack: 'swing', extra: bigShield,
     anims: {
       idle: [{ handL: [-.3, -.35], handR: [.3, -.5] }, { handL: [-.3, -.35], handR: [.3, -.5], bob: .025 }],
       walk: walk({ st: .24, lift: .12, bob: .06, lean: .02, sway: .04, tilt: 5, arm: .04, x: .04, hl: [-.3, -.35], hr: [.32, -.55] }),
@@ -1581,7 +1640,7 @@ K.defScene('gallery', {
     c.lineWidth = 8; c.strokeStyle = '#fff'; c.stroke(); c.fillStyle = I; c.fill(); c.lineWidth = 3; c.strokeStyle = I; c.stroke();
     c.fillStyle = PAL.red; c.fillRect(x - r * .85, y - r * 1.6, r * 1.7, r * .36);
   };
-  K.defLook('atirador', { size: .9, hgt: .94, skin: '#FFE3DA', shirt: '#F7F5EE', pants: I, sleeve: I, acc: [topHat, 'glasses', bow], face: 'smile', held: redRock, attack: 'throw', lw: 5,
+  K.defLook('atirador', { rel: 1, size: .9, hgt: .94, skin: '#FFE3DA', shirt: '#F7F5EE', pants: I, sleeve: I, acc: [topHat, 'glasses', bow], face: 'smile', held: redRock, attack: 'throw', lw: 5,
     anims: {
       idle: [{ lean: -.03, handL: [-.35, -.35], handR: [.3, -.5], tilt: -3 }, { lean: -.03, bob: .025, handL: [-.35, -.35], handR: [.3, -.5], tilt: -3 }],
       walk: walk({ lean: -.045, bob: .05, tilt: 4, arm: .03, hl: [-.38, -.3], hr: [.3, -.5], st: .13, lift: .26 }),
@@ -1605,7 +1664,7 @@ K.defScene('gallery', {
     c.lineWidth = 8; c.strokeStyle = '#fff'; c.stroke(); c.lineWidth = 3.5; c.strokeStyle = I; c.fill(); c.stroke();
     c.fillStyle = PAL.red; c.beginPath(); c.arc(x, y - r * 1.0, 3.5, 0, TAU2); c.fill();
   };
-  K.defLook('chefe1', { size: 0.88, hgt: 0.93, skin: '#FFD8CC', shirt: PAL.red, pants: I, acc: [bigCrown, fur], face: 'grr', held: spikeClub, attack: 'swing', lw: 7.5, head: 1.1, torso: 1.1,
+  K.defLook('chefe1', { rel: 1.6, size: 0.88, hgt: 0.93, skin: '#FFD8CC', shirt: PAL.red, pants: I, acc: [bigCrown, fur], face: 'grr', held: spikeClub, attack: 'swing', lw: 7.5, head: 1.1, torso: 1.1,
     anims: {
       idle: [{ handL: [-.38, -.4], handR: [.38, -.45] }, { handL: [-.38, -.4], handR: [.38, -.45], bob: .03 }],
       walk: walk({ st: .22, lift: .14, bob: .06, lean: .02, sway: .03, tilt: 4, arm: .05, hl: [-.38, -.4], hr: [.3, -.5] }),
@@ -1633,7 +1692,7 @@ K.defScene('gallery', {
     c.fillStyle = I; for (const s of [-1, 1]) { c.beginPath(); c.arc(x + s * r * .46, y - r * .08, 2.4, 0, TAU2); c.fill(); }
   };
   const profTie = (c, J) => { const [x, y] = J.neck; c.fillStyle = PAL.red; c.strokeStyle = I; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x, y + 4); c.lineTo(x - 7, y + 14); c.lineTo(x, y + J.u * .6); c.lineTo(x + 7, y + 14); c.closePath(); c.fill(); c.stroke(); };
-  K.defLook('chefe2', { size: 0.81, hgt: 1.0, skin: '#FFF3D6', shirt: PAL.green, pants: '#3A3F5C', acc: [gradCap, bigGlasses, 'mustache', profTie], face: 'angry', held: bigRuler, attack: 'swing', lw: 7, extra: chalk,
+  K.defLook('chefe2', { rel: 1.6, size: 0.81, hgt: 1.0, skin: '#FFF3D6', shirt: PAL.green, pants: '#3A3F5C', acc: [gradCap, bigGlasses, 'mustache', profTie], face: 'angry', held: bigRuler, attack: 'swing', lw: 7, extra: chalk,
     anims: {
       idle: [{ handL: [-.4, -.1], handR: [.3, -.5] }, { handL: [-.4, -.1], handR: [.3, -.5], bob: .025 }],
       walk: walk({ st: .15, lift: .2, bob: .045, lean: .03, tilt: 3, arm: .04, hl: [-.4, -.1], hr: [.3, -.5] }),
@@ -1660,7 +1719,7 @@ K.defScene('gallery', {
     const [x, y] = J.head, r = J.hr; c.fillStyle = PAL.yellow; c.lineJoin = 'round';
     for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x + s * r * .45, y - r * .8); c.quadraticCurveTo(x + s * r * 1.5, y - r * .9, x + s * r * 1.35, y - r * 2); c.quadraticCurveTo(x + s * r * .85, y - r * 1.35, x + s * r * .1, y - r * .95); c.closePath(); c.lineWidth = 8; c.strokeStyle = '#fff'; c.stroke(); c.lineWidth = 3.5; c.strokeStyle = I; c.fill(); c.stroke(); }
   };
-  K.defLook('chefe3', { size: .74, hgt: 1.1, skin: '#FFE3DA', shirt: PAL.red2, pants: I, acc: [kingCape, kingHorns], face: 'grr', held: longBomb, attack: 'throw', lw: 7.5, head: 1.1,
+  K.defLook('chefe3', { rel: 1.65, size: .74, hgt: 1.1, skin: '#FFE3DA', shirt: PAL.red2, pants: I, acc: [kingCape, kingHorns], face: 'grr', held: longBomb, attack: 'throw', lw: 7.5, head: 1.1,
     anims: {
       idle: [{ handL: [-.4, -.35], handR: [.35, -.3] }, { handL: [-.4, -.35], handR: [.35, -.3], bob: .03 }],
       walk: walk({ st: .17, lift: .22, bob: .05, lean: .02, tilt: 3, arm: .05, hl: [-.42, -.3], hr: [.3, -.1] }),
@@ -2110,7 +2169,7 @@ K.hud.status = (c, S) => {
     c.fillStyle = I; for (const [a, b] of [[-w * .7, 12], [w * .7, 12]]) { c.beginPath(); c.arc(cx + a, top + b, 2.4, 0, TAU2); c.fill(); }   // rebites
     c.restore();
   };
-  K.defLook('escudeiro', { size: .94, hgt: .95, skin: '#FFE3DA', shirt: '#6F7E99', pants: I, acc: ['helmet'], accCol: '#AEB6C4', face: 'angry', lw: 7, head: 1.3, torso: 1.1, attack: 'swing', extra: bigPaperShield,
+  K.defLook('escudeiro', { rel: 1.3, size: .94, hgt: .95, skin: '#FFE3DA', shirt: '#6F7E99', pants: I, acc: ['helmet'], accCol: '#AEB6C4', face: 'angry', lw: 7, head: 1.3, torso: 1.1, attack: 'swing', extra: bigPaperShield,
     anims: {
       idle: [{ handL: [-.3, -.3], handR: [.3, -.3] }, { handL: [-.3, -.3], handR: [.3, -.3], bob: .025 }],
       walk: walk({ st: .15, lift: .1, bob: .05, lean: .02, tilt: 3, arm: .03, x: .03, hl: [-.3, -.3], hr: [.3, -.3] }),
@@ -2141,7 +2200,7 @@ K.hud.status = (c, S) => {
     c.fillStyle = '#F59BB0'; c.strokeStyle = I; c.lineWidth = 3; c.beginPath(); c.arc(h[0], h[1], 7, 0, TAU2); c.fill(); c.stroke();
     c.fillStyle = '#8A94A8'; c.beginPath(); c.arc(h[0] + 2, h[1] + 1, 2.6, 0, TAU2); c.fill();
   };
-  K.defLook('borrachudo', { size: .98, hgt: .9, skin: '#F8A9BD', shirt: '#F59BB0', pants: '#E87C98', sleeve: '#F59BB0', face: 'o', lw: 4, head: 1.15, torso: .8, held: smudge, attack: 'swing', extra: (c, J) => { crumbs(c, J); dizzyEyes(c, J); },
+  K.defLook('borrachudo', { rel: 1, size: .98, hgt: .9, skin: '#F8A9BD', shirt: '#F59BB0', pants: '#E87C98', sleeve: '#F59BB0', face: 'o', lw: 4, head: 1.15, torso: .8, held: smudge, attack: 'swing', extra: (c, J) => { crumbs(c, J); dizzyEyes(c, J); },
     anims: {
       idle: [{ lean: .05, tilt: 5, handL: [-.3, -.3], handR: [.3, -.3] }, { lean: .05, tilt: -5, bob: .03, handL: [-.3, -.3], handR: [.3, -.3] }],
       walk: walk({ st: .17, lift: .26, bob: .07, lean: .08, sway: .07, tilt: 8, arm: .18, hl: [-.3, -.35], hr: [.3, -.35] }),
@@ -2156,7 +2215,7 @@ K.hud.status = (c, S) => {
     c.beginPath(); c.ellipse(x, y + r * .58, r * .32, r * .26, 0, 0, TAU2); c.fillStyle = '#7A1E2B'; c.fill(); c.stroke();   // boca aberta
     c.restore();
   };
-  K.defLook('enxame', { size: .92, hgt: .6, skin: '#FFE45C', shirt: '#FFD93D', pants: '#F2B705', sleeve: '#FFD93D', face: 'o', lw: 4.5, head: 1.6, torso: .75, extra: bigEyes, attack: 'swing',
+  K.defLook('enxame', { rel: 0.5, size: .92, hgt: .6, skin: '#FFE45C', shirt: '#FFD93D', pants: '#F2B705', sleeve: '#FFD93D', face: 'o', lw: 4.5, head: 1.6, torso: .75, extra: bigEyes, attack: 'swing',
     anims: {
       idle: [{ lean: .1, footL: [-.2, 0], footR: [.2, 0], handL: [-.4, .2], handR: [.4, .2] }, { lean: .1, bob: .05, footL: [-.2, 0], footR: [.2, 0], handL: [-.4, .2], handR: [.4, .2] }],
       walk: walk({ st: .22, lift: .4, bob: .09, lean: .22, arm: .35, x: .05, tilt: 6, hl: [-.4, .3], hr: [.4, .3] }),
@@ -2223,7 +2282,7 @@ K.hud.status = (c, S) => {
     const [x, y] = J.head, r = J.hr; c.beginPath(); c.ellipse(x - r * .15, y - r * .95, r * 1.2, r * .5, -.12, 0, TAU2); outline(c, PAL.red, 3);
     c.beginPath(); c.arc(x - r * .15, y - r * 1.45, 3, 0, TAU2); outline(c, PAL.red, 2.5);
   };
-  K.defLook('bombardeiro', { size: .84, hgt: .92, skin: '#FFE3DA', shirt: '#FFD93D', pants: I, acc: [bomberHat, apron, bandolier], face: 'grr', held: bombHeld, attack: 'throw', lw: 6,
+  K.defLook('bombardeiro', { rel: 1, size: .84, hgt: .92, skin: '#FFE3DA', shirt: '#FFD93D', pants: I, acc: [bomberHat, apron, bandolier], face: 'grr', held: bombHeld, attack: 'throw', lw: 6,
     anims: {
       idle: [{ lean: -.02, handL: [-.4, -.4], handR: [.55, -.15] }, { lean: -.02, bob: .03, handL: [-.4, -.4], handR: [.55, -.15] }],
       walk: walk({ st: .15, lift: .14, bob: .05, lean: .03, tilt: 3, arm: .04, hl: [-.4, -.4], hr: [.55, -.15] }),
@@ -2252,7 +2311,7 @@ K.hud.status = (c, S) => {
     c.save(); c.strokeStyle = '#fff'; c.lineWidth = 5; c.lineCap = 'round'; c.beginPath(); c.moveTo(J.sh[0] - 4, J.sh[1] + 6); c.lineTo(J.elbL[0] + 4, J.elbL[1] - 2); c.stroke();   // atadura no braço
     c.strokeStyle = I; c.lineWidth = 1.5; c.beginPath(); c.moveTo(J.sh[0] - 8, J.sh[1] + 12); c.lineTo(J.sh[0] + 1, J.sh[1] + 12); c.stroke(); c.restore();
   };
-  K.defLook('curandeiro', { size: .84, hgt: .9, skin: '#FFF3D6', shirt: '#BFEBC9', pants: '#3E7F5B', sleeve: '#3E7F5B', acc: [nurseCap, plasters], face: 'smile', held: wand, attack: 'point', lw: 6,
+  K.defLook('curandeiro', { rel: 1, size: .84, hgt: .9, skin: '#FFF3D6', shirt: '#BFEBC9', pants: '#3E7F5B', sleeve: '#3E7F5B', acc: [nurseCap, plasters], face: 'smile', held: wand, attack: 'point', lw: 6,
     anims: {
       idle: [{ lean: -.02, handL: [-.35, -.4], handR: [.3, .4] }, { lean: -.02, bob: .03, handL: [-.35, -.4], handR: [.3, .4] }],
       walk: walk({ st: .13, lift: .14, bob: .045, lean: -.01, tilt: 3, arm: .03, hl: [-.35, -.4], hr: [.3, .4] }),
@@ -2282,7 +2341,7 @@ K.hud.status = (c, S) => {
     c.fillStyle = PAL.red; c.beginPath(); c.arc(x + r * .46, y - r * .1, 2.2, 0, TAU2); c.fill();
     c.beginPath(); c.arc(x - r * .46, y - r * .1, r * .3, 0, TAU2); c.fillStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 2.6; c.fill(); c.stroke();
   };
-  K.defLook('sniper', { size: .84, hgt: 1.0, skin: '#FFE3DA', shirt: '#4A5368', pants: I, sleeve: '#4A5368', acc: [hood, scopeGlasses], face: 'meh', held: rifle, attack: 'point', lw: 4.5, torso: .9,
+  K.defLook('sniper', { rel: 1, size: .84, hgt: 1.0, skin: '#FFE3DA', shirt: '#4A5368', pants: I, sleeve: '#4A5368', acc: [hood, scopeGlasses], face: 'meh', held: rifle, attack: 'point', lw: 4.5, torso: .9,
     anims: {
       idle: [{ lean: -.02, handL: [-.1, -.1], handR: [.42, .22] }, { lean: -.02, bob: .025, handL: [-.1, -.1], handR: [.42, .22] }],
       walk: walk({ st: .13, lift: .16, bob: .035, lean: -.03, tilt: 2, arm: .02, hl: [-.1, -.1], hr: [.42, .22] }),
@@ -2413,7 +2472,7 @@ K.hud.status = (c, S) => {
   };
   const gold = (c, J) => { const [x, y] = J.head, r = J.hr; c.fillStyle = PAL.yellow; for (let k = 0; k < 4; k++) { const a = k * 1.7 + .5, d = r * (1.6 + k % 2 * .35); c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * .8 - r * .2, 2.6, 0, TAU2); c.fill(); } };
 
-  const mk = (id, o) => K.defLook(id, mix({ size: .74, hgt: 1.1, head: 1.1, lw: 9, attack: 'throw', anims: anims(o.attackFace || 'grr') }, o));
+  const mk = (id, o) => K.defLook(id, mix({ size: .74, hgt: 1.1, rel: 1.75, head: 1.1, lw: 9, attack: 'throw', anims: anims(o.attackFace || 'grr') }, o));
 
   mk('chefe4', { skin: '#F4F1F6', ink: '#2A2F4A', edge: '#fff', shirt: '#C9CFDF', pants: '#3C4260', face: 'meh', attackFace: 'angry',
     acc: [eraserHead('#FFC2D1', '#6A7088', fMeh, '#E8EAF2', '#8A90A8'), suit('#fff', '#6B7186')], extra: sketch });
