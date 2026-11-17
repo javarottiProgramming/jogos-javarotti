@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="data:,">
-<title>Java's Brick 1.0.19</title>
+<title>Java's Brick 1.0.20</title>
 <style>
   html, body { margin: 0; height: 100%; background: #07061a; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -17,7 +17,7 @@
 /*==ENGINE:core==  JGK (Javarotti Game Kit) 2D · registros, save, canvas, entrada, cenas, loop */
 // Motor JGK — Javarotti Game Kit. Cada jogo do time usa este mesmo núcleo.
 const K = (window.K = window.K || {});
-K.version = '1.0.19';
+K.version = '1.0.20';
 K.game = "Java's Brick";
 K.W = 800;
 K.H = 600;
@@ -530,19 +530,14 @@ window.addEventListener('pagehide', () => AU.sleep());
 /*==ENGINE:play==  JGK · jogo de quebra-tijolos: física, blocos, poderes, Núcleo, desenho da fase */
 const PL = (K.play = {});
 // grade: 12 colunas por padrão; fases avançadas podem usar até 20 (mosaicos de palavras)
-let PL_COLS = 12, PL_CW = 64, PL_CH = 30, PL_X0 = 16, PL_Y0 = 84, PL_BW = 56, PL_BH = 22;
+// blocos pequenos e iguais em todas as telas: passo de linha 20 px, bloco 14 px de altura, grade ocupando 72% da largura
+let PL_COLS = 12, PL_CW = 46, PL_CH = 20, PL_X0 = 16, PL_Y0 = 72, PL_BW = 40, PL_BH = 14;
 const PL_PH = 14;                         // raquete (a altura do centro dela é PL.py())
 // geometria vertical da fase. No modo toque (K.touch) sobra uma faixa embaixo do campo para os 2 botões de seta,
-// então a raquete e o chão sobem e a grade de blocos se ajusta (PL.fitRows)
+// então a raquete e o chão sobem (a grade de blocos é pequena o bastante para sempre sobrar espaço)
 PL.strip = function () { return K.touch ? (K.wide() ? 78 : 96) : 0; };
 PL.floor = function () { return K.H - PL.strip(); };                 // chão do campo: a bola que passa dele se perde
 PL.py = function () { return PL.floor() - (K.touch ? 30 : 44); };   // altura do centro da raquete
-// altura de cada linha de blocos: 30 px; no modo toque encolhe (até 20) para a última linha ficar acima da raquete
-PL.fitRows = function (nrows) {
-  PL_CH = 30;
-  if (K.touch) PL_CH = K.clamp(Math.floor((PL.py() - 70 - PL_Y0) / Math.max(1, nrows)), 20, 30);
-  PL_BH = PL_CH - 8;
-};
 const PL_STEP = 1 / 120;                  // passo fixo
 const PL_DEFAULT_LEGEND = {
   '1': 'basico', '2': 'dupla', '3': 'tripla', '#': 'indestrutivel', '*': 'explosivo', G: 'nucleo',
@@ -563,10 +558,9 @@ PL.start = function (levelId) {
   const legend = Object.assign({}, PL_DEFAULT_LEGEND, def.legend || {});
   // grade da fase: a largura total fica em 768 px, então blocos menores em fases mais largas
   PL_COLS = Math.min(20, Math.max(1, def.cols || 12));
-  PL_CW = Math.floor(768 / PL_COLS);
-  PL_BW = PL_CW - 8;
+  PL_CW = Math.floor(768 * 0.72 / PL_COLS);
+  PL_BW = PL_CW - 6;
   PL_X0 = Math.floor((K.W - PL_CW * PL_COLS) / 2);
-  PL.fitRows(def.rows.length);
   const bricks = [];
   def.rows.forEach((row, r) => {
     for (let c = 0; c < PL_COLS; c++) {
@@ -580,9 +574,9 @@ PL.start = function (levelId) {
       bricks.push({
         c, r, id: bname, def: bd, hp, maxHp: hp, dead: false, flash: 0,
         letter: L && L.letter, move: bd.move || null,
-        baseX: PL_X0 + c * PL_CW + 4,
+        baseX: PL_X0 + c * PL_CW + 3,
         y: PL_Y0 + r * PL_CH,
-        x: PL_X0 + c * PL_CW + 4,
+        x: PL_X0 + c * PL_CW + 3,
       });
     }
   });
@@ -760,8 +754,6 @@ PL.relayout = function () {
     G.paddle.x += dx; PL_X0 += dx; G.vw = K.W;
   }
   if (G.vh !== K.H) {
-    PL.fitRows(G.def.rows.length);
-    G.bricks.forEach((b) => { b.y = PL_Y0 + b.r * PL_CH; });
     G.balls.forEach((b) => { if (b.stuck) b.y = PL.py() - PL_PH / 2 - b.r - 1; });
     G.vh = K.H;
   }
