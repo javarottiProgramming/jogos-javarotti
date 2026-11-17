@@ -7,7 +7,7 @@ Portfólio rápido dos jogos do Pedro Javarotti: um painel para escolher o jogo 
 | **Kuku e a Semente do Sol** (plataforma 2D) | 2.8 | `jogos/kuku/` |
 | **Pedrada de Palito** (FPS de estilingue) | 1.1.5 | `jogos/pedrada/` |
 | **Cacos de Sol** (RPG de ação 3D) | 1.0.3 | `jogos/cacos-de-sol/` |
-| **Java's Brick** (quebra-tijolos) | 1.0.16 | `jogos/javas-brick/` |
+| **Java's Brick** (quebra-tijolos) | 1.0.17 | `jogos/javas-brick/` |
 
 Cada jogo é **um único arquivo HTML** (o `releases/*.html` do repositório original), copiado sem alteração para `jogos/<id>/index.html`.
 Os códigos-fonte continuam nos repositórios dos próprios jogos.
