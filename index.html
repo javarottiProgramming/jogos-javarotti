@@ -406,6 +406,7 @@ const GAMES = {
 };
 
 /* Histórico de versões (botão "histórico" de cada jogo): [versão, data/hora de Brasília, frase], da mais nova para a mais antiga.
+   Horário SEMPRE de Brasília (UTC−3), nunca UTC. O container dos agentes está em UTC: use TZ=America/Sao_Paulo date.
    Data sem hora (só AAAA-MM-DD) = o dia é conhecido, a hora não; null = data não registrada.
    A cada versão nova de um jogo, acrescente a linha NO TOPO da lista dele (a versão do topo é a marcada como "atual"). */
 const HIST = {
@@ -442,8 +443,8 @@ const HIST = {
     ['1.0', '2026-11-12', 'Primeira entrega: motor FPS, 3 fases com chefe, 4 bots, 3 chefes e 3 mundos.']
   ],
   'cacos-de-sol': [
-    ['1.3.0', '2026-11-17T04:30', 'Opções funcionam no toque (controles que arrastam e tamanho do minimapa visível), zoom no mapa e créditos enxutos.'],
-    ['1.2.2', '2026-11-17T03:05', 'O aviso de ação (Falar, Abrir, Colher…) não fica mais escondido atrás da dica do mouse.'],
+    ['1.3.0', '2026-11-17T01:30', 'Opções funcionam no toque (controles que arrastam e tamanho do minimapa visível), zoom no mapa e créditos enxutos.'],
+    ['1.2.2', '2026-11-17T00:05', 'O aviso de ação (Falar, Abrir, Colher…) não fica mais escondido atrás da dica do mouse.'],
     ['1.2.1', '2026-11-17T02:35', 'O texto de esquiva não sai mais cortado.'],
     ['1.2.0', '2026-11-17', 'O botão de ação diz o que vai acontecer (Falar, Abrir, Minerar, Descansar) e rolar virou esquiva de verdade: cancela golpes, atravessa projéteis e mostra ESQUIVOU!.'],
     ['1.1.1', '2026-11-17T00:45', 'O objetivo no mapa não esconde mais a vila nem você.'],

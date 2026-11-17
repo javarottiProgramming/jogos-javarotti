@@ -15,7 +15,13 @@ Os códigos-fonte continuam nos repositórios dos próprios jogos.
 ## Como atualizar um jogo
 Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a versão no `badge` do `index.html` **e o campo `v` do jogo no objeto `GAMES`** (ele evita que o navegador mostre a versão antiga em cache dentro do quadro) e faça push na `main`.
 
-**Histórico:** a cada versão nova, acrescente uma linha **no topo** da lista do jogo no objeto `HIST` do script (`['versão', 'AAAA-MM-DDThh:mm' em horário de Brasília, 'uma frase']`). É o que o link *histórico* de cada cartão mostra; a versão do topo aparece como "atual". As frases vêm do `CHANGELOG.md` de cada jogo.
+**Histórico:** a cada versão nova, acrescente uma linha **no topo** da lista do jogo no objeto `HIST` do script (`['versão', 'AAAA-MM-DDThh:mm', 'uma frase']`). É o que o link *histórico* de cada cartão mostra; a versão do topo aparece como "atual". As frases vêm do `CHANGELOG.md` de cada jogo.
+
+**Regra de horário (vale para qualquer PR que atualize a versão de um jogo, inclusive de outro repositório):**
+- O horário é sempre o de **Brasília (UTC−3)**, nunca UTC. Os containers e servidores que rodam os agentes ficam em UTC, então `date` sozinho mostra a hora errada.
+- Para pegar a hora certa use: `TZ=America/Sao_Paulo date '+%Y-%m-%dT%H:%M'`. Brasília não tem horário de verão desde 2019, então o desvio é sempre de 3 horas.
+- Use a hora em que a versão foi publicada. Se a hora for de um commit, converta esse commit para Brasília antes de gravar.
+- Se só o dia for conhecido, grave `AAAA-MM-DD` sem hora.
 
 ## Como adicionar um jogo novo
 1. `jogos/<id>/index.html` com o HTML do jogo.
