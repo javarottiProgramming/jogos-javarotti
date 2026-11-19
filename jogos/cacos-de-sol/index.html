@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.3.0</title>
+<title>Cacos de Sol 1.3.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -4291,7 +4291,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.3.0', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.3.2', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -6215,19 +6215,93 @@ UI.optPanel = function (l, back) {
   K.MMS.forEach((n, i) => { const b = UI.btn(n, () => { K.setMmSize(i); K.persist(); mmUpd(); }, { cls: 'small', parent: mmr }); b.dataset.mm = i; mmb.push(b); }); mmUpd();
   const z = UI.btn('Zerar progresso', () => { const c = h('div', 'panel', '<h2>Zerar o progresso?</h2><p>Apaga a partida salva, finais e recordes. As opções são mantidas.</p>', l.el); c.style.cssText += ';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:24rem;text-align:center;background:#fff'; const r = h('div', 'row', '', c); r.style.justifyContent = 'center'; UI.btn('Cancelar', () => { c.remove(); setFocus(0); }, { parent: r, cls: 'aqua' }); UI.btn('Zerar tudo', () => { K.resetSave(); c.remove(); K.ui.toast && K.ui.toast('Progresso zerado.'); if (K.sceneName !== 'play') K.go('title'); }, { parent: r, cls: 'pri' }); setFocus(0); }, { cls: 'pri small', parent: p }); z.style.marginTop = '.8rem';
 };
+/* ---------------------------------------------------------------- pop-up de item (1.3.2) — UI.itemModal
+ * Regra: CLICAR EM UM ITEM SÓ INSPECIONA. Quem gasta recurso (comprar, vender, fabricar) é o botão de ação DENTRO do pop-up, depois do jogador ler.
+ * Componente reutilizável: loja, fabricação, e (item 18 do roadmap) inventário, menu do personagem etc. API em docs/ENGINE_API.md. */
+K.css(`
+.im{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:31rem;max-width:calc(var(--vw,1vw)*94);max-height:calc(var(--vh,1vh)*92);display:flex;flex-direction:column;padding:.9rem 1.2rem}
+.im-head{display:flex;gap:.9rem;align-items:center;flex:none}
+.im-ic{flex:none;width:5rem;height:5rem;border:.22rem solid var(--ink);border-radius:.9rem;background:var(--paper2);overflow:hidden}.im-ic canvas{width:100%;height:100%;display:block}
+.im-head h2{margin:0 0 .3rem;overflow-wrap:anywhere}
+.im-tags{display:flex;flex-wrap:wrap;gap:.35rem}.im-tag{font:400 .85rem 'Lilita One',sans-serif;border:.16rem solid var(--ink);border-radius:.5rem;padding:.02rem .5rem;background:var(--paper2);color:var(--ink)}
+.im-tag.raro{background:var(--sky)}.im-tag.epico{background:#d34cae;color:#fff}.im-tag.lendario{background:var(--sun)}
+.im-body{flex:1 1 auto;min-height:0;overflow:auto;margin:.55rem 0;overflow-wrap:anywhere}
+.im-desc{font-weight:800;line-height:1.35;font-size:1rem}
+.im-sec{margin-top:.55rem}.im-sec h3{margin:0 0 .2rem;font:400 1rem 'Lilita One',sans-serif;color:var(--coral2)}
+.im-ing{display:flex;align-items:center;gap:.5rem;padding:.12rem 0;font-weight:800;font-size:.95rem}.im-ing canvas{width:2rem;height:2rem;flex:none}.im-ing span{flex:1;min-width:0}.im-ing em{font:400 1rem 'Lilita One',sans-serif;font-style:normal;white-space:nowrap}.im-ing.no em{color:var(--coral2)}.im-ing.ok em{color:var(--leaf2)}
+.im-why{flex:none;margin:0 0 .5rem;padding:.3rem .7rem;border:.18rem dashed var(--coral2);border-radius:.6rem;background:#fff;color:var(--coral2);font:400 1.05rem 'Lilita One',sans-serif}
+.im-foot{flex:none;display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap}.im-foot .btn{flex:1 1 8rem}
+`);
+UI.IM_GUARD_MS = 250;   /* o clique/toque que ABRIU o pop-up não pode "vazar" para o botão dele (clique duplo, toque que repete) */
+UI.ITEM_TIPO = { arma: 'Arma', amuleto: 'Amuleto', consumivel: 'Consumível', material: 'Material', chave: 'Item especial' };
+UI.ITEM_RAR = { comum: 'Comum', raro: 'Raro', epico: 'Épico', lendario: 'Lendário' };
+/* linhas "Atributo → valor" de um item (arma/amuleto: stats; consumível: cura, Brilho, buff) */
+UI.itemRows = function (it) {
+  const NM = { atk: 'Ataque', crit: 'Crítico', aspd: 'Velocidade de golpe', reach: 'Alcance', hp: 'Vida', mp: 'Brilho', def: 'Defesa', st: 'Fôlego', mpr: 'Regen. Brilho', spd: 'Velocidade' }, rows = [], st = it.stats || {};
+  for (const k in st) rows.push([NM[k] || k, k === 'crit' ? '+' + Math.round(st[k] * 100) + '%' : k === 'aspd' || k === 'reach' ? '×' + st[k] : '+' + st[k]]);
+  if (it.heal) rows.push(['Cura', '+' + it.heal + ' de vida']); if (it.mp) rows.push(['Brilho', '+' + it.mp]);
+  if (it.buff) for (const k in it.buff) if (k !== 't') rows.push([NM[k] || k, '×' + it.buff[k] + ' por ' + (it.buff.t || 30) + ' s']);
+  return rows;
+};
+const imCacos = n => n + (n === 1 ? ' caco' : ' cacos');
+/* o que impede a ação? → texto do motivo, ou '' se pode. Usado ao abrir e depois de cada tentativa */
+UI.itemWhy = function (id, mode, o) {
+  const G = K.G, it = REG.item[id]; o = o || {};
+  if (mode === 'buy') { if (G.coins < o.price) return 'Faltam ' + imCacos(o.price - G.coins) + ' para comprar.'; }
+  else if (mode === 'sell') { if (it.tipo === 'chave') return 'Item importante: não pode ser vendido.'; if (!K.inv.has(id)) return 'Você não tem este item.'; if ((G.equip.weapon === id || G.equip.charm === id) && K.inv.count(id) <= 1) return 'Equipado agora: equipe outro antes de vender.'; }
+  else if (mode === 'craft') { const r = REG.recipe[o.recipe]; if (!r) return 'Receita desconhecida.'; const miss = Object.keys(r.in).filter(k => !K.inv.has(k, r.in[k])); if (miss.length) return 'Faltam ingredientes: ' + miss.map(k => (REG.item[k] || { nome: k }).nome).join(', ') + '.'; }
+  return o.can ? (o.can() || '') : '';
+};
+/* UI.itemModal(id, mode, o) — mode: 'info' (só detalhes) | 'buy' | 'sell' | 'craft'
+ *   o.price   (buy/sell) preço já calculado · o.recipe (craft) id da receita · o.can() → texto de motivo extra (ex.: "Mochila cheia.") ou ''
+ *   o.confirm() → true/false: troca a ação padrão (K.buy/K.sell/K.craft) · o.onDone(ok) depois de uma ação que deu certo · o.onClose() ao fechar, por qualquer caminho
+ * Devolve { close, layer }. Foco abre em Cancelar (nunca no botão de ação); clique fora / Esc / Cancelar fecham SÓ o pop-up. */
+UI.itemModal = function (id, mode, o) {
+  const it = REG.item[id]; if (!it) return null; o = o || {}; mode = mode || 'info'; const G = K.G, r = mode === 'craft' ? REG.recipe[o.recipe] : null; if (mode === 'craft' && !r) return null;
+  if (UI._im) UI._im.close(true);
+  const t0 = performance.now(), young = () => performance.now() - t0 < UI.IM_GUARD_MS; let busy = false, dead = false;
+  const l = UI.layer('itemmodal', { modal: true, onBack: () => close() }); l.el.setAttribute('role', 'dialog'); l.el.setAttribute('aria-modal', 'true');
+  const p = h('div', 'panel im', '', l.el); const head = h('div', 'im-head', '', p), ic = h('div', 'im-ic', '', head); ic.appendChild(UI.itemIconCanvas(id, 96)); const tt = h('div', '', '', head); tt.style.minWidth = 0;
+  h('h2', '', esc(it.nome), tt); const tags = h('div', 'im-tags', '', tt), rar = it.rar || 'comum'; h('span', 'im-tag', UI.ITEM_TIPO[it.tipo] || esc(it.tipo || 'Item'), tags); h('span', 'im-tag ' + rar, (rar === 'comum' ? '' : '◆ ') + (UI.ITEM_RAR[rar] || rar), tags);
+  const body = h('div', 'im-body', '', p); h('div', 'im-desc', esc(it.desc || 'Sem descrição.'), body);
+  const rows = UI.itemRows(it); if (rows.length) { const s = h('div', 'im-sec', '<h3>Atributos e efeito</h3>', body), kv = h('div', 'kv', '', s); rows.forEach(([a, b]) => { kv.innerHTML += '<b>' + esc(a) + '</b><span>' + esc(b) + '</span>'; }); }
+  const money = h('div', 'im-sec', '', body), mk_ = h('div', 'kv', '', money);
+  if (mode === 'buy') { money.insertAdjacentHTML('afterbegin', '<h3>Preço</h3>'); mk_.innerHTML = '<b>Custa</b><span>' + imCacos(o.price) + '</span><b>Você tem</b><span>' + imCacos(G.coins) + '</span><b>Depois da compra</b><span>' + (G.coins >= o.price ? imCacos(G.coins - o.price) : '—') + '</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>'; }
+  else if (mode === 'sell') { money.insertAdjacentHTML('afterbegin', '<h3>Venda</h3>'); mk_.innerHTML = '<b>Você recebe</b><span>' + imCacos(o.price) + '</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span><b>Seus cacos depois</b><span>' + imCacos(G.coins + o.price) + '</span>'; }
+  else if (mode === 'craft') { money.insertAdjacentHTML('afterbegin', '<h3>Ingredientes · você tem × precisa</h3>'); mk_.remove(); Object.keys(r.in).forEach(k => { const have = K.inv.count(k), need = r.in[k], good = have >= need, row = h('div', 'im-ing ' + (good ? 'ok' : 'no'), '', money); row.appendChild(UI.itemIconCanvas(k, 40)); h('span', '', esc((REG.item[k] || { nome: k }).nome), row); h('em', '', (good ? '✓ ' : '✗ ') + have + ' × ' + need, row); }); h('div', 'kv', '<b>Rende</b><span>' + (r.out.n || 1) + ' un.</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>', money).style.marginTop = '.3rem'; }
+  else money.remove();
+  const whyEl = h('div', 'im-why', '', p); whyEl.setAttribute('role', 'status'); const foot = h('div', 'im-foot', '', p);
+  function close(quiet) { if (dead) return; dead = true; if (UI._im && UI._im.layer === l) UI._im = null; UI.drop(l); if (!quiet && o.onClose) o.onClose(); }
+  const cancel = UI.btn(mode === 'info' ? 'Fechar' : 'Cancelar', () => close(), { parent: foot });   /* 1º do DOM = foco inicial; estilo normal (ghost some sobre papel) */
+  let act = null; const VERB = { buy: 'Comprar', sell: 'Vender', craft: 'Fabricar' };
+  const refresh = () => { const why = mode === 'info' ? '' : UI.itemWhy(id, mode, o); whyEl.style.display = why ? '' : 'none'; whyEl.textContent = why ? '⚠ ' + why : ''; if (act) { act.disabled = !!why; act.title = why; } };
+  if (mode !== 'info') act = UI.btn(VERB[mode], () => {
+    if (busy || dead || young() || act.disabled) return;   /* clique que abriu o pop-up / clique duplo não confirma */
+    busy = true; let ok;
+    if (o.confirm) ok = o.confirm(); else if (mode === 'buy') { ok = K.buy(id, o.price); if (ok) K.ui.toast('Comprou ' + it.nome + ' por ' + imCacos(o.price) + '.'); } else if (mode === 'sell') { ok = K.sell(id, o.price); if (ok) K.ui.toast('Vendeu ' + it.nome + ' por ' + imCacos(o.price) + '.'); } else ok = K.craft(o.recipe);
+    if (ok) { if (o.onDone) o.onDone(true, mode === 'buy' ? 'Comprou ' + it.nome + ' por ' + imCacos(o.price) + '.' : mode === 'sell' ? 'Vendeu ' + it.nome + ' por ' + imCacos(o.price) + '.' : 'Fabricou ' + it.nome + '.'); close(); } else { busy = false; refresh(); }
+  }, { parent: foot, cls: 'pri' });
+  l.el.addEventListener('click', e => { if (e.target === l.el && !young()) close(); });   /* clicar fora fecha SÓ o pop-up */
+  refresh(); const m = { close, layer: l, act, cancel }; UI._im = m; setFocus(0); return m;
+};
 UI.shop = function (npcDef) {
   const G = K.G; K.uiBlock = true; const sh = npcDef && npcDef.shop; if (!sh) { K.uiBlock = false; return; } const stock = Array.isArray(sh) ? sh : sh.stock, buyMul = sh.buyMul || 1, sellMul = sh.sellMul === undefined ? .4 : sh.sellMul; const l = UI.layer('shop', { modal: true, onBack: () => { UI.drop(l); K.uiBlock = false; } });
-  const p = panelFrame(l, (npcDef.nome || 'Loja') + ' · ' + G.coins + ' cacos', 48); const mode = { v: 'buy' }; const tabs = h('div', 'row', '', p), body = h('div', 'grid', '', p);
-  const render = () => { tabs.innerHTML = ''; body.innerHTML = ''; h('h1', '', '', tabs).remove(); for (const [k, n] of [['buy', 'Comprar'], ['sell', 'Vender']]) { const t = h('div', 'tab' + (mode.v === k ? ' on' : ''), n, tabs); t.dataset.nav = 1; t.addEventListener('click', () => { mode.v = k; render(); setFocus(0); }); }
-    p.querySelector('h1').textContent = (npcDef.nome || 'Loja') + ' · ' + G.coins + ' cacos'; const arr = mode.v === 'buy' ? stock.map(id => ({ id, it: REG.item[id], n: 0 })).filter(o => o.it) : K.inv.list().filter(o => o.it.preco && o.it.tipo !== 'chave');
+  const p = panelFrame(l, (npcDef.nome || 'Loja') + ' · ' + G.coins + ' cacos', 48); const mode = { v: 'buy' }; const tabs = h('div', 'row', '', p), body = h('div', 'grid', '', p), msg = h('div', 'shop-msg', '', p); p.insertBefore(msg, body); msg.style.cssText = 'font-weight:800;font-size:.95rem;margin:.4rem 0;min-height:1.3rem';
+  const render = () => { tabs.innerHTML = ''; body.innerHTML = ''; h('h1', '', '', tabs).remove(); for (const [k, n] of [['buy', 'Comprar'], ['sell', 'Vender']]) { const t = h('div', 'tab' + (mode.v === k ? ' on' : ''), n, tabs); t.dataset.nav = 1; t.addEventListener('click', () => { mode.v = k; msg.textContent = ''; render(); setFocus(0); }); }
+    p.querySelector('h1').textContent = (npcDef.nome || 'Loja') + ' · ' + G.coins + ' cacos'; if (!msg.textContent) msg.textContent = 'Toque num item para ver os detalhes. Só ' + (mode.v === 'buy' ? 'compra' : 'vende') + ' no botão do pop-up.'; const arr = mode.v === 'buy' ? stock.map(id => ({ id, it: REG.item[id], n: 0 })).filter(o => o.it) : K.inv.list().filter(o => o.it.preco && o.it.tipo !== 'chave');
+    if (!arr.length) h('div', '', '<i>Nada para vender por aqui.</i>', body);
     arr.forEach(o => { const price = Math.round((o.it.preco || 10) * (mode.v === 'buy' ? buyMul : sellMul)); const c = h('div', 'card rar-' + (o.it.rar || 'comum'), '', body); c.dataset.nav = 1; c.appendChild(UI.itemIconCanvas(o.id)); h('div', '', esc(o.it.nome), c); h('div', '', '<b>' + price + '</b>', c); if (o.n > 1) h('span', 'q', 'x' + o.n, c); c.title = o.it.desc || '';
-      c.addEventListener('click', () => { if (mode.v === 'buy') K.buy(o.id, price); else K.sell(o.id, price); render(); setFocus(UI.focusIdx); }); }); };
+      /* 1.3.2: clique só INSPECIONA. Cobrar/pagar é o botão do pop-up (bug: clicar para ver os detalhes comprava na hora) */
+      c.addEventListener('click', () => { const fi = Math.max(0, navItems().indexOf(c)); UI.itemModal(o.id, mode.v, { price, onDone: (ok, txt) => { msg.textContent = '✔ ' + txt; render(); }, onClose: () => setFocus(fi) }); }); }); };
   render(); setFocus(0);
 };
 UI.craft = function (at) {
   const G = K.G; K.uiBlock = true; const l = UI.layer('craft', { modal: true, onBack: () => { UI.drop(l); K.uiBlock = false; } }); const p = panelFrame(l, 'Fabricar', 46);
-  const recs = Object.values(REG.recipe).filter(r => !r.at || r.at === at || at === true);
-  const render = () => { [...p.querySelectorAll('.rec')].forEach(e => e.remove()); recs.forEach(r => { const it = REG.item[r.out.id]; if (!it) return; const ok = Object.keys(r.in).every(k => K.inv.has(k, r.in[k])); const row = h('div', 'card rec', '', p); row.style.cssText += ';text-align:left;display:flex;gap:.7rem;align-items:center;margin-bottom:.4rem'; row.appendChild(UI.itemIconCanvas(r.out.id, 64)); h('div', '', '<b>' + esc(it.nome) + '</b> x' + (r.out.n || 1) + '<br><small>' + Object.keys(r.in).map(k => esc((REG.item[k] || { nome: k }).nome) + ' ' + K.inv.count(k) + '/' + r.in[k]).join(' · ') + '</small>', row).style.flex = 1; const b = UI.btn('Fabricar', () => { K.craft(r.id); render(); }, { cls: 'leaf small', parent: row }); b.disabled = !ok; }); setFocus(0); };
+  const recs = Object.values(REG.recipe).filter(r => !r.at || r.at === at || at === true); const msg = h('div', 'shop-msg', 'Toque numa receita para ver os detalhes. Só gasta ingredientes no botão do pop-up.', p); msg.style.cssText = 'font-weight:800;font-size:.95rem;margin:.2rem 0 .5rem';
+  const render = fi => { [...p.querySelectorAll('.rec')].forEach(e => e.remove()); recs.forEach(r => { const it = REG.item[r.out.id]; if (!it) return; const ok = Object.keys(r.in).every(k => K.inv.has(k, r.in[k])); const row = h('div', 'card rec', '', p); row.style.cssText += ';text-align:left;display:flex;gap:.7rem;align-items:center;margin-bottom:.4rem' + (ok ? '' : ';opacity:.7'); row.appendChild(UI.itemIconCanvas(r.out.id, 64)); h('div', '', '<b>' + esc(it.nome) + '</b> x' + (r.out.n || 1) + '<br><small>' + Object.keys(r.in).map(k => esc((REG.item[k] || { nome: k }).nome) + ' ' + K.inv.count(k) + '/' + r.in[k]).join(' · ') + '</small>', row).style.flex = 1;
+      /* 1.3.2: a linha e o botão só ABREM o pop-up; os ingredientes só saem no "Fabricar" de dentro dele */
+      const open = () => { const i = Math.max(0, navItems().indexOf(b)); let dirty = false; UI.itemModal(r.out.id, 'craft', { recipe: r.id, onDone: (ok2, txt) => { msg.textContent = '✔ ' + txt; dirty = true; }, onClose: () => { if (dirty) render(i); else setFocus(i); } }); };
+      const b = UI.btn(ok ? 'Fabricar…' : 'Ver', open, { cls: 'leaf small', parent: row }); row.addEventListener('click', open); }); setFocus(fi || 0); };
   render();
 };
 UI.campMenu = function (c) {
