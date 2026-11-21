@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.3.3</title>
+<title>Cacos de Sol 1.3.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -4291,7 +4291,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.3.3', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.3.4', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -4419,10 +4419,10 @@ K.boot = async first => {
 
 /*==ENGINE:input==  teclado, mouse (pointer lock), toque (analógico flutuante + arrastar para a câmera + botões), gamepad, piloto automático (bot) */
 const IN = K.input = { mv: { x: 0, y: 0 }, look: { x: 0, y: 0 }, zoom: 0, down: {}, hit: {}, rel: {}, held: {}, bufT: {}, bot: null, dev: 'kb', locked: false, touch: false };
-/* ações do jogo: attack(segurar = golpe carregado) roll jump skill1 skill2 skill3 interact lock pause map inv quests pot1 pot2 camreset */
-const ACTS = ['attack', 'roll', 'jump', 'skill1', 'skill2', 'skill3', 'interact', 'lock', 'pause', 'map', 'inv', 'quests', 'pot1', 'pot2', 'camreset'];
+/* ações do jogo: attack(segurar = golpe carregado) roll jump skill1 skill2 skill3 interact lock pause map inv char(H, tela do personagem) quests pot1 pot2 camreset */
+const ACTS = ['attack', 'roll', 'jump', 'skill1', 'skill2', 'skill3', 'interact', 'lock', 'pause', 'map', 'inv', 'char', 'quests', 'pot1', 'pot2', 'camreset'];
 const KB = {}, MS = {}, TC = {}, PD = {}, LATCH = {};   // LATCH: toque curtíssimo (menor que um passo) ainda vale
-const KEYMAP = { Space: 'jump', ShiftLeft: 'roll', ShiftRight: 'roll', KeyQ: 'skill1', KeyR: 'skill2', KeyX: 'skill3', KeyE: 'interact', Enter: 'interact', KeyF: 'lock', Tab: 'map', KeyM: 'map', KeyI: 'inv', KeyJ: 'quests', KeyL: 'quests', Digit1: 'pot1', Digit2: 'pot2', KeyC: 'camreset', KeyP: 'pause', Escape: 'pause', KeyZ: 'attack', KeyK: 'attack' };
+const KEYMAP = { Space: 'jump', ShiftLeft: 'roll', ShiftRight: 'roll', KeyQ: 'skill1', KeyR: 'skill2', KeyX: 'skill3', KeyE: 'interact', Enter: 'interact', KeyF: 'lock', Tab: 'map', KeyM: 'map', KeyI: 'inv', KeyH: 'char', KeyJ: 'quests', KeyL: 'quests', Digit1: 'pot1', Digit2: 'pot2', KeyC: 'camreset', KeyP: 'pause', Escape: 'pause', KeyZ: 'attack', KeyK: 'attack' };
 const MOVEKEYS = { KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
 const mvKeys = {};
 const SENS = () => .5 + SAVE.opt.sens * .1;                  // nível 5 = 1,0
@@ -5035,10 +5035,12 @@ K.renderObj = function (obj, w, h, o) {
   const g = c.getContext('2d'); g.translate(0, h); g.scale(1, -1); g.drawImage(t2, 0, 0);       // o buffer vem de cabeça pra baixo
   PORT.scene.remove(obj); PORT.scene.background = oldBg; rt.dispose(); return c;
 };
-/* retrato 3D para diálogos/menus: K.portrait('vovo_brasa', {w:192,h:192, pose:'idle'}) → <canvas> (em cache). Câmera: def.portrait = {y, d, x} para ajustar o enquadramento. */
+/* retrato 3D para diálogos/menus: K.portrait('vovo_brasa', {w:192,h:192, pose:'idle'}) → <canvas> (em cache). Câmera: def.portrait = {y, d, x} para ajustar o enquadramento.
+ * 1.3.4: o.cam = {y,d,x} troca o enquadramento só nesta chamada (corpo inteiro na tela do personagem) · o.dress(inst) veste o modelo antes de renderizar (arma na mão)
+ *        · o.key entra na chave do cache: quem veste o modelo PRECISA passar uma chave que mude com a roupa (ex.: o equipamento), senão volta o retrato velho. */
 K.portrait = function (id, o) {
-  o = o || {}; const w = o.w || 192, h = o.h || 192, key = id + w + h + (o.pose || '') + (o.bg || ''); if (PORT.cache[key]) { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(PORT.cache[key], 0, 0); return c; }
-  const def = REG.model[id] || {}, inst = K.model(id, { anim: o.pose || 'idle' }); inst.play(o.pose || 'idle'); inst.update(.6); const hh = (def.height || 1.75) * (def.scale || 1), pr = def.portrait || {}; const y = pr.y || hh * .86, d = pr.d || Math.max(1.5, hh * 1.35);
+  o = o || {}; const w = o.w || 192, h = o.h || 192, key = id + w + h + (o.pose || '') + (o.bg || '') + (o.key ? '|' + o.key : '') + (o.cam ? JSON.stringify(o.cam) : ''); if (PORT.cache[key]) { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(PORT.cache[key], 0, 0); return c; }
+  const def = REG.model[id] || {}, inst = K.model(id, { anim: o.pose || 'idle' }); if (o.dress) o.dress(inst); inst.play(o.pose || 'idle'); inst.update(.6); const hh = (def.height || 1.75) * (def.scale || 1), pr = Object.assign({}, def.portrait || {}, o.cam || {}); const y = pr.y || hh * .86, d = pr.d || Math.max(1.5, hh * 1.35);
   const c = K.renderObj(inst.obj, w, h, { bg: o.bg, cam: cam => { cam.position.set(pr.x || .25, y + .05, d); cam.lookAt(0, y - .02, 0); } }); inst.dispose(); PORT.cache[key] = c; const c2 = document.createElement('canvas'); c2.width = w; c2.height = h; c2.getContext('2d').drawImage(c, 0, 0); return c2;
 };
 K.clearPortraits = () => { PORT.cache = {}; };
@@ -5246,17 +5248,21 @@ function newPlayer(x, z) {
 }
 /* ------------------------------------------------------------------ atributos */
 K.xpFor = l => Math.round(34 * Math.pow(l, 1.5));
+/* 1.3.4: atributos somam TODOS os slots liberados do registro (K.SLOTS, 07-rpg.js), não mais "arma + amuleto" fixos.
+ * Somam: hp mp st atk def crit mpr · multiplicam: aspd reach. K.statsCalc é puro (serve para comparar "e se eu equipar isto?"). */
+K.equipStats = function (equip) { const t = { aspd: 1, reach: 1 }; for (const s of K.slotsOn()) { const it = REG.item[(equip || {})[s.id]], st = it && it.stats; if (!st) continue; for (const k in st) { if (k === 'aspd' || k === 'reach') t[k] *= st[k]; else t[k] = (t[k] || 0) + st[k]; } } return t; };
+K.statsCalc = function (l, equip, buff) { const e = K.equipStats(equip), b = buff || {};
+  return { maxhp: Math.round(100 + 16 * (l - 1) + (e.hp || 0)), maxmp: Math.round(50 + 6 * (l - 1) + (e.mp || 0)), maxst: 100 + (e.st || 0), atk: Math.round((9 + 2.4 * l + (e.atk || 0)) * (b.atk || 1)), defv: 2 + .9 * l + (e.def || 0), crit: .08 + (e.crit || 0), aspd: e.aspd * (b.aspd || 1), reach: e.reach, mpRegen: 1.2 + (e.mpr || 0) }; };
 K.statsRecalc = function (full) {
-  const G = K.G, p = G.pl, l = G.lvl, w = REG.item[G.equip.weapon] || {}, ch = REG.item[G.equip.charm] || {}, cs = ch.stats || {}, ws = w.stats || {};
-  const oldHp = p.maxhp, oldMp = p.maxmp; G.buff = {}; for (const k in (G.buffs || {})) { const m = G.buffs[k].mods; for (const f in m) if (f !== 't') G.buff[f] = (G.buff[f] || 1) * m[f]; }
-  p.maxhp = Math.round(100 + 16 * (l - 1) + (cs.hp || 0)); p.maxmp = Math.round(50 + 6 * (l - 1) + (cs.mp || 0)); p.maxst = 100 + (cs.st || 0);
-  p.atk = Math.round((9 + 2.4 * l + (ws.atk || 0) + (cs.atk || 0)) * (G.buff && G.buff.atk ? G.buff.atk : 1)); p.defv = 2 + .9 * l + (cs.def || 0); p.crit = .08 + (ws.crit || 0) + (cs.crit || 0); p.aspd = (ws.aspd || 1) * (G.buff && G.buff.aspd ? G.buff.aspd : 1); p.reach = (ws.reach || 1); p.mpRegen = 1.2 + (cs.mpr || 0);
+  const G = K.G, p = G.pl; const oldHp = p.maxhp, oldMp = p.maxmp; G.buff = {}; for (const k in (G.buffs || {})) { const m = G.buffs[k].mods; for (const f in m) if (f !== 't') G.buff[f] = (G.buff[f] || 1) * m[f]; }
+  Object.assign(p, K.statsCalc(G.lvl, G.equip, G.buff));
   if (!full) { p.hp += p.maxhp - oldHp; p.mp += p.maxmp - oldMp; } p.hp = Math.min(p.hp, p.maxhp); p.mp = Math.min(p.mp, p.maxmp);
 };
-/* arma em mãos: constrói o visual da arma equipada (item.model) e prende na mão direita */
+/* visual do equipamento: cada slot com `visual` prende o item.model no pivô do modelo (arma na mão direita). Usado no herói do jogo e no retrato da tela do personagem. */
+K.slotVisual = function (s, id, mi) { const it = REG.item[id], v = s.visual; if (!it || !v || !mi) return null; const g = it.model ? it.model(mk) : mk.grp(); const w = mk.grp({ parent: mi.parts[v.part] || mi.root }); w.rotation.set(v.rx || 0, v.ry || 0, v.rz || 0); w.position.set(v.x || 0, v.y || 0, v.z || 0); if (v.s) w.scale.setScalar(v.s); w.add(g); mk.outline(w, .03); return w; };
+K.dressModel = (mi, equip) => { const out = {}; for (const s of K.slotsOn()) { const o = K.slotVisual(s, equip[s.id], mi); if (o) out[s.id] = o; } return out; };
 K.equipVisual = function () {
-  const G = K.G, p = G.pl, it = REG.item[G.equip.weapon]; if (p.wObj) { p.wObj.parent && p.wObj.parent.remove(p.wObj); p.wObj = null; }
-  if (!it) return; const g = it.model ? it.model(mk) : mk.grp(); const w = mk.grp({ parent: p.mi.parts.handR || p.mi.root }); w.rotation.x = Math.PI / 2 * .9; w.add(g); mk.outline(w, .03); p.wObj = w;
+  const G = K.G, p = G.pl; for (const k in (p.eqObj || {})) { const o = p.eqObj[k]; o.parent && o.parent.remove(o); } p.eqObj = K.dressModel(p.mi, G.equip); p.wObj = p.eqObj.weapon || null;
 };
 /* ------------------------------------------------------------------ combate: ajudantes (também usados por habilidades e inimigos) */
 K.angTo = (x0, z0, x1, z1) => Math.atan2(x1 - x0, z1 - z0);
@@ -5775,14 +5781,37 @@ K.stubEnemy = (id, o) => { K.stubModel(id, o); const atk = o.ranged ? { tiro: { 
  *    steps:[{ text, obj:{type:'talk',npc} | {type:'kill',enemy:'gosma'|'*',n} | {type:'collect',item,n} | {type:'gather',node,n} | {type:'reach',x,z,r} | {type:'boss',enemy} | {type:'flag',flag} | {type:'enter',region} | {type:'chest',n} | {type:'craft',recipe} | {type:'use',item} | {type:'custom',check(G)},
  *             at:[x,z] (marcador), onStart(G), onDone(G) }], reward:{xp,coins,items:[{id,n}]}, onStart(G), onComplete(G) })
  * K.defDialog('id', { nodes:{ start:{ who:'vovo_brasa'|'faisca'|'narrador', text, next:'n2' | choices:[{t,go:'n3'|end:true,do(G),if(G),shop:true,craft:true}], do(G) } } })  ou  { lines:[{who,text},...] } */
+/* ---------------------------------------------------------------- equipamento: REGISTRO DE SLOTS (1.3.4, item 8 do roadmap)
+ * Cada slot é UMA linha de dados: id (= chave em G.equip, vai no save), nome, tipos de item aceitos (it.tipo), área no layout da tela do personagem (grid-area), on (liberado no jogo).
+ * LIBERAR UM SLOT = trocar on:false por on:true aqui (ou K.defSlot('helm', { on: true }) num arquivo de conteúdo) e criar itens com o tipo aceito (stats somam sozinhos).
+ * O layout da tela (UI.charPanel) já reserva a área de TODOS os slots; slot desligado aparece DESABILITADO no lugar dele (caixa tracejada "fechado", clicar só diz o que é); ao ligar vira espaço de verdade no mesmo lugar.
+ * padrao: item que volta quando o slot esvazia (a arma nunca fica vazia; sem padrao o botão do pop-up vira "Tirar") · ja: motivo quando o item já está ali
+ * visual: { part:'handR', rx,ry,rz, x,y,z, s } prende item.model no pivô do modelo (arma na mão; vale no jogo e no retrato da tela). Sem visual = só atributos. */
+K.SLOTS = [];
+K.defSlot = function (id, o) { let s = K.SLOTS.find(x => x.id === id); if (!s) { s = { id, nome: id, tipos: [], area: id, on: false }; K.SLOTS.push(s); } return Object.assign(s, o || {}); };
+K.defSlot('weapon', { nome: 'Arma', tipos: ['arma'], on: true, padrao: 'espada_madeira', ja: 'Já está na sua mão.', visual: { part: 'handR', rx: Math.PI / 2 * .9 } });
+K.defSlot('charm', { nome: 'Amuleto', tipos: ['amuleto'], on: true });
+K.defSlot('helm', { nome: 'Capacete', tipos: ['capacete'], on: false });      /* visual sugerido: { part: 'head', y: .2 } */
+K.defSlot('armor', { nome: 'Armadura', tipos: ['armadura'], on: false });     /* visual sugerido: { part: 'torso' } */
+K.defSlot('shield', { nome: 'Escudo', tipos: ['escudo'], on: false });        /* visual sugerido: { part: 'handL', ry: Math.PI / 2 } */
+K.defSlot('gloves', { nome: 'Luvas', tipos: ['luvas'], on: false });
+K.defSlot('boots', { nome: 'Botas', tipos: ['botas'], on: false });
+K.defSlot('ring', { nome: 'Anel', tipos: ['anel'], on: false });
+K.slotsOn = () => K.SLOTS.filter(s => s.on);
+K.slotFor = tipo => K.SLOTS.find(s => s.on && s.tipos.includes(tipo)) || null;
+K.isEquipped = id => !!id && !!K.G && K.slotsOn().some(s => K.G.equip[s.id] === id);
+/* equipamento como ficaria depois de "equipar/tirar" id (o mesmo que K.inv.equip faria) → usado na comparação da tela e do pop-up */
+K.equipAfter = function (id) { const G = K.G, it = REG.item[id], s = it && K.slotFor(it.tipo), e = Object.assign({}, G.equip); if (!s) return e; e[s.id] = G.equip[s.id] === id && !s.padrao ? null : id; return e; };
 K.inv = {
   count: id => (K.G.inv[id] || 0), has: (id, n) => (K.G.inv[id] || 0) >= (n || 1),
   add(id, n) { const G = K.G; n = n || 1; G.inv[id] = (G.inv[id] || 0) + n; K.emit('invchange', { id, n }); return G.inv[id]; },
-  remove(id, n) { const G = K.G; n = n || 1; if ((G.inv[id] || 0) < n) return false; G.inv[id] -= n; if (G.inv[id] <= 0) { delete G.inv[id]; if (G.equip.weapon === id) { G.equip.weapon = 'espada_madeira'; K.statsRecalc(); K.equipVisual(); } if (G.equip.charm === id) { G.equip.charm = null; K.statsRecalc(); } } return true; },
+  remove(id, n) { const G = K.G; n = n || 1; if ((G.inv[id] || 0) < n) return false; G.inv[id] -= n; if (G.inv[id] <= 0) { delete G.inv[id]; let ch = false; for (const sl of K.SLOTS) if (G.equip[sl.id] === id) { G.equip[sl.id] = sl.padrao || null; ch = true; } if (ch) { K.statsRecalc(); K.equipVisual(); } } return true; },
   list(tipo) { const G = K.G, out = []; for (const id in G.inv) { const it = REG.item[id]; if (!it) continue; if (tipo && it.tipo !== tipo) continue; out.push({ id, it, n: G.inv[id] }); } return out; },
-  equip(id) { const G = K.G, it = REG.item[id]; if (!it || !K.inv.has(id)) return false; if (it.tipo === 'arma') { G.equip.weapon = id; K.statsRecalc(); K.equipVisual(); } else if (it.tipo === 'amuleto') { G.equip.charm = G.equip.charm === id ? null : id; K.statsRecalc(); } else return false; K.sfx('ui_ok'); return true; },
+  /* equipar pelo REGISTRO DE SLOTS: o tipo do item escolhe o slot liberado. Já equipado num slot sem padrao → tira (amuleto). */
+  equip(id) { const G = K.G, it = REG.item[id]; if (!it || !K.inv.has(id)) return false; const s = K.slotFor(it.tipo); if (!s) return false; G.equip = K.equipAfter(id); K.statsRecalc(); K.equipVisual(); K.sfx('ui_ok'); K.emit('equip', { id, slot: s.id }); return true; },
+  unequip(slot) { const G = K.G, s = K.SLOTS.find(x => x.id === slot); if (!s || !G.equip[slot] || G.equip[slot] === s.padrao) return false; G.equip[slot] = s.padrao || null; K.statsRecalc(); K.equipVisual(); K.sfx('ui_ok'); K.emit('equip', { id: null, slot }); return true; },
   use(id) {
-    const G = K.G, p = G.pl, it = REG.item[id]; if (!it || !K.inv.has(id) || !p.alive) return false; if (it.tipo === 'arma' || it.tipo === 'amuleto') return K.inv.equip(id);
+    const G = K.G, p = G.pl, it = REG.item[id]; if (!it || !K.inv.has(id) || !p.alive) return false; if (K.slotFor(it.tipo)) return K.inv.equip(id);
     if (it.tipo !== 'consumivel') return false; let ok = false;
     if (it.heal) { if (p.hp >= p.maxhp && !it.mp && !it.buff) { K.ui.toast('Vida já está cheia.'); return false; } p.hp = Math.min(p.maxhp, p.hp + it.heal); ok = true; K.fx.text(p.x, p.y + 2.1, p.z, '+' + it.heal, { color: '#3DDC84' }); }
     if (it.mp) { p.mp = Math.min(p.maxmp, p.mp + it.mp); ok = true; K.fx.text(p.x, p.y + 2.4, p.z, '+' + it.mp + ' MP', { color: '#4DA3FF', size: .9 }); }
@@ -5865,14 +5894,15 @@ K.talkTo = function (n) {
 };
 /* ---------------------------------------------------------------- loja e fabricação */
 K.buy = (id, price) => { const G = K.G; if (G.coins < price) { K.sfx('erro'); K.ui.toast('Cacos insuficientes.'); return false; } G.coins -= price; K.inv.add(id, 1); K.sfx('comprar'); K.emit('buy', { id }); return true; };
-K.sell = (id, price) => { if (!K.inv.has(id)) return false; const G = K.G; if (G.equip.weapon === id || G.equip.charm === id) { if (K.inv.count(id) <= 1) { K.ui.toast('Item equipado.'); return false; } } K.inv.remove(id, 1); G.coins += price; K.sfx('comprar'); K.emit('sell', { id }); return true; };
+K.sell = (id, price) => { if (!K.inv.has(id)) return false; const G = K.G; if (K.isEquipped(id)) { if (K.inv.count(id) <= 1) { K.ui.toast('Item equipado.'); return false; } } K.inv.remove(id, 1); G.coins += price; K.sfx('comprar'); K.emit('sell', { id }); return true; };
 K.craft = function (id) { const G = K.G, r = REG.recipe[id]; if (!r) return false; for (const k in r.in) if (!K.inv.has(k, r.in[k])) { K.sfx('erro'); K.ui.toast('Faltam materiais.'); return false; } for (const k in r.in) K.inv.remove(k, r.in[k]); K.inv.add(r.out.id, r.out.n || 1); K.sfx('fabricar'); K.ui.toast('Fabricado: ' + REG.item[r.out.id].nome); K.emit('craft', { id }); return true; };
 /* ---------------------------------------------------------------- salvar / carregar */
 K.snapshot = function () {
   const G = K.G, p = G.pl; return { v: 1, lvl: G.lvl, xp: G.xp, coins: G.coins, inv: Object.assign({}, G.inv), equip: Object.assign({}, G.equip), q: JSON.parse(JSON.stringify(G.q)), flags: Object.assign({}, G.flags), nodes: Object.assign({}, G.nodes), opened: Object.assign({}, G.opened), kills: G.kills, deaths: G.deaths, dodges: G.dodges || 0, dodgesPerfect: G.dodgesPerfect || 0, play: G.play, tod: G.tod, day: G.day, x: G.rest.x, z: G.rest.z, hp: p.hp, pots: G.pots.slice(), slots: Object.assign({}, G.slots), won: G.won, track: G.track };
 };
 K.applySnapshot = function (s) {
-  const G = K.G, p = G.pl; Object.assign(G, { lvl: s.lvl, xp: s.xp, coins: s.coins, inv: s.inv, equip: s.equip, q: s.q, flags: s.flags || {}, nodes: s.nodes || {}, opened: s.opened || {}, kills: s.kills || 0, deaths: s.deaths || 0, dodges: s.dodges || 0, dodgesPerfect: s.dodgesPerfect || 0, play: s.play || 0, day: s.day || 1, pots: s.pots || G.pots, won: !!s.won, track: s.track || null });
+  const G = K.G, p = G.pl; Object.assign(G, { lvl: s.lvl, xp: s.xp, coins: s.coins, inv: s.inv, equip: Object.assign({ weapon: 'espada_madeira', charm: null }, s.equip || {}),   /* save antigo (sem as chaves novas) = slots vazios */
+    q: s.q, flags: s.flags || {}, nodes: s.nodes || {}, opened: s.opened || {}, kills: s.kills || 0, deaths: s.deaths || 0, dodges: s.dodges || 0, dodgesPerfect: s.dodgesPerfect || 0, play: s.play || 0, day: s.day || 1, pots: s.pots || G.pots, won: !!s.won, track: s.track || null });
   if (s.slots) G.slots = s.slots; G.rest = { x: s.x, z: s.z }; p.x = s.x; p.z = s.z; p.y = K.world.h(p.x, p.z);
 };
 K.saveGame = function (quiet) { if (!K.G || K.debug.nosave) return; SAVE.game = K.snapshot(); SAVE.meta.time = (SAVE.meta.time || 0); K.persist(); if (!quiet) K.ui.toast && K.ui.toast('Jogo salvo.'); };
@@ -5976,7 +6006,7 @@ UI.focusIdx = 0;
 function setFocus(i, still) { const it = navItems(); if (!it.length) return; UI.focusIdx = (i + it.length) % it.length; it.forEach((e, k) => e.classList.toggle('focus', k === UI.focusIdx)); if (!still && it[UI.focusIdx].scrollIntoView) it[UI.focusIdx].scrollIntoView({ block: 'nearest' }); }
 UI.key = function (e) {
   const t = UI.top(); const dlg = K.dlg; if (dlg) { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyE') { K.sfx('ui'); UI.dlgAdvance(); return true; } if (e.code === 'Escape') { K.dialogClose(); return true; } const ch = navItems(); if (ch.length) { if (e.code === 'ArrowRight' || e.code === 'ArrowDown') { setFocus(UI.focusIdx + 1); return true; } if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') { setFocus(UI.focusIdx - 1); return true; } } return false; }
-  if (!t) { if (K.sceneName === 'play' && !K.paused && e.code === 'Escape') { K.pause(); return true; } if (K.sceneName === 'play' && !K.paused && (e.code === 'KeyI' || e.code === 'KeyJ' || e.code === 'KeyM' || e.code === 'Tab')) { K.pause(e.code === 'KeyI' ? 'inv' : e.code === 'KeyJ' ? 'quests' : 'map'); return true; } return false; }
+  if (!t) { if (K.sceneName === 'play' && !K.paused && e.code === 'Escape') { K.pause(); return true; } if (K.sceneName === 'play' && !K.paused && (e.code === 'KeyI' || e.code === 'KeyJ' || e.code === 'KeyM' || e.code === 'Tab' || e.code === 'KeyH')) { K.pause(e.code === 'KeyI' ? 'inv' : e.code === 'KeyJ' ? 'quests' : e.code === 'KeyH' ? 'char' : 'map'); return true; } return false; }
   const it = navItems(); if (e.code === 'Escape' || e.code === 'Backspace') { if (t.onBack) { K.sfx('ui_volta'); t.onBack(); } return true; }
   if (!it.length) return false; const cur = it[UI.focusIdx] || null;
   if (e.code === 'ArrowDown' || e.code === 'KeyS') { setFocus(UI.focusIdx + 1); K.sfx('tick' in REG ? 'ui' : 'ui'); return true; } if (e.code === 'ArrowUp' || e.code === 'KeyW') { setFocus(UI.focusIdx - 1); K.sfx('ui'); return true; }
@@ -6062,15 +6092,17 @@ UI.hideDialog = function () { if (UI.dlgEl) { UI.dlgEl.remove(); UI.dlgEl = null
 /* ---------------------------------------------------------------- painéis de pausa (inventário, missões, mapa, opções, loja, fabricação) */
 K.paused = false;
 K.pause = function (tab) { if (K.paused || !K.G || K.sceneName !== 'play') return; K.paused = true; K.uiBlock = true; if (document.pointerLockElement) document.exitPointerLock(); K.input.clear(); UI.panelOpen(tab || 'menu'); K.sfx('ui'); };
-K.resume = function () { if (!K.paused) return; K.paused = false; K.uiBlock = false; if (UI.panelL) { UI.drop(UI.panelL); UI.panelL = null; } K.input.clear(); K.saveGame(true); K.input.relockSoon(); };
+K.resume = function () { if (!K.paused) return; UI.lastTab = null; K.paused = false;   /* 1.3.4: sem isto, depois de passar pela pausa, uma tela aberta por atalho (H, I, J) voltava para a pausa no Esc em vez do jogo */
+  K.uiBlock = false; if (UI.panelL) { UI.drop(UI.panelL); UI.panelL = null; } K.input.clear(); K.saveGame(true); K.input.relockSoon(); };
 K.onUnlock = () => { if (K.sceneName === 'play' && !K.paused && !K.dlg && K.G && K.G.pl.alive) K.pause(); };
 UI.panelOpen = function (tab) {
   if (UI.panelL) { UI.drop(UI.panelL); } const l = UI.panelL = UI.layer('pause', { modal: true, onBack: () => { if (tab !== 'menu' && UI.fromMenu) { UI.panelOpen('menu'); } else K.resume(); } }); UI.fromMenu = tab !== 'menu' && UI.lastTab === 'menu'; UI.lastTab = tab;
   const E_ = l.el, nav = (act, label, cls) => UI.btn(label, act, { cls });
   if (tab === 'menu') {
     const c = h('div', 'panel menu-col', '<h1>Pausa</h1>', E_); c.style.cssText += ';left:50%;top:50%;transform:translate(-50%,-50%);width:22rem'; const B = (t, f, cls) => UI.btn(t, f, { parent: c, cls });
-    B('Continuar', () => K.resume(), 'pri'); B('Inventário', () => UI.panelOpen('inv')); B('Missões', () => UI.panelOpen('quests')); B('Mapa', () => UI.panelOpen('map')); B('Opções', () => UI.panelOpen('opt')); const fsp = B(K.fsLabel(), () => K.fsToggle()); fsp.dataset.fs = 1; B('Sair para o menu', () => { K.saveGame(true); K.paused = false; K.uiBlock = false; K.go('title'); }, 'ghost'); l.onBack = () => K.resume();
+    B('Continuar', () => K.resume(), 'pri'); B('Personagem', () => UI.panelOpen('char')); B('Inventário', () => UI.panelOpen('inv')); B('Missões', () => UI.panelOpen('quests')); B('Mapa', () => UI.panelOpen('map')); B('Opções', () => UI.panelOpen('opt')); const fsp = B(K.fsLabel(), () => K.fsToggle()); fsp.dataset.fs = 1; B('Sair para o menu', () => { K.saveGame(true); K.paused = false; K.uiBlock = false; K.go('title'); }, 'ghost'); l.onBack = () => K.resume();
   } else if (tab === 'inv') UI.invPanel(l);
+  else if (tab === 'char') { UI.charPanel(l); return; }   /* foco inicial escolhido pela tela (1º espaço, nunca um botão que troca equipamento) */
   else if (tab === 'quests') UI.questPanel(l);
   else if (tab === 'map') UI.mapPanel(l);
   else if (tab === 'opt') UI.optPanel(l, () => UI.panelOpen('menu'));
@@ -6082,7 +6114,7 @@ UI.invPanel = function (l) {
   const G = K.G, p = panelFrame(l, 'Inventário · ' + G.coins + ' cacos', 60); let tab = 'arma', sel = null; const msg = h('div', 'shop-msg', ''); const tabs = h('div', 'row', '', p), body = h('div', 'row', '', p); body.style.alignItems = 'flex-start'; const left = h('div', 'grid', '', body), right = h('div', '', '', body); left.style.flex = 2; right.style.flex = 1.1; right.style.minWidth = '15rem';
   const TABS = [['arma', 'Armas'], ['amuleto', 'Amuletos'], ['consumivel', 'Poções'], ['material', 'Materiais'], ['chave', 'Especiais']];
   const render = () => { tabs.innerHTML = ''; left.innerHTML = ''; right.innerHTML = ''; TABS.forEach(([k, n]) => { const t = h('div', 'tab' + (k === tab ? ' on' : ''), n, tabs); t.dataset.nav = 1; t.addEventListener('click', () => { tab = k; sel = null; render(); setFocus(0); }); });
-    const list = K.inv.list(tab); if (!list.length) h('div', '', '<i>Nada por aqui ainda.</i>', left); list.forEach(o => { const c = h('div', 'card rar-' + (o.it.rar || 'comum') + (sel === o.id ? ' sel' : ''), '', left); c.dataset.nav = 1; c.appendChild(UI.itemIconCanvas(o.id)); h('div', '', esc(o.it.nome), c); if (o.n > 1) h('span', 'q', 'x' + o.n, c); if (G.equip.weapon === o.id || G.equip.charm === o.id) h('span', 'q', '★', c).style.left = '.3rem'; c.addEventListener('click', () => { sel = o.id; const fi = Math.max(0, navItems().indexOf(c)); let dirty = false; const modo = o.it.tipo === 'arma' || o.it.tipo === 'amuleto' ? 'equip' : o.it.tipo === 'consumivel' ? 'use' : 'info';
+    const list = K.inv.list(tab); if (!list.length) h('div', '', '<i>Nada por aqui ainda.</i>', left); list.forEach(o => { const c = h('div', 'card rar-' + (o.it.rar || 'comum') + (sel === o.id ? ' sel' : ''), '', left); c.dataset.nav = 1; c.appendChild(UI.itemIconCanvas(o.id)); h('div', '', esc(o.it.nome), c); if (o.n > 1) h('span', 'q', 'x' + o.n, c); if (K.isEquipped(o.id)) h('span', 'q', '★', c).style.left = '.3rem'; c.addEventListener('click', () => { sel = o.id; const fi = Math.max(0, navItems().indexOf(c)); let dirty = false; const modo = K.slotFor(o.it.tipo) ? 'equip' : o.it.tipo === 'consumivel' ? 'use' : 'info';
         UI.itemModal(o.id, modo, { onDone: (ok, txt) => { dirty = true; msg.textContent = '✔ ' + txt; }, onClose: () => { if (dirty) { if (!K.inv.has(sel)) sel = null; render(); } setFocus(fi); } }); }); });
     msg.style.cssText = 'font-weight:800;font-size:.9rem;margin-bottom:.4rem;min-height:1.2rem'; right.appendChild(msg); if (!msg.textContent) msg.textContent = 'Toque num item para ver os detalhes.';
     const ps = h('div', '', '<b>Atributos</b>', right); ps.style.marginTop = '.6rem'; const pl = G.pl; h('div', 'kv', `<b>Nível</b><span>${G.lvl}</span><b>Ataque</b><span>${pl.atk}</span><b>Defesa</b><span>${Math.round(pl.defv)}</span><b>Vida</b><span>${pl.maxhp}</span><b>Brilho</b><span>${pl.maxmp}</span><b>Crítico</b><span>${Math.round(pl.crit * 100)}%</span>`, ps); setFocus(UI.focusIdx); };
@@ -6252,7 +6284,7 @@ K.css(`
 .im-foot{flex:none;display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap}.im-foot .btn{flex:1 1 8rem}
 `);
 UI.IM_GUARD_MS = 250;   /* o clique/toque que ABRIU o pop-up não pode "vazar" para o botão dele (clique duplo, toque que repete) */
-UI.ITEM_TIPO = { arma: 'Arma', amuleto: 'Amuleto', consumivel: 'Consumível', material: 'Material', chave: 'Item especial' };
+UI.ITEM_TIPO = { arma: 'Arma', amuleto: 'Amuleto', capacete: 'Capacete', armadura: 'Armadura', escudo: 'Escudo', luvas: 'Luvas', botas: 'Botas', anel: 'Anel', consumivel: 'Consumível', material: 'Material', chave: 'Item especial' };
 UI.ITEM_RAR = { comum: 'Comum', raro: 'Raro', epico: 'Épico', lendario: 'Lendário' };
 /* linhas "Atributo → valor" de um item (arma/amuleto: stats; consumível: cura, Brilho, buff) */
 UI.itemRows = function (it) {
@@ -6267,8 +6299,8 @@ const imCacos = n => n + (n === 1 ? ' caco' : ' cacos');
 UI.itemWhy = function (id, mode, o) {
   const G = K.G, it = REG.item[id]; o = o || {};
   if (mode === 'buy') { if (G.coins < o.price) return 'Faltam ' + imCacos(o.price - G.coins) + ' para comprar.'; }
-  else if (mode === 'sell') { if (it.tipo === 'chave') return 'Item importante: não pode ser vendido.'; if (!K.inv.has(id)) return 'Você não tem este item.'; if ((G.equip.weapon === id || G.equip.charm === id) && K.inv.count(id) <= 1) return 'Equipado agora: equipe outro antes de vender.'; }
-  else if (mode === 'equip') { if (!K.inv.has(id)) return 'Você não tem este item.'; if (it.tipo !== 'arma' && it.tipo !== 'amuleto') return 'Este item não se equipa.'; if (it.tipo === 'arma' && G.equip.weapon === id) return 'Já está na sua mão.'; }
+  else if (mode === 'sell') { if (it.tipo === 'chave') return 'Item importante: não pode ser vendido.'; if (!K.inv.has(id)) return 'Você não tem este item.'; if (K.isEquipped(id) && K.inv.count(id) <= 1) return 'Equipado agora: equipe outro antes de vender.'; }
+  else if (mode === 'equip') { if (!K.inv.has(id)) return 'Você não tem este item.'; const sl = K.slotFor(it.tipo); if (!sl) return 'Este item não se equipa.'; if (sl.padrao && G.equip[sl.id] === id) return sl.ja || 'Já está equipado.'; }
   else if (mode === 'use') { const p = G.pl; if (!K.inv.has(id)) return 'Você não tem este item.'; if (it.tipo !== 'consumivel') return 'Este item não se usa.'; if (!p.alive) return 'Indisponível agora.'; if (it.heal && p.hp >= p.maxhp && !it.mp && !it.buff) return 'Sua vida já está cheia.'; }
   else if (mode === 'craft') { const r = REG.recipe[o.recipe]; if (!r) return 'Receita desconhecida.'; const miss = Object.keys(r.in).filter(k => !K.inv.has(k, r.in[k])); if (miss.length) return 'Faltam ingredientes: ' + miss.map(k => (REG.item[k] || { nome: k }).nome).join(', ') + '.'; }
   return o.can ? (o.can() || '') : '';
@@ -6286,17 +6318,18 @@ UI.itemModal = function (id, mode, o) {
   h('h2', '', esc(it.nome), tt); const tags = h('div', 'im-tags', '', tt), rar = it.rar || 'comum'; h('span', 'im-tag', UI.ITEM_TIPO[it.tipo] || esc(it.tipo || 'Item'), tags); h('span', 'im-tag ' + rar, (rar === 'comum' ? '' : '◆ ') + (UI.ITEM_RAR[rar] || rar), tags);
   const body = h('div', 'im-body', '', p); h('div', 'im-desc', esc(it.desc || 'Sem descrição.'), body);
   const rows = UI.itemRows(it); if (rows.length) { const s = h('div', 'im-sec', '<h3>Atributos e efeito</h3>', body), kv = h('div', 'kv', '', s); rows.forEach(([a, b]) => { kv.innerHTML += '<b>' + esc(a) + '</b><span>' + esc(b) + '</span>'; }); }
+  if (mode === 'equip' && o.compare !== false) UI.equipCompare(id, body);   /* 1.3.4: "+10 Ataque · −1 Defesa" contra o que está no espaço agora */
   const money = h('div', 'im-sec', '', body), mk_ = h('div', 'kv', '', money);
   if (mode === 'buy') { money.insertAdjacentHTML('afterbegin', '<h3>Preço</h3>'); mk_.innerHTML = '<b>Custa</b><span>' + imCacos(o.price) + '</span><b>Você tem</b><span>' + imCacos(G.coins) + '</span><b>Depois da compra</b><span>' + (G.coins >= o.price ? imCacos(G.coins - o.price) : '—') + '</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>'; }
   else if (mode === 'sell') { money.insertAdjacentHTML('afterbegin', '<h3>Venda</h3>'); mk_.innerHTML = '<b>Você recebe</b><span>' + imCacos(o.price) + '</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span><b>Seus cacos depois</b><span>' + imCacos(G.coins + o.price) + '</span>'; }
   else if (mode === 'craft') { money.insertAdjacentHTML('afterbegin', '<h3>Ingredientes · você tem × precisa</h3>'); mk_.remove(); Object.keys(r.in).forEach(k => { const have = K.inv.count(k), need = r.in[k], good = have >= need, row = h('div', 'im-ing ' + (good ? 'ok' : 'no'), '', money); row.appendChild(UI.itemIconCanvas(k, 40)); h('span', '', esc((REG.item[k] || { nome: k }).nome), row); h('em', '', (good ? '✓ ' : '✗ ') + have + ' × ' + need, row); if (REG.item[k]) { row.dataset.nav = 1; row.title = 'Ver detalhes'; row.addEventListener('click', e => { e.stopPropagation(); const fi = Math.max(0, navItems().indexOf(row)); UI.itemModal(k, 'info', { stack: true, onClose: () => setFocus(fi) }); }); } }); h('div', 'kv', '<b>Rende</b><span>' + (r.out.n || 1) + ' un.</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>', money).style.marginTop = '.3rem'; }
-  else { money.insertAdjacentHTML('afterbegin', '<h3>Na sua mochila</h3>'); const eqp = G.equip.weapon === id || G.equip.charm === id; mk_.innerHTML = '<b>Quantidade</b><span>' + K.inv.count(id) + '</span>' + (eqp ? '<b>Equipado</b><span>sim ★</span>' : ''); }
+  else { money.insertAdjacentHTML('afterbegin', '<h3>Na sua mochila</h3>'); const eqp = K.isEquipped(id); mk_.innerHTML = '<b>Quantidade</b><span>' + K.inv.count(id) + '</span>' + (eqp ? '<b>Equipado</b><span>sim ★</span>' : ''); }
   const usos = Object.values(REG.recipe).filter(rc => rc.in && rc.in[id] && REG.item[rc.out.id]).map(rc => REG.item[rc.out.id].nome);   /* "para que serve" um material (item 18) */
   if (it.tipo === 'material' && usos.length) { const s2 = h('div', 'im-sec', '<h3>Usado para fabricar</h3>', body); h('div', 'im-desc', esc(usos.join(' · ')), s2).style.fontSize = '.95rem'; }
   const whyEl = h('div', 'im-why', '', p); whyEl.setAttribute('role', 'status'); const foot = h('div', 'im-foot', '', p);
   function close(quiet) { if (dead) return; dead = true; UI._ims = UI._ims.filter(x => x.layer !== l); UI._im = UI._ims[UI._ims.length - 1] || null; UI.drop(l); if (!quiet && o.onClose) o.onClose(); }
   const cancel = UI.btn(mode === 'info' ? 'Fechar' : 'Cancelar', () => close(), { parent: foot });   /* 1º do DOM = foco inicial; estilo normal (ghost some sobre papel) */
-  let act = null; const VERB = { buy: 'Comprar', sell: 'Vender', craft: 'Fabricar', use: 'Usar', equip: it.tipo === 'amuleto' && G.equip.charm === id ? 'Tirar' : 'Equipar' };
+  let act = null; const VERB = { buy: 'Comprar', sell: 'Vender', craft: 'Fabricar', use: 'Usar', equip: K.isEquipped(id) && !(K.slotFor(it.tipo) || {}).padrao ? 'Tirar' : 'Equipar' };
   const refresh = () => { const why = mode === 'info' ? '' : UI.itemWhy(id, mode, o); whyEl.style.display = why ? '' : 'none'; whyEl.textContent = why ? '⚠ ' + why : ''; if (act) { act.disabled = !!why; act.title = why; } };
   if (mode !== 'info') act = UI.btn(VERB[mode], () => {
     if (busy || dead || young() || act.disabled) return;   /* clique que abriu o pop-up / clique duplo não confirma */
@@ -6341,6 +6374,110 @@ K.itemIcon = function (id, size) {
   const it = REG.item[id] || { nome: '?' }; let c = null; if (it.model && K.renderObj && !K.debug.noRender) { const g = mk.grp(); g.add(it.model(mk)); mk.outline(g, .03); g.rotation.set(.35, .6, it.tipo === 'arma' ? -.6 : 0); c = K.renderObj(g, size, size, { bg: null }); }
   if (!c) { c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); g.fillStyle = it.color || '#9AA6BD'; g.strokeStyle = '#101830'; g.lineWidth = size * .07; g.beginPath(); g.arc(size / 2, size / 2, size * .38, 0, TAU); g.fill(); g.stroke(); g.fillStyle = '#101830'; g.font = (size * .42) + "px 'Lilita One',sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(it.icon || (it.nome || '?')[0], size / 2, size / 2 + 2); }
   K._icons[k] = c; const o = document.createElement('canvas'); o.width = o.height = size; o.getContext('2d').drawImage(c, 0, 0); return o;
+};
+/* ---------------------------------------------------------------- tela do personagem (1.3.4, item 8 do roadmap) — UI.charPanel(l)
+ * Herói no centro com o equipamento de verdade (retrato 3D vestido), espaços em volta, atributos + efeitos ativos e a mochila (só equipáveis) com comparação.
+ * Espaços vêm do REGISTRO DE SLOTS (K.SLOTS, 07-rpg.js): o grid abaixo tem a área de TODOS; os liberados (on:true) mostram o item, os outros aparecem desabilitados (.ch-slot.off).
+ * Regra do projeto: clicar em espaço/item SÓ inspeciona (UI.itemModal modo 'equip', com comparação); trocar o equipamento é o botão do pop-up. */
+K.css(`
+.chp{width:68rem}
+.ch{display:grid;grid-template-columns:auto minmax(12.5rem,15rem) minmax(15rem,1fr);gap:1rem;align-items:start}
+.ch-doll{display:grid;grid-template-columns:7.2rem 9.5rem 7.2rem;grid-template-rows:repeat(4,5.7rem);gap:.5rem;grid-template-areas:"helm hero charm" "weapon hero shield" "armor hero ring" "gloves hero boots"}
+.ch-hero{grid-area:hero;position:relative;border:.22rem solid var(--ink);border-radius:1rem;background:var(--paper2);overflow:hidden;cursor:pointer;box-shadow:.14rem .18rem 0 var(--ink)}
+.ch-hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ch-hero b{position:absolute;left:0;right:0;bottom:.3rem;text-align:center;font:400 1rem 'Lilita One',sans-serif;color:var(--ink)}
+.ch-hero.focus,.ch-hero:hover{border-color:var(--coral2)}
+.ch-slot{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.05rem;min-width:0;background:var(--paper2);border:.2rem solid var(--ink);border-radius:.8rem;box-shadow:.14rem .18rem 0 var(--ink);cursor:pointer;padding:.2rem;text-align:center;overflow:hidden}
+.ch-slot small{font:400 .8rem 'Lilita One',sans-serif;color:var(--coral2);line-height:1}
+.ch-slot canvas{width:2.3rem;height:2.3rem;display:block;flex:none}
+.ch-slot b{font-size:.72rem;font-weight:800;line-height:1.05;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ch-slot.vazio{border-style:dashed;background:#fff}.ch-slot.vazio i{width:2.4rem;height:2.4rem;border:.18rem dashed var(--ink2);border-radius:50%;display:grid;place-items:center;font:400 1.3rem 'Lilita One';color:var(--ink2);font-style:normal}
+.ch-slot.off{background:transparent;border:.18rem dashed rgba(30,42,85,.45);box-shadow:none;cursor:help}.ch-slot.off small{color:rgba(30,42,85,.6)}.ch-slot.off b{color:rgba(30,42,85,.55)}.ch-slot.off i{width:2.1rem;height:2.1rem;border-radius:.5rem;border:.16rem dashed rgba(30,42,85,.35);display:block}
+.ch-slot:not(.off):hover,.ch-slot:not(.off).focus{background:var(--sun)}.ch-slot.off:hover,.ch-slot.off.focus{background:rgba(255,210,63,.25);border-color:var(--ink2)}.ch-slot.sel{outline:.22rem solid var(--coral);outline-offset:.12rem}
+.ch-col h3{margin:.1rem 0 .3rem;font:400 1.1rem 'Lilita One',sans-serif;color:var(--coral2)}
+.ch-st{display:flex;justify-content:space-between;gap:.5rem;padding:.08rem .4rem;border-radius:.45rem;font-size:.9rem;font-weight:800;cursor:pointer;border:.12rem solid transparent}
+.ch-st b{color:var(--ink2)}.ch-st span{font:400 .98rem 'Lilita One',sans-serif;color:var(--ink);white-space:nowrap}
+.ch-st:hover,.ch-st.focus,.ch-st.sel{background:var(--sun);border-color:var(--ink)}
+.ch-tip{margin-top:.45rem;padding:.3rem .55rem;border:.16rem dashed var(--ink2);border-radius:.6rem;background:#fff;font-size:.85rem;font-weight:800;line-height:1.25;min-height:2.6rem}
+.ch-filt{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.4rem}.ch-filt .tab{border-radius:.6rem;font-size:.95rem;padding:.15rem .6rem}
+.ch-list{display:flex;flex-direction:column;gap:.35rem;max-height:calc(var(--vh,1vh)*52);min-height:6rem;overflow:auto;padding:.1rem .3rem .3rem .1rem}
+.ch-it{display:flex;align-items:center;gap:.5rem;background:var(--paper2);border:.2rem solid var(--ink);border-radius:.7rem;padding:.2rem .45rem;cursor:pointer;box-shadow:.12rem .15rem 0 var(--ink)}
+.ch-it canvas{width:2.6rem;height:2.6rem;flex:none}.ch-it>div{min-width:0;flex:1}
+.ch-it b{display:block;font-size:.9rem;font-weight:800;line-height:1.15}.ch-it small{display:block;font:400 .78rem 'Lilita One',sans-serif;color:var(--ink2)}
+.ch-it em{display:block;font-style:normal;font-weight:800;font-size:.8rem;line-height:1.2}.ch-it em .up{color:var(--leaf2)}.ch-it em .dn{color:var(--coral2)}
+.ch-it:hover,.ch-it.focus{background:var(--sun)}
+.ch-cmp{display:flex;flex-direction:column;gap:.1rem;font-weight:800;font-size:.95rem}.ch-cmp .up{color:var(--leaf2)}.ch-cmp .dn{color:var(--coral2)}
+`);
+/* atributos mostrados na tela (os mesmos números de K.G.pl / K.statsCalc) e a dica de cada um (regra l: tudo que aparece diz o que é) */
+UI.STATS = [
+  ['maxhp', 'Vida', v => '' + Math.round(v), 'Quanto dano você aguenta antes de cair. Sobe com o nível e com amuletos.'],
+  ['maxmp', 'Brilho', v => '' + Math.round(v), 'Energia das habilidades (Q, R e X). Volta sozinho com o tempo.'],
+  ['atk', 'Ataque', v => '' + Math.round(v), 'Dano de cada golpe. Vem do nível, da arma e dos amuletos.'],
+  ['defv', 'Defesa', v => '' + Math.round(v), 'Diminui o dano que os monstros causam em você.'],
+  ['crit', 'Crítico', v => Math.round(v * 100) + '%', 'Chance de o golpe sair crítico, com 60% de dano a mais.'],
+  ['aspd', 'Velocidade de golpe', v => '×' + (+v.toFixed(2)), 'Rapidez dos ataques. Acima de ×1 você bate mais rápido.'],
+  ['reach', 'Alcance', v => '×' + (+v.toFixed(2)), 'Até onde o golpe da arma chega. Acima de ×1 alcança mais longe.'],
+  ['maxst', 'Fôlego', v => '' + Math.round(v), 'Gasto ao rolar. Mais fôlego, mais roladas seguidas.'],
+  ['mpRegen', 'Regen. de Brilho', v => v.toFixed(1) + '/s', 'Quanto Brilho volta por segundo.']];
+/* diferença de atributos se o jogador equipar/tirar id agora → [{key, nome, d, txt:'+10 Ataque'}] (sinal + texto, não só cor) */
+UI.equipDiff = function (id) {
+  const G = K.G, a = K.statsCalc(G.lvl, G.equip, G.buff), b = K.statsCalc(G.lvl, K.equipAfter(id), G.buff), out = [];
+  for (const [k, nome] of UI.STATS) { const d = b[k] - a[k]; if (Math.abs(d) < 1e-4) continue; const m = Math.abs(d);
+    const v = k === 'crit' ? Math.round(m * 100) + '%' : k === 'aspd' || k === 'reach' ? Math.round(m / (a[k] || 1) * 100) + '%' : k === 'mpRegen' ? m.toFixed(1) + '/s' : k === 'defv' ? '' + (+m.toFixed(1)) : '' + Math.round(m);
+    out.push({ key: k, nome, d, txt: (d > 0 ? '+' : '−') + v + ' ' + nome }); }
+  return out;
+};
+UI.diffHTML = (df, vazio) => df.length ? df.map(x => '<span class="' + (x.d > 0 ? 'up' : 'dn') + '">' + (x.d > 0 ? '▲ ' : '▼ ') + esc(x.txt) + '</span>').join(' ') : esc(vazio || 'Nada muda nos atributos.');
+/* seção "Comparado ao equipado" do pop-up (modo equip; desligue com o.compare:false) */
+UI.equipCompare = function (id, body) {
+  const G = K.G, it = REG.item[id], sl = it && K.slotFor(it.tipo); if (!sl) return; const cur = G.equip[sl.id], sec = h('div', 'im-sec ch-cmpsec', '<h3>Comparado ao equipado</h3>', body);
+  const curNm = cur ? (REG.item[cur] || { nome: cur }).nome : 'nada';
+  if (cur === id && sl.padrao) { h('div', 'im-desc', 'Equipado agora no espaço ' + esc(sl.nome) + '.', sec); return; }
+  h('div', '', (cur === id ? 'Equipado agora. Se tirar:' : 'No espaço ' + esc(sl.nome) + ' agora: <b>' + esc(curNm) + '</b>. Se trocar:'), sec).style.cssText = 'font-size:.9rem;font-weight:800;margin-bottom:.15rem';
+  const df = UI.equipDiff(id), c = h('div', 'ch-cmp', '', sec); c.innerHTML = df.length ? df.map(x => '<span class="' + (x.d > 0 ? 'up' : 'dn') + '">' + (x.d > 0 ? '▲ ' : '▼ ') + esc(x.txt) + '</span>').join('') : 'Nada muda nos atributos.';
+};
+UI.charKey = () => K.slotsOn().map(s => s.id + '=' + (K.G.equip[s.id] || '')).join('|');   /* muda com o equipamento → chave do cache do retrato */
+UI.charPanel = function (l) {
+  const G = K.G, p = panelFrame(l, 'Personagem · Nível ' + G.lvl, 68); p.classList.add('chp'); p.style.width = ''; p.style.overflowX = 'hidden';   /* o panelFrame põe overflow:auto INLINE (vence a classe): o canto dobrado do .panel (3 px) viraria barra de rolagem horizontal */ let pick = null, tipK = null;
+  const wrap = h('div', 'ch', '', p), doll = h('div', 'ch-doll', '', wrap), cs = h('div', 'ch-col', '', wrap), cb = h('div', 'ch-col', '', wrap);
+  const tipTxt = 'Toque num atributo para saber o que ele faz, ou num espaço para ver o item.';
+  const render = keep => {
+    const fi = UI.focusIdx; doll.innerHTML = ''; cs.innerHTML = ''; cb.innerHTML = '';
+    const hero = h('div', 'ch-hero', '', doll); hero.dataset.nav = 1; hero.title = 'Faísca';
+    const key = UI.charKey(); hero.dataset.equip = key;
+    hero.appendChild(K.portrait('faisca', { w: 228, h: 520, key, cam: { x: 1.5, y: .64, d: 4.3 }, dress: mi => { const v = K.dressModel(mi, G.equip); if (v.weapon) v.weapon.rotation.x = .3; } }));    h('b', '', 'Faísca', hero);   /* no retrato a arma fica erguida (de frente para a câmera ela vira um quadrado) */
+    hero.addEventListener('click', () => { tipK = null; tip.innerHTML = '<b>Faísca, nível ' + G.lvl + '.</b> ' + K.slotsOn().map(s => esc(s.nome) + ': ' + esc(G.equip[s.id] ? REG.item[G.equip[s.id]].nome : 'vazio')).join(' · ') + '.'; K.sfx('ui'); });
+    for (const s of K.SLOTS.filter(x => !x.on)) {   /* 1.3.4 (pedido do Pedro): espaço futuro já aparece no lugar dele, DESABILITADO (tracejado, sem item); clicar só diz o que é */
+      const c = h('div', 'ch-slot off', '', doll); c.dataset.nav = 1; c.dataset.slot = s.id; c.style.gridArea = s.area; c.setAttribute('aria-disabled', 'true'); c.title = s.nome + ': ainda fechado';
+      h('small', '', esc(s.nome), c); h('i', '', '', c); h('b', '', 'fechado', c);
+      c.addEventListener('click', () => { tipK = null; mark(); tip.textContent = s.nome + ': espaço ainda fechado. Abre quando os primeiros itens desse tipo chegarem ao jogo.'; K.sfx('ui'); }); }
+    for (const s of K.slotsOn()) {   /* liberados: mostram o item (ou "vazio") e abrem o pop-up */
+      const id = G.equip[s.id], it = REG.item[id], c = h('div', 'ch-slot' + (it ? ' rar-' + (it.rar || 'comum') : ' vazio') + (pick === s.id ? ' sel' : ''), '', doll); c.dataset.nav = 1; c.dataset.slot = s.id; c.style.gridArea = s.area;
+      h('small', '', esc(s.nome), c); if (it) { c.appendChild(UI.itemIconCanvas(id, 96)); h('b', '', esc(it.nome), c); c.title = s.nome + ': ' + it.nome; } else { h('i', '', '+', c); h('b', '', 'vazio', c); c.title = s.nome + ': vazio'; }
+      c.addEventListener('click', () => { const f = Math.max(0, navItems().indexOf(c)); pick = s.id; render(true);
+        if (it) UI.itemModal(id, 'equip', { onDone: () => render(true), onClose: () => setFocus(f) });   /* ocupado: detalhes (Tirar só se o espaço pode ficar vazio) */
+        else { tip.textContent = 'Espaço ' + s.nome + ' vazio. A mochila mostra o que cabe nele.'; setFocus(f); } }); }
+    h('h3', '', 'Atributos', cs); const pl = G.pl;
+    const lv = h('div', 'ch-st', '<b>Nível</b><span>' + G.lvl + '</span>', cs); lv.dataset.nav = 1; lv.dataset.stat = 'lvl'; lv.dataset.v = G.lvl;
+    lv.addEventListener('click', () => { tipK = 'lvl'; tip.textContent = 'Nível ' + G.lvl + (G.lvl < 20 ? ': faltam ' + (K.xpFor(G.lvl) - G.xp) + ' XP para o próximo. Subir aumenta Vida, Brilho, Ataque e Defesa.' : ': nível máximo!'); mark(); K.sfx('ui'); });
+    for (const [k, nome, fmt, dica] of UI.STATS) { const r = h('div', 'ch-st', '<b>' + esc(nome) + '</b><span>' + esc(fmt(pl[k])) + '</span>', cs); r.dataset.nav = 1; r.dataset.stat = k; r.dataset.v = pl[k]; r.addEventListener('click', () => { tipK = k; tip.textContent = nome + ': ' + dica; mark(); K.sfx('ui'); }); }
+    h('h3', '', 'Efeitos ativos', cs).style.marginTop = '.5rem'; const bf = Object.keys(G.buffs || {});
+    if (!bf.length) h('div', '', '<i>Nenhum efeito agora.</i>', cs).style.cssText = 'font-size:.85rem;padding:0 .4rem';
+    bf.forEach(bid => { const b = G.buffs[bid], bi = REG.item[bid] || { nome: bid }, r = h('div', 'ch-st', '<b>' + esc(bi.nome) + '</b><span>' + Math.ceil(b.t) + ' s</span>', cs); r.dataset.nav = 1; r.dataset.buff = bid; r.title = 'Ver detalhes'; r.addEventListener('click', () => { const f = Math.max(0, navItems().indexOf(r)); if (REG.item[bid]) UI.itemModal(bid, 'info', { onClose: () => setFocus(f) }); }); });
+    const tip = h('div', 'ch-tip', '', cs); tip.setAttribute('role', 'status'); tip.textContent = tipTxt;
+    const mark = () => cs.querySelectorAll('.ch-st[data-stat]').forEach(e => e.classList.toggle('sel', e.dataset.stat === tipK));
+    h('h3', '', 'Mochila · para equipar', cb); const ft = h('div', 'ch-filt', '', cb);
+    [[null, 'Todos']].concat(K.slotsOn().map(s => [s.id, s.nome])).forEach(([sid, nm]) => { const t = h('div', 'tab' + (pick === sid ? ' on' : ''), esc(nm), ft); t.dataset.nav = 1; t.dataset.pick = sid || ''; t.addEventListener('click', () => { pick = sid; render(true); }); });
+    const list = h('div', 'ch-list', '', cb), slots = pick ? K.slotsOn().filter(s => s.id === pick) : K.slotsOn();
+    const its = K.inv.list().filter(o => slots.some(s => s.tipos.includes(o.it.tipo))).sort((a, b) => (K.isEquipped(b.id) - K.isEquipped(a.id)) || ((b.it.preco || 0) - (a.it.preco || 0)));
+    if (!its.length) h('div', '', '<i>Nada ' + (pick ? 'para o espaço ' + esc(K.SLOTS.find(s => s.id === pick).nome) : 'para equipar') + ' na mochila ainda. Loja da forja e baús têm mais.</i>', list).style.fontSize = '.9rem';
+    its.forEach(o => { const sl = K.slotFor(o.it.tipo), eq = K.isEquipped(o.id), c = h('div', 'ch-it rar-' + (o.it.rar || 'comum'), '', list); c.dataset.nav = 1; c.dataset.item = o.id; c.appendChild(UI.itemIconCanvas(o.id, 96)); const d = h('div', '', '', c);
+      h('b', '', esc(o.it.nome) + (eq ? ' ★' : ''), d); h('small', '', esc((UI.ITEM_RAR[o.it.rar || 'comum'] || '') + ' · ' + sl.nome + (eq ? ' · equipado' : '')), d);
+      h('em', '', eq && sl.padrao ? 'Na sua mão agora.' : (eq ? 'Equipado. Se tirar: ' : '') + UI.diffHTML(UI.equipDiff(o.id)), d);
+      c.addEventListener('click', () => { const f = Math.max(0, navItems().indexOf(c)); UI.itemModal(o.id, 'equip', { onDone: () => render(true), onClose: () => setFocus(f) }); }); });
+    if (keep) setFocus(fi, true); else setFocus(Math.max(0, navItems().indexOf(doll.querySelector('.ch-slot:not(.off)'))));   /* foco inicial: 1º espaço (só inspeciona), nunca um botão que troca equipamento */
+  };
+  render(false);
 };
 
 /*==ENGINE:scenes==  cenas: title (diorama 3D + menu na coluna livre), play, gallery (modelos/props em mesa giratória), credits, ending. Registrar de novo o mesmo nome em src/content/60-menus.js SUBSTITUI. */
@@ -6391,7 +6528,7 @@ SC('play', {
   },
   update(dt) {
     const I = K.input; K.ui.update(dt); if (!K.G) return;
-    if (!K.paused && !K.dlg) { if (I.hit.pause) K.pause(); else if (I.hit.map) K.pause('map'); else if (I.hit.inv) K.pause('inv'); else if (I.hit.quests) K.pause('quests'); }
+    if (!K.paused && !K.dlg) { if (I.hit.pause) K.pause(); else if (I.hit.map) K.pause('map'); else if (I.hit.inv) K.pause('inv'); else if (I.hit.char) K.pause('char'); else if (I.hit.quests) K.pause('quests'); }
     if (K.G.winT > 0) { K.G.winT -= dt; if (K.G.winT <= 0) K.endingStart(); }
     K.updateGame(dt); if (K.input.touch !== K._lastTouch) { K._lastTouch = K.input.touch; K.showTouch(K.input.touch || K.debug.touch); }
   },
