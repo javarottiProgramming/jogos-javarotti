@@ -886,7 +886,7 @@ UI.draw = g => {
  * Abrir: K.partida({ mesa: 'classica', rival: 'zorg', regra?, aposta?, depois(res) })  →  res = { venceu, mesa, rival, tacadas, faltas }
  * Controles (PC): mover o mouse mira · clicar e PUXAR para trás dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
  *   teclado/gamepad: ←/→ mira (Shift fino) · segurar Espaço/A carrega, soltar tacada · E/X efeito · Q/Y respiro · P/Start pausa
- *   toque (como no 8 Ball Pool): 1º dedo em qualquer lado é a mira — de lado gira, PARA TRÁS do taco carrega a força, soltar tacada · 2 dedos: um mira, o outro vai e volta (barra F ou qualquer ponto) · bola na mão: arraste e solte */
+ *   toque: 1º dedo em qualquer lado é a mira — de lado gira, PARA TRÁS do taco carrega a força, soltar tacada · 2 dedos: um mira, o outro vai e volta (barra F ou qualquer ponto) · bola na mão: arraste e solte */
 const MV = { };   // visão da mesa: escala e deslocamento
 function tableView(T) { const W = K.v.W, H = K.v.H, top = 24, bot = 16, side = 28; const s = Math.min((W - side * 2) / (T.w + 14), (H - top - bot) / (T.h + 14)); return { s, ox: Math.round((W - T.w * s) / 2), oy: Math.round(top + (H - top - bot - T.h * s) / 2) }; }
 const toS = (x, y) => ({ x: MV.ox + x * MV.s, y: MV.oy + y * MV.s });
@@ -937,7 +937,7 @@ K.defScene('partida', {
     if (M.spinOpen) { this.spinAt(M, p); M.spinDrag = true; return; }
     if (M.fase === 'mao') { M.handDrag = p.id; if (p.type === 'touch') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return;
-    /* TOQUE (mesma mecânica do 8 Ball Pool): o 1º dedo, em qualquer lado, é a MIRA. Arrastar de lado gira; arrastar PARA TRÁS do taco carrega a força; soltar tacada.
+    /* TOQUE: o 1º dedo, em qualquer lado, é a MIRA. Arrastar de lado gira; arrastar PARA TRÁS do taco carrega a força; soltar tacada.
      * Com 2 dedos: um mira e o outro (barra F ou qualquer ponto da tela) vai e volta para dar a força; soltar esse dedo dá a tacada. */
     if (p.type === 'touch') {
       if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y }; return; }
