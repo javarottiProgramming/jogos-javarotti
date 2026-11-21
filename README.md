@@ -4,9 +4,10 @@ Portfólio rápido dos jogos do Pedro Javarotti: um painel para escolher o jogo 
 
 | Jogo | Versão | Pasta |
 |---|---|---|
-| **Kuku e a Semente do Sol** (plataforma 2D) | 2.9 | `jogos/kuku/` |
-| **Pedrada de Palito** (FPS de estilingue) | 1.1.7 | `jogos/pedrada/` |
 | **Cacos de Sol** (RPG de ação 3D) | 1.3.5 | `jogos/cacos-de-sol/` |
+| **Pedrada de Palito** (FPS de estilingue) | 1.1.7 | `jogos/pedrada/` |
+| **Sinuca Intergaláctica** (sinuca 16 bits) | 0.2.1 | `jogos/sinuca/` |
+| **Kuku e a Semente do Sol** (plataforma 2D) | 2.9 | `jogos/kuku/` |
 | **Java's Brick** (quebra-tijolos) | 1.0.21 | `jogos/javas-brick/` |
 
 Cada jogo é **um único arquivo HTML** (o `releases/*.html` do repositório original), copiado sem alteração para `jogos/<id>/index.html`.
