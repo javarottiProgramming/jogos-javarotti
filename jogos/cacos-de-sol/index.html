@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.3.2</title>
+<title>Cacos de Sol 1.3.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -4291,7 +4291,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.3.2', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.3.3', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -6079,12 +6079,12 @@ UI.panelOpen = function (tab) {
 function panelFrame(l, title, w) { const p = h('div', 'panel', '', l.el); p.style.cssText += ';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:' + (w || 56) + 'rem;max-width:calc(var(--vw,1vw)*94);max-height:calc(var(--vh,1vh)*88);overflow:auto'; h('h1', '', title, p); const x = UI.btn('Voltar', () => { l.onBack(); }, { cls: 'small', parent: p }); x.style.cssText = 'position:absolute;right:1rem;top:1rem'; return p; }
 UI.itemIconCanvas = function (id, size) { return K.itemIcon ? K.itemIcon(id, size || 96) : document.createElement('canvas'); };
 UI.invPanel = function (l) {
-  const G = K.G, p = panelFrame(l, 'Inventário · ' + G.coins + ' cacos', 60); let tab = 'arma', sel = null; const tabs = h('div', 'row', '', p), body = h('div', 'row', '', p); body.style.alignItems = 'flex-start'; const left = h('div', 'grid', '', body), right = h('div', '', '', body); left.style.flex = 2; right.style.flex = 1.1; right.style.minWidth = '15rem';
+  const G = K.G, p = panelFrame(l, 'Inventário · ' + G.coins + ' cacos', 60); let tab = 'arma', sel = null; const msg = h('div', 'shop-msg', ''); const tabs = h('div', 'row', '', p), body = h('div', 'row', '', p); body.style.alignItems = 'flex-start'; const left = h('div', 'grid', '', body), right = h('div', '', '', body); left.style.flex = 2; right.style.flex = 1.1; right.style.minWidth = '15rem';
   const TABS = [['arma', 'Armas'], ['amuleto', 'Amuletos'], ['consumivel', 'Poções'], ['material', 'Materiais'], ['chave', 'Especiais']];
   const render = () => { tabs.innerHTML = ''; left.innerHTML = ''; right.innerHTML = ''; TABS.forEach(([k, n]) => { const t = h('div', 'tab' + (k === tab ? ' on' : ''), n, tabs); t.dataset.nav = 1; t.addEventListener('click', () => { tab = k; sel = null; render(); setFocus(0); }); });
-    const list = K.inv.list(tab); if (!list.length) h('div', '', '<i>Nada por aqui ainda.</i>', left); list.forEach(o => { const c = h('div', 'card rar-' + (o.it.rar || 'comum') + (sel === o.id ? ' sel' : ''), '', left); c.dataset.nav = 1; c.appendChild(UI.itemIconCanvas(o.id)); h('div', '', esc(o.it.nome), c); if (o.n > 1) h('span', 'q', 'x' + o.n, c); if (G.equip.weapon === o.id || G.equip.charm === o.id) h('span', 'q', '★', c).style.left = '.3rem'; c.addEventListener('click', () => { sel = o.id; render(); }); });
-    const it = REG.item[sel]; if (it) { const d = h('div', 'panel', '', right); d.style.boxShadow = 'none'; d.style.background = 'var(--paper2)'; h('h2', '', esc(it.nome), d); h('div', '', esc(it.desc || ''), d).style.marginBottom = '.6rem'; const kv = h('div', 'kv', '', d); const st = it.stats || {}; const NM = { atk: 'Ataque', crit: 'Crítico', aspd: 'Velocidade', reach: 'Alcance', hp: 'Vida', mp: 'Brilho', def: 'Defesa', st: 'Fôlego', mpr: 'Regen. Brilho' }; for (const k in st) kv.innerHTML += '<b>' + (NM[k] || k) + '</b><span>' + (k === 'crit' ? '+' + Math.round(st[k] * 100) + '%' : k === 'aspd' || k === 'reach' ? '×' + st[k] : '+' + st[k]) + '</span>'; if (it.heal) kv.innerHTML += '<b>Cura</b><span>' + it.heal + '</span>'; if (it.mp) kv.innerHTML += '<b>Brilho</b><span>+' + it.mp + '</span>'; if (it.preco) kv.innerHTML += '<b>Valor</b><span>' + it.preco + ' cacos</span>';
-      const eq = G.equip.weapon === sel || G.equip.charm === sel; if (it.tipo === 'arma' || it.tipo === 'amuleto') UI.btn(eq && it.tipo === 'amuleto' ? 'Tirar' : (eq ? 'Equipada' : 'Equipar'), () => { K.inv.equip(sel); render(); }, { cls: 'leaf', parent: d }).style.marginTop = '.7rem'; else if (it.tipo === 'consumivel') UI.btn('Usar', () => { K.inv.use(sel); if (!K.inv.has(sel)) sel = null; render(); }, { cls: 'leaf', parent: d }).style.marginTop = '.7rem'; }
+    const list = K.inv.list(tab); if (!list.length) h('div', '', '<i>Nada por aqui ainda.</i>', left); list.forEach(o => { const c = h('div', 'card rar-' + (o.it.rar || 'comum') + (sel === o.id ? ' sel' : ''), '', left); c.dataset.nav = 1; c.appendChild(UI.itemIconCanvas(o.id)); h('div', '', esc(o.it.nome), c); if (o.n > 1) h('span', 'q', 'x' + o.n, c); if (G.equip.weapon === o.id || G.equip.charm === o.id) h('span', 'q', '★', c).style.left = '.3rem'; c.addEventListener('click', () => { sel = o.id; const fi = Math.max(0, navItems().indexOf(c)); let dirty = false; const modo = o.it.tipo === 'arma' || o.it.tipo === 'amuleto' ? 'equip' : o.it.tipo === 'consumivel' ? 'use' : 'info';
+        UI.itemModal(o.id, modo, { onDone: (ok, txt) => { dirty = true; msg.textContent = '✔ ' + txt; }, onClose: () => { if (dirty) { if (!K.inv.has(sel)) sel = null; render(); } setFocus(fi); } }); }); });
+    msg.style.cssText = 'font-weight:800;font-size:.9rem;margin-bottom:.4rem;min-height:1.2rem'; right.appendChild(msg); if (!msg.textContent) msg.textContent = 'Toque num item para ver os detalhes.';
     const ps = h('div', '', '<b>Atributos</b>', right); ps.style.marginTop = '.6rem'; const pl = G.pl; h('div', 'kv', `<b>Nível</b><span>${G.lvl}</span><b>Ataque</b><span>${pl.atk}</span><b>Defesa</b><span>${Math.round(pl.defv)}</span><b>Vida</b><span>${pl.maxhp}</span><b>Brilho</b><span>${pl.maxmp}</span><b>Crítico</b><span>${Math.round(pl.crit * 100)}%</span>`, ps); setFocus(UI.focusIdx); };
   render();
 };
@@ -6247,7 +6247,7 @@ K.css(`
 .im-body{flex:1 1 auto;min-height:0;overflow:auto;margin:.55rem 0;overflow-wrap:anywhere}
 .im-desc{font-weight:800;line-height:1.35;font-size:1rem}
 .im-sec{margin-top:.55rem}.im-sec h3{margin:0 0 .2rem;font:400 1rem 'Lilita One',sans-serif;color:var(--coral2)}
-.im-ing{display:flex;align-items:center;gap:.5rem;padding:.12rem 0;font-weight:800;font-size:.95rem}.im-ing canvas{width:2rem;height:2rem;flex:none}.im-ing span{flex:1;min-width:0}.im-ing em{font:400 1rem 'Lilita One',sans-serif;font-style:normal;white-space:nowrap}.im-ing.no em{color:var(--coral2)}.im-ing.ok em{color:var(--leaf2)}
+.im-ing[data-nav]{cursor:pointer;border-radius:.5rem;padding-left:.2rem}.im-ing[data-nav]:hover,.im-ing.focus{background:var(--sun)}.im-ing{display:flex;align-items:center;gap:.5rem;padding:.12rem 0;font-weight:800;font-size:.95rem}.im-ing canvas{width:2rem;height:2rem;flex:none}.im-ing span{flex:1;min-width:0}.im-ing em{font:400 1rem 'Lilita One',sans-serif;font-style:normal;white-space:nowrap}.im-ing.no em{color:var(--coral2)}.im-ing.ok em{color:var(--leaf2)}
 .im-why{flex:none;margin:0 0 .5rem;padding:.3rem .7rem;border:.18rem dashed var(--coral2);border-radius:.6rem;background:#fff;color:var(--coral2);font:400 1.05rem 'Lilita One',sans-serif}
 .im-foot{flex:none;display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap}.im-foot .btn{flex:1 1 8rem}
 `);
@@ -6268,6 +6268,8 @@ UI.itemWhy = function (id, mode, o) {
   const G = K.G, it = REG.item[id]; o = o || {};
   if (mode === 'buy') { if (G.coins < o.price) return 'Faltam ' + imCacos(o.price - G.coins) + ' para comprar.'; }
   else if (mode === 'sell') { if (it.tipo === 'chave') return 'Item importante: não pode ser vendido.'; if (!K.inv.has(id)) return 'Você não tem este item.'; if ((G.equip.weapon === id || G.equip.charm === id) && K.inv.count(id) <= 1) return 'Equipado agora: equipe outro antes de vender.'; }
+  else if (mode === 'equip') { if (!K.inv.has(id)) return 'Você não tem este item.'; if (it.tipo !== 'arma' && it.tipo !== 'amuleto') return 'Este item não se equipa.'; if (it.tipo === 'arma' && G.equip.weapon === id) return 'Já está na sua mão.'; }
+  else if (mode === 'use') { const p = G.pl; if (!K.inv.has(id)) return 'Você não tem este item.'; if (it.tipo !== 'consumivel') return 'Este item não se usa.'; if (!p.alive) return 'Indisponível agora.'; if (it.heal && p.hp >= p.maxhp && !it.mp && !it.buff) return 'Sua vida já está cheia.'; }
   else if (mode === 'craft') { const r = REG.recipe[o.recipe]; if (!r) return 'Receita desconhecida.'; const miss = Object.keys(r.in).filter(k => !K.inv.has(k, r.in[k])); if (miss.length) return 'Faltam ingredientes: ' + miss.map(k => (REG.item[k] || { nome: k }).nome).join(', ') + '.'; }
   return o.can ? (o.can() || '') : '';
 };
@@ -6277,7 +6279,7 @@ UI.itemWhy = function (id, mode, o) {
  * Devolve { close, layer }. Foco abre em Cancelar (nunca no botão de ação); clique fora / Esc / Cancelar fecham SÓ o pop-up. */
 UI.itemModal = function (id, mode, o) {
   const it = REG.item[id]; if (!it) return null; o = o || {}; mode = mode || 'info'; const G = K.G, r = mode === 'craft' ? REG.recipe[o.recipe] : null; if (mode === 'craft' && !r) return null;
-  if (UI._im) UI._im.close(true);
+  UI._ims = UI._ims || []; if (!o.stack) UI._ims.slice().forEach(m => m.close(true));   /* o.stack: abre POR CIMA do pop-up atual (ex.: tocar num ingrediente) */
   const t0 = performance.now(), young = () => performance.now() - t0 < UI.IM_GUARD_MS; let busy = false, dead = false;
   const l = UI.layer('itemmodal', { modal: true, onBack: () => close() }); l.el.setAttribute('role', 'dialog'); l.el.setAttribute('aria-modal', 'true');
   const p = h('div', 'panel im', '', l.el); const head = h('div', 'im-head', '', p), ic = h('div', 'im-ic', '', head); ic.appendChild(UI.itemIconCanvas(id, 96)); const tt = h('div', '', '', head); tt.style.minWidth = 0;
@@ -6287,21 +6289,23 @@ UI.itemModal = function (id, mode, o) {
   const money = h('div', 'im-sec', '', body), mk_ = h('div', 'kv', '', money);
   if (mode === 'buy') { money.insertAdjacentHTML('afterbegin', '<h3>Preço</h3>'); mk_.innerHTML = '<b>Custa</b><span>' + imCacos(o.price) + '</span><b>Você tem</b><span>' + imCacos(G.coins) + '</span><b>Depois da compra</b><span>' + (G.coins >= o.price ? imCacos(G.coins - o.price) : '—') + '</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>'; }
   else if (mode === 'sell') { money.insertAdjacentHTML('afterbegin', '<h3>Venda</h3>'); mk_.innerHTML = '<b>Você recebe</b><span>' + imCacos(o.price) + '</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span><b>Seus cacos depois</b><span>' + imCacos(G.coins + o.price) + '</span>'; }
-  else if (mode === 'craft') { money.insertAdjacentHTML('afterbegin', '<h3>Ingredientes · você tem × precisa</h3>'); mk_.remove(); Object.keys(r.in).forEach(k => { const have = K.inv.count(k), need = r.in[k], good = have >= need, row = h('div', 'im-ing ' + (good ? 'ok' : 'no'), '', money); row.appendChild(UI.itemIconCanvas(k, 40)); h('span', '', esc((REG.item[k] || { nome: k }).nome), row); h('em', '', (good ? '✓ ' : '✗ ') + have + ' × ' + need, row); }); h('div', 'kv', '<b>Rende</b><span>' + (r.out.n || 1) + ' un.</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>', money).style.marginTop = '.3rem'; }
-  else money.remove();
+  else if (mode === 'craft') { money.insertAdjacentHTML('afterbegin', '<h3>Ingredientes · você tem × precisa</h3>'); mk_.remove(); Object.keys(r.in).forEach(k => { const have = K.inv.count(k), need = r.in[k], good = have >= need, row = h('div', 'im-ing ' + (good ? 'ok' : 'no'), '', money); row.appendChild(UI.itemIconCanvas(k, 40)); h('span', '', esc((REG.item[k] || { nome: k }).nome), row); h('em', '', (good ? '✓ ' : '✗ ') + have + ' × ' + need, row); if (REG.item[k]) { row.dataset.nav = 1; row.title = 'Ver detalhes'; row.addEventListener('click', e => { e.stopPropagation(); const fi = Math.max(0, navItems().indexOf(row)); UI.itemModal(k, 'info', { stack: true, onClose: () => setFocus(fi) }); }); } }); h('div', 'kv', '<b>Rende</b><span>' + (r.out.n || 1) + ' un.</span><b>Na mochila</b><span>' + K.inv.count(id) + '</span>', money).style.marginTop = '.3rem'; }
+  else { money.insertAdjacentHTML('afterbegin', '<h3>Na sua mochila</h3>'); const eqp = G.equip.weapon === id || G.equip.charm === id; mk_.innerHTML = '<b>Quantidade</b><span>' + K.inv.count(id) + '</span>' + (eqp ? '<b>Equipado</b><span>sim ★</span>' : ''); }
+  const usos = Object.values(REG.recipe).filter(rc => rc.in && rc.in[id] && REG.item[rc.out.id]).map(rc => REG.item[rc.out.id].nome);   /* "para que serve" um material (item 18) */
+  if (it.tipo === 'material' && usos.length) { const s2 = h('div', 'im-sec', '<h3>Usado para fabricar</h3>', body); h('div', 'im-desc', esc(usos.join(' · ')), s2).style.fontSize = '.95rem'; }
   const whyEl = h('div', 'im-why', '', p); whyEl.setAttribute('role', 'status'); const foot = h('div', 'im-foot', '', p);
-  function close(quiet) { if (dead) return; dead = true; if (UI._im && UI._im.layer === l) UI._im = null; UI.drop(l); if (!quiet && o.onClose) o.onClose(); }
+  function close(quiet) { if (dead) return; dead = true; UI._ims = UI._ims.filter(x => x.layer !== l); UI._im = UI._ims[UI._ims.length - 1] || null; UI.drop(l); if (!quiet && o.onClose) o.onClose(); }
   const cancel = UI.btn(mode === 'info' ? 'Fechar' : 'Cancelar', () => close(), { parent: foot });   /* 1º do DOM = foco inicial; estilo normal (ghost some sobre papel) */
-  let act = null; const VERB = { buy: 'Comprar', sell: 'Vender', craft: 'Fabricar' };
+  let act = null; const VERB = { buy: 'Comprar', sell: 'Vender', craft: 'Fabricar', use: 'Usar', equip: it.tipo === 'amuleto' && G.equip.charm === id ? 'Tirar' : 'Equipar' };
   const refresh = () => { const why = mode === 'info' ? '' : UI.itemWhy(id, mode, o); whyEl.style.display = why ? '' : 'none'; whyEl.textContent = why ? '⚠ ' + why : ''; if (act) { act.disabled = !!why; act.title = why; } };
   if (mode !== 'info') act = UI.btn(VERB[mode], () => {
     if (busy || dead || young() || act.disabled) return;   /* clique que abriu o pop-up / clique duplo não confirma */
     busy = true; let ok;
-    if (o.confirm) ok = o.confirm(); else if (mode === 'buy') { ok = K.buy(id, o.price); if (ok) K.ui.toast('Comprou ' + it.nome + ' por ' + imCacos(o.price) + '.'); } else if (mode === 'sell') { ok = K.sell(id, o.price); if (ok) K.ui.toast('Vendeu ' + it.nome + ' por ' + imCacos(o.price) + '.'); } else ok = K.craft(o.recipe);
-    if (ok) { if (o.onDone) o.onDone(true, mode === 'buy' ? 'Comprou ' + it.nome + ' por ' + imCacos(o.price) + '.' : mode === 'sell' ? 'Vendeu ' + it.nome + ' por ' + imCacos(o.price) + '.' : 'Fabricou ' + it.nome + '.'); close(); } else { busy = false; refresh(); }
+    if (o.confirm) ok = o.confirm(); else if (mode === 'buy') { ok = K.buy(id, o.price); if (ok) K.ui.toast('Comprou ' + it.nome + ' por ' + imCacos(o.price) + '.'); } else if (mode === 'sell') { ok = K.sell(id, o.price); if (ok) K.ui.toast('Vendeu ' + it.nome + ' por ' + imCacos(o.price) + '.'); } else if (mode === 'equip') { const tirou = VERB.equip === 'Tirar'; ok = K.inv.equip(id); if (ok) K.ui.toast((tirou ? 'Tirou ' : 'Equipou ') + it.nome + '.'); } else if (mode === 'use') ok = K.inv.use(id); else ok = K.craft(o.recipe);
+    if (ok) { if (o.onDone) o.onDone(true, mode === 'buy' ? 'Comprou ' + it.nome + ' por ' + imCacos(o.price) + '.' : mode === 'sell' ? 'Vendeu ' + it.nome + ' por ' + imCacos(o.price) + '.' : mode === 'equip' ? VERB.equip.replace('Tirar', 'Tirou').replace('Equipar', 'Equipou') + ' ' + it.nome + '.' : mode === 'use' ? 'Usou ' + it.nome + '.' : 'Fabricou ' + it.nome + '.'); close(); } else { busy = false; refresh(); }
   }, { parent: foot, cls: 'pri' });
   l.el.addEventListener('click', e => { if (e.target === l.el && !young()) close(); });   /* clicar fora fecha SÓ o pop-up */
-  refresh(); const m = { close, layer: l, act, cancel }; UI._im = m; setFocus(0); return m;
+  refresh(); const m = { close, layer: l, act, cancel }; UI._ims.push(m); UI._im = m; setFocus(Math.max(0, navItems().indexOf(cancel))); return m;   /* foco SEMPRE em Cancelar/Fechar, mesmo com linhas clicáveis antes dele */
 };
 UI.shop = function (npcDef) {
   const G = K.G; K.uiBlock = true; const sh = npcDef && npcDef.shop; if (!sh) { K.uiBlock = false; return; } const stock = Array.isArray(sh) ? sh : sh.stock, buyMul = sh.buyMul || 1, sellMul = sh.sellMul === undefined ? .4 : sh.sellMul; const l = UI.layer('shop', { modal: true, onBack: () => { UI.drop(l); K.uiBlock = false; } });
