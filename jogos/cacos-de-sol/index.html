@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.3.4</title>
+<title>Cacos de Sol 1.3.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -40,8 +40,9 @@ body.dlgopen #touch,body.uimodal #touch{display:none!important}
 .b-map{right:calc(var(--sr) + var(--mm,11.5rem) + 3.1rem + var(--tb) * .75 + 10px);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75);font-size:calc(var(--tb) * .17)}
 .tb.lockd{opacity:.45}
 body.touchmode .hud-bot{display:none}
-body.touchmode .qtrack{position:fixed;left:max(calc(var(--sl) + 19rem),230px);top:calc(var(--st) + 1rem);width:min(22rem,calc(var(--vw,1vw)*30));font-size:.72rem;padding:.25rem .5rem}
-body.touchmode.boss .qtrack{display:none}
+body.touchmode .qbox{position:fixed;left:max(calc(var(--sl) + 19rem),230px);top:calc(var(--st) + 1rem);width:min(22rem,calc(var(--vw,1vw)*30));gap:.25rem}
+body.touchmode .qtrack{font-size:.72rem;padding:.25rem .5rem}body.touchmode .trailchip{font-size:.75rem}body.touchmode .trailchip .x{width:1.9rem;height:1.6rem}
+body.touchmode.boss .qbox{display:none}
 body.touchmode .hud-tr{gap:.3rem}
 body.touchmode .prompt{display:none!important}
 #stage{position:fixed;left:0;top:0;width:100%;height:100%}
@@ -4291,7 +4292,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.3.4', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.3.5', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -4322,7 +4323,7 @@ const PAL = K.pal = { ink: '#101830', ink2: '#1E2A55', paper: '#F4F1E8', paper2:
 const SAVE_KEY = 'cacosdesol.v1.save';
 /* opt: sv/mv volumes 0-100 · sens 1..10 (padrão 5) · inv (inverter Y) · q 0..2 / qa 1 = automático (só em memória, regra h) · shake · hap · fov · outl (contornos) · shadow
  * game: null | snapshot da partida (K.snapshot) · meta: coisas que sobrevivem ao "novo jogo" (finais, recordes) */
-const SAVE = K.save = { opt: { sv: 100, mv: 70, sens: 5, inv: 0, q: 1, qa: 1, shake: 1, hap: 1, fov: 1, outl: 1, shadow: 1, tsz: 1, mms: 1, lang: 'pt' }, game: null, meta: { ends: 0, best: 0, seen: {}, plays: 0, time: 0 } };
+const SAVE = K.save = { opt: { sv: 100, mv: 70, sens: 5, inv: 0, q: 1, qa: 1, shake: 1, hap: 1, fov: 1, outl: 1, shadow: 1, tsz: 1, mms: 1, mmrot: 1, lang: 'pt' }, game: null, meta: { ends: 0, best: 0, seen: {}, plays: 0, time: 0 } };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s) { Object.assign(SAVE, s, { opt: Object.assign(SAVE.opt, s.opt || {}), meta: Object.assign(SAVE.meta, s.meta || {}) }); } } catch (e) {}
 SAVE.opt.snd = SAVE.opt.sv > 0 ? 1 : 0; SAVE.opt.mus = SAVE.opt.mv > 0 ? 1 : 0;
 K.qRun = 1; K.qEff = () => SAVE.opt.qa ? Math.min(K.qRun, 2) : SAVE.opt.q;            // qualidade automática só em memória (regra h)
@@ -4418,7 +4419,8 @@ K.boot = async first => {
 };
 
 /*==ENGINE:input==  teclado, mouse (pointer lock), toque (analógico flutuante + arrastar para a câmera + botões), gamepad, piloto automático (bot) */
-const IN = K.input = { mv: { x: 0, y: 0 }, look: { x: 0, y: 0 }, zoom: 0, down: {}, hit: {}, rel: {}, held: {}, bufT: {}, bot: null, dev: 'kb', locked: false, touch: false };
+const IN = K.input = { tap: a => { LATCH[a] = 1; },   /* 1.3.5: HUD clicável dispara uma ação do jogo (clicar no aviso 'E · Falar' = interagir) */
+  mv: { x: 0, y: 0 }, look: { x: 0, y: 0 }, zoom: 0, down: {}, hit: {}, rel: {}, held: {}, bufT: {}, bot: null, dev: 'kb', locked: false, touch: false };
 /* ações do jogo: attack(segurar = golpe carregado) roll jump skill1 skill2 skill3 interact lock pause map inv char(H, tela do personagem) quests pot1 pot2 camreset */
 const ACTS = ['attack', 'roll', 'jump', 'skill1', 'skill2', 'skill3', 'interact', 'lock', 'pause', 'map', 'inv', 'char', 'quests', 'pot1', 'pot2', 'camreset'];
 const KB = {}, MS = {}, TC = {}, PD = {}, LATCH = {};   // LATCH: toque curtíssimo (menor que um passo) ainda vale
@@ -4429,6 +4431,8 @@ const SENS = () => .5 + SAVE.opt.sens * .1;                  // nível 5 = 1,0
 const MOUSE_BASE = .0011, TOUCH_BASE = .0042 * 1.35, PAD_BASE = 2.6;   // rad/px (mouse: já a 50% da calibração inicial, regra i) · rad/px toque · rad/s no analógico
 function uiOpen() { return K.paused || !!document.querySelector('#ui .layer.modal'); }
 window.addEventListener('keydown', e => {
+  /* 1.3.5 (item 15): SEGURAR Alt solta o cursor SEM pausar, para clicar no HUD (missões, rastreio, barras...) no PC; soltar Alt devolve a câmera ao mouse */
+  if (e.code === 'AltLeft' || e.code === 'AltRight') { e.preventDefault(); if (!e.repeat && K.sceneName === 'play' && document.pointerLockElement) { IN.altFree = true; try { document.exitPointerLock(); } catch (er) {} } return; }
   if (e.repeat) { if (MOVEKEYS[e.code] || KEYMAP[e.code]) e.preventDefault(); return; }
   IN.dev = 'kb'; IN.touch = false;
   if (K.ui && K.ui.key && K.ui.key(e)) { e.preventDefault(); return; }       // menus consomem primeiro
@@ -4438,9 +4442,9 @@ window.addEventListener('keydown', e => {
   if (K.debug.keys && K.debug.keys[e.code]) K.debug.keys[e.code]();
   if (e.code !== 'Escape' && (MOVEKEYS[e.code] || KEYMAP[e.code])) IN.relock();   // 1.1.0: andar/pular/rolar também devolve o mouse ao jogo
 });
-window.addEventListener('keyup', e => { delete mvKeys[e.code]; const a = KEYMAP[e.code]; if (a) KB[a] = 0; });
+window.addEventListener('keyup', e => { if (e.code === 'AltLeft' || e.code === 'AltRight') { e.preventDefault(); if (IN.altFree) { IN.altFree = false; IN.relock(); } return; } delete mvKeys[e.code]; const a = KEYMAP[e.code]; if (a) KB[a] = 0; });
 function clearAll() { for (const k in KB) KB[k] = 0; for (const k in MS) MS[k] = 0; for (const k in TC) TC[k] = 0; for (const k in mvKeys) delete mvKeys[k]; tj.on = false; tj.id = -1; camId = -1; if (tjEl) tjEl.base.style.display = 'none'; }
-window.addEventListener('blur', clearAll); document.addEventListener('visibilitychange', () => { if (document.hidden) clearAll(); });   // toques não ficam presos (lição Kuku 2.7)
+window.addEventListener('blur', () => { IN.altFree = false; clearAll(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) clearAll(); });   // toques não ficam presos (lição Kuku 2.7)
 /* mouse */
 function playing() { return K.sceneName === 'play' && !K.paused && !K.G_dialog; }
 /* CURSOR (1.0.2): o mouse fica "preso" (pointer lock) só enquanto se joga. Qualquer tela que precise do cursor — diálogo, loja, fabricação,
@@ -4449,16 +4453,16 @@ function playing() { return K.sceneName === 'play' && !K.paused && !K.G_dialog; 
 /* 1.1.0 — RELOCK: ao fechar fala/loja/fabricação/fogueira/pausa/morte o mouse VOLTA SOZINHO para o jogo (antes pedia "um clique para entrar": em RPG com muita conversa,
  * o inimigo chegava e a câmera não mexia). O fechamento acontece dentro de um clique/tecla do jogador, então o navegador autoriza o pedido de pointer lock;
  * se negar (Esc, aba sem foco), qualquer tecla de jogo ou clique no jogo pede de novo (keydown/mousedown abaixo). IN.relock() é seguro de chamar a qualquer hora. */
-IN.canLock = () => !IN.locked && !IN.touch && !document.body.classList.contains('touchmode') && IN.dev === 'kb' && K.sceneName === 'play' && !K.paused && !K.uiBlock && !K.dlg && !uiOpen() && !!K.G && K.G.pl.alive && !K.debug.nopause && !IN.bot;
+IN.canLock = () => !IN.locked && !IN.altFree && !IN.touch && !document.body.classList.contains('touchmode') && IN.dev === 'kb' && K.sceneName === 'play' && !K.paused && !K.uiBlock && !K.dlg && !uiOpen() && !!K.G && K.G.pl.alive && !K.debug.nopause && !IN.bot;
 IN._rlT = -9e9; IN._rlP = false;   // um pedido por vez ENQUANTO o anterior está pendente: dois requestPointerLock no mesmo instante fazem o navegador soltar e prender de novo, e o 'soltou' pausava o jogo (achado pelo qa:interface). Pendente = até pointerlockchange/error (ou 700 ms); um relock legítimo logo depois passa.
 IN.relock = () => { if (!IN.canLock() || IN._rlP) return; IN._rlP = true; IN._rlT = performance.now(); setTimeout(() => { IN._rlP = false; }, 700); try { window.focus(); const pr = $('gl').requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (er) {} };
 IN.relockSoon = () => setTimeout(IN.relock, 0);   // depois que a tela que fechou terminar de abrir/fechar o que mais precisar
 IN.freeCursor = () => { if (!document.pointerLockElement) return; if (K.paused || K.uiBlock || K.sceneName !== 'play' || uiOpen()) { try { document.exitPointerLock(); } catch (er) {} } };
 document.addEventListener('pointerlockerror', () => { IN._rlP = false; });
-document.addEventListener('pointerlockchange', () => { IN._rlP = false; IN.locked = document.pointerLockElement === $('gl'); if (!IN.locked && performance.now() - IN._rlT > 400 && K.sceneName === 'play' && !K.paused && !K.uiBlock && !uiOpen() && !IN.touch && !K.debug.nopause && K.onUnlock) K.onUnlock(); });
+document.addEventListener('pointerlockchange', () => { IN._rlP = false; IN.locked = document.pointerLockElement === $('gl'); if (!IN.locked && performance.now() - IN._rlT > 400 && K.sceneName === 'play' && !K.paused && !K.uiBlock && !uiOpen() && !IN.touch && !K.debug.nopause && !IN.altFree && K.onUnlock) K.onUnlock(); });
 document.addEventListener('mousemove', e => { if (!IN.locked) return; const s = MOUSE_BASE * SENS(); IN.look.x += e.movementX * s; IN.look.y += e.movementY * s * (SAVE.opt.inv ? -1 : 1); });
 document.addEventListener('mousedown', e => {
-  if (e.target.closest && e.target.closest('#ui .layer.modal, #touch, #mm')) return;   // 1.3.1: clicar no minimapa abre o mapa; não ataca nem prende o mouse
+  if (e.target.closest && e.target.closest('#ui .layer.modal, #touch, #mm, .hudtap')) return;   // 1.3.1/1.3.5: clicar no minimapa ou em qualquer HUD clicável (.hudtap) não ataca nem prende o mouse
   if (K.sceneName !== 'play' || K.paused || K.uiBlock || uiOpen()) return;       // com tela aberta o clique é da tela, nunca prende o mouse nem ataca
   if (!IN.locked && e.target.id === 'gl' && !IN.touch && e.pointerType !== 'touch') { try { const pr = $('gl').requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (er) {} return; }
   IN.dev = 'kb'; if (e.button === 0) { MS.attack = 1; LATCH.attack = 1; } if (e.button === 2) { MS.skill2 = 1; LATCH.skill2 = 1; } if (e.button === 1) MS.lock = 1;
@@ -4479,16 +4483,18 @@ K.buildTouch = () => {
   for (const b of TBTN) { const d = document.createElement('button'); d.className = 'tb ' + b.cls; d.dataset.a = b.a; d.textContent = b.txt; root.appendChild(d); }
   tjEl = { base: $('tbase'), knob: $('tknob') };
   const joy = $('tjoy'), cam = $('tcam');
-  joy.addEventListener('pointerdown', e => { if (tj.on) return; IN.touch = true; IN.dev = 'touch'; tj.on = true; tj.id = e.pointerId; const P = K.pt(e); tj.ox = P.x; tj.oy = P.y; tj.x = tj.y = 0; joy.setPointerCapture(e.pointerId); tjEl.base.style.display = 'block'; tjEl.base.style.left = P.x + 'px'; tjEl.base.style.top = P.y + 'px'; tjEl.knob.style.transform = 'translate(-50%,-50%)'; });
+  joy.addEventListener('pointerdown', e => { if (hudDown(e)) return; if (tj.on) return; IN.touch = true; IN.dev = 'touch'; tj.on = true; tj.id = e.pointerId; const P = K.pt(e); tj.ox = P.x; tj.oy = P.y; tj.x = tj.y = 0; joy.setPointerCapture(e.pointerId); tjEl.base.style.display = 'block'; tjEl.base.style.left = P.x + 'px'; tjEl.base.style.top = P.y + 'px'; tjEl.knob.style.transform = 'translate(-50%,-50%)'; });
   joy.addEventListener('pointermove', e => { if (e.pointerId !== tj.id) return; const R0 = Math.max(46, Math.min(K.vw(), K.vh()) * .11); const P = K.pt(e); let dx = P.x - tj.ox, dy = P.y - tj.oy; const d = Math.hypot(dx, dy); if (d > R0) { dx *= R0 / d; dy *= R0 / d; } tj.x = dx / R0; tj.y = dy / R0; tjEl.knob.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`; });
-  const jEnd = e => { if (e.pointerId !== tj.id) return; tj.on = false; tj.id = -1; tj.x = tj.y = 0; tjEl.base.style.display = 'none'; };
+  const jEnd = e => { if (hudUp(e)) return; if (e.pointerId !== tj.id) return; tj.on = false; tj.id = -1; tj.x = tj.y = 0; tjEl.base.style.display = 'none'; };
   joy.addEventListener('pointerup', jEnd); joy.addEventListener('pointercancel', jEnd);
   /* 1.3.1: o minimapa é HUD e fica embaixo da camada de toque (a área da câmera cobre a direita da tela). O toque que cai nele é encaminhado: solto em cima do minimapa, abre o mapa (K.openMap); não gira a câmera. */
-  const mmHit = e => { const m = $('mm'); if (!m || !m.getBoundingClientRect().width) return false; const r = m.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
-  let mmTid = -1;
-  cam.addEventListener('pointerdown', e => { if (mmHit(e)) { mmTid = e.pointerId; return; } if (camId >= 0) return; IN.touch = true; IN.dev = 'touch'; camId = e.pointerId; const P = K.pt(e); camX = P.x; camY = P.y; cam.setPointerCapture(e.pointerId); });
+  /* 1.3.5 (item 15): vale para TODO HUD clicável (classe .hudtap: missões, barras, relógio, rastreio...), nas duas áreas (analógico e câmera). Solto em cima do MESMO elemento = clique nele. */
+  const hudHit = e => { for (const m of document.querySelectorAll('#mm, #ui .hud .hudtap')) { const r = m.getBoundingClientRect(); if (!r.width || !m.offsetParent) continue; if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { let best = m; for (const c of m.querySelectorAll('.hudtap')) { const q = c.getBoundingClientRect(); if (q.width && e.clientX >= q.left && e.clientX <= q.right && e.clientY >= q.top && e.clientY <= q.bottom) best = c; } return best; } } return null; };
+  let mmTid = -1, mmEl = null; const hudDown = e => { const el = hudHit(e); if (!el) return false; mmTid = e.pointerId; mmEl = el; return true; };
+  const hudUp = e => { if (e.pointerId !== mmTid) return false; mmTid = -1; const el = hudHit(e), was = mmEl; mmEl = null; if (el && el === was) { if (el.id === 'mm') { if (K.openMap) K.openMap(); } else el.click(); } return true; };
+  cam.addEventListener('pointerdown', e => { if (hudDown(e)) return; if (camId >= 0) return; IN.touch = true; IN.dev = 'touch'; camId = e.pointerId; const P = K.pt(e); camX = P.x; camY = P.y; cam.setPointerCapture(e.pointerId); });
   cam.addEventListener('pointermove', e => { if (e.pointerId !== camId) return; const s = TOUCH_BASE * SENS(); const P = K.pt(e); IN.look.x += (P.x - camX) * s; IN.look.y += (P.y - camY) * s * (SAVE.opt.inv ? -1 : 1); camX = P.x; camY = P.y; });
-  const cEnd = e => { if (e.pointerId === mmTid) { mmTid = -1; if (mmHit(e) && K.openMap) K.openMap(); } if (e.pointerId === camId) camId = -1; }; cam.addEventListener('pointerup', cEnd); cam.addEventListener('pointercancel', cEnd);
+  const cEnd = e => { if (hudUp(e)) return; if (e.pointerId === camId) camId = -1; }; cam.addEventListener('pointerup', cEnd); cam.addEventListener('pointercancel', cEnd);
   root.querySelectorAll('.tb').forEach(b => { const a = b.dataset.a;
     b.addEventListener('pointerdown', e => { e.preventDefault(); IN.touch = true; IN.dev = 'touch'; b.setPointerCapture(e.pointerId); TC[a] = (TC[a] || 0) + 1; LATCH[a] = 1; b.classList.add('on'); });
     const up = e => { if (TC[a] > 0) TC[a]--; if (!TC[a]) b.classList.remove('on'); }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); });
@@ -5225,6 +5231,94 @@ W.toUV = (x, z) => [(x / (WHALF * 2) + .5), (z / (WHALF * 2) + .5)];
 /* região (para o aviso ao entrar): biome id + nome */
 W.region = (x, z) => { for (const p of poiList()) if (p.region && Math.hypot(x - p.x, z - p.z) < p.region) return { id: p.id, nome: p.nome, poi: p }; const b = W.biomeAt(x, z); return b ? { id: b.id, nome: b.nome, biome: b } : { id: 'costa', nome: 'Costa dos Cacos' }; };
 
+/*==ENGINE:nav==  RASTREIO (1.3.5, itens 9 + 17 do roadmap): UM só sistema para "lugar escolhido no mapa" e "missão rastreada".
+ * K.trail.set({ t:'poi', id })  → rastreia um lugar (some ao chegar)
+ * K.trail.set({ t:'q', id })    → rastreia uma missão (segue o objetivo do passo atual; some quando a missão termina)
+ * K.trail.clear()               → para de rastrear · K.trail.is(o) → true se o é o rastreio atual · K.trail.target() → { x, z, nome, sub } | null
+ * Estado salvo em G.trail. O caminho (K.trail.path, lista de [x,z] do jogador até o alvo) sai de um A* numa grade de 2 m sobre o relevo:
+ * evita mar fundo, ladeira que não se sobe e colisor alto (casa, pedra, árvore); colisor baixo (cerca, que se pula) só custa mais.
+ * O mesmo caminho desenha: a linha no minimapa (08-ui), a linha no mapa-múndi (08-ui) e as setas no chão (aqui, K.trail.mesh).
+ * Regra da hierarquia do mapa: o rastro é LINHA amarela com tinta e setas; nunca usa ícone de lugar. */
+const NAV_C = 2, NAV_N = Math.round(K.world.half * 2 / NAV_C) + 1;
+let navG = null;
+/* grade: custo por célula (0 = bloqueada). Montada uma vez por mundo (o relevo e os colisores não mudam durante a partida). */
+function navGrid() {
+  const W = K.world; if (!W.built) return null; if (navG && navG.H === W.H) return navG;
+  const N = NAV_N, cost = new Float32Array(N * N), X = i => -W.half + i * NAV_C;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const x = X(i), z = X(j); if (!W.walkable(x, z)) continue; const s = W.slope(x, z); if (s > .95) continue; cost[j * N + i] = 1 + s * 1.6 + (W.h(x, z) < W.sea ? 1.5 : 0); }
+  const seen = new Set();
+  for (const k in W.col) for (const o of W.col[k]) { if (seen.has(o) || o.off) continue; seen.add(o); const low = o.top !== undefined && o.top - W.h(o.x, o.z) < 1.15, pad = .55;
+    const rr = (o.t === 'c' ? o.r : Math.hypot(o.hw, o.hd)) + pad, i0 = Math.max(0, Math.floor((o.x - rr + W.half) / NAV_C)), i1 = Math.min(N - 1, Math.ceil((o.x + rr + W.half) / NAV_C)), j0 = Math.max(0, Math.floor((o.z - rr + W.half) / NAV_C)), j1 = Math.min(N - 1, Math.ceil((o.z + rr + W.half) / NAV_C));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const x = X(i), z = X(j); let inside;
+      if (o.t === 'c') inside = Math.hypot(x - o.x, z - o.z) < o.r + pad;
+      else { const c = Math.cos(o.rot), s = Math.sin(o.rot), dx = x - o.x, dz = z - o.z, lx = dx * c - dz * s, lz = dx * s + dz * c; inside = Math.abs(lx) < o.hw + pad && Math.abs(lz) < o.hd + pad; }
+      if (!inside) continue; const q = j * N + i; if (!cost[q]) continue; if (low) cost[q] += 7; else cost[q] = 0; } }
+  navG = { H: W.H, cost, N }; return navG;
+}
+const navIdx = (x, z) => { const i = clamp(Math.round((x + K.world.half) / NAV_C), 0, NAV_N - 1), j = clamp(Math.round((z + K.world.half) / NAV_C), 0, NAV_N - 1); return j * NAV_N + i; };
+const navX = q => -K.world.half + (q % NAV_N) * NAV_C, navZ = q => -K.world.half + Math.floor(q / NAV_N) * NAV_C;
+/* célula livre mais perto (alvo dentro de uma casa, jogador encostado numa pedra...) */
+function navFree(q, gr) { if (gr.cost[q]) return q; const ci = q % NAV_N, cj = Math.floor(q / NAV_N); for (let r = 1; r < 12; r++) { let best = -1, bd = 1e9; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue; const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= NAV_N || j >= NAV_N) continue; const k = j * NAV_N + i; if (gr.cost[k] && di * di + dj * dj < bd) { bd = di * di + dj * dj; best = k; } } if (best >= 0) return best; } return -1; }
+/* reta livre na grade (para alisar o caminho em zigue-zague) */
+function navClear(gr, ax, az, bx, bz) { const n = Math.ceil(Math.hypot(bx - ax, bz - az) / (NAV_C * .45)); for (let s = 1; s < n; s++) { const t = s / n, c = gr.cost[navIdx(lerp(ax, bx, t), lerp(az, bz, t))]; if (!c || c > 5) return false; } return true; }
+/* A* (8 vizinhos, sem cortar quina). Devolve [[x,z]...] do início ao fim, ou null */
+K.navPath = function (x0, z0, x1, z1) {
+  const gr = navGrid(); if (!gr) return null; const N = gr.N, C = gr.cost; let s = navFree(navIdx(x0, z0), gr), e = navFree(navIdx(x1, z1), gr); if (s < 0 || e < 0) return null;
+  const g = new Float32Array(N * N).fill(Infinity), par = new Int32Array(N * N).fill(-1), closed = new Uint8Array(N * N), ei = e % N, ej = Math.floor(e / N);
+  const heap = [], hf = []; const push = (q, f) => { heap.push(q); hf.push(f); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (hf[p] <= hf[i]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; [hf[p], hf[i]] = [hf[i], hf[p]]; i = p; } };
+  const pop = () => { const top = heap[0], lq = heap.pop(), lf = hf.pop(); if (heap.length) { heap[0] = lq; hf[0] = lf; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && hf[l] < hf[m]) m = l; if (r < heap.length && hf[r] < hf[m]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; [hf[m], hf[i]] = [hf[i], hf[m]]; i = m; } } return top; };
+  const hh = q => { const dx = Math.abs(q % N - ei), dz = Math.abs(Math.floor(q / N) - ej); return (Math.max(dx, dz) + .414 * Math.min(dx, dz)); };
+  g[s] = 0; push(s, hh(s)); let found = false, it = 0;
+  while (heap.length && it++ < N * N) { const q = pop(); if (closed[q]) continue; if (q === e) { found = true; break; } closed[q] = 1; const qi = q % N, qj = Math.floor(q / N);
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const i = qi + di, j = qj + dj; if (i < 0 || j < 0 || i >= N || j >= N) continue; const k = j * N + i; if (!C[k] || closed[k]) continue;
+      if (di && dj && (!C[qj * N + i] || !C[j * N + qi])) continue; const ng = g[q] + C[k] * (di && dj ? 1.414 : 1); if (ng < g[k]) { g[k] = ng; par[k] = q; push(k, ng + hh(k)); } } }
+  if (!found) return null; const cells = []; for (let q = e; q >= 0; q = par[q]) cells.push(q); cells.reverse();
+  const raw = cells.map(q => [navX(q), navZ(q)]); raw[0] = [x0, z0]; if (C[navIdx(x1, z1)]) raw[raw.length - 1] = [x1, z1];
+  const out = [raw[0]]; let a = 0; while (a < raw.length - 1) { let b = raw.length - 1; while (b > a + 1 && !navClear(gr, raw[a][0], raw[a][1], raw[b][0], raw[b][1])) b--; out.push(raw[b]); a = b; }
+  return out;
+};
+/* ---------------------------------------------------------------- o rastreio (estado + alvo + chegada) */
+const TRL = K.trail = { path: null, near: false, mesh: null, _t: 0, _from: null, _to: null };
+TRL.is = o => { const t = K.G && K.G.trail; return !!(t && o && t.t === o.t && t.id === o.id); };
+TRL.label = o => { if (!o) return ''; if (o.t === 'q') return (REG.quest[o.id] || {}).nome || o.id; const po = REG.poi[o.id]; return po ? po.nome || o.id : o.id; };
+TRL.set = function (o, quiet) { const G = K.G; if (!G || !o) return; G.trail = { t: o.t, id: o.id }; TRL._t = .6; const tg = TRL.target(), p = G.pl; TRL._from = [p.x, p.z]; TRL._to = tg ? [tg.x, tg.z] : null; TRL.path = tg ? (K.navPath(p.x, p.z, tg.x, tg.z) || [[p.x, p.z], [tg.x, tg.z]]) : null;   /* calcula JÁ: quem escolhe está com o jogo pausado (mapa/missões) e quer ver o caminho */
+  if (!quiet) { K.sfx('ui_ok'); K.ui.toast(tg ? 'Rastreando: ' + TRL.label(o) : 'Rastreando: ' + TRL.label(o) + ' (sem lugar fixo agora)', 2.8); } };
+TRL.clear = function (quiet, msg) { const G = K.G; if (!G || !G.trail) return; G.trail = null; TRL.path = null; TRL.near = false; if (TRL.mesh) TRL.mesh.visible = false; if (!quiet) { K.sfx('ui_volta'); K.ui.toast(msg || 'Rastreio desligado', 2.4); } };
+TRL.toggle = o => { if (TRL.is(o)) TRL.clear(); else TRL.set(o); };
+/* alvo atual: quest → marcador do passo (pode andar, ex.: o lugar de caça mais perto); lugar → o POI */
+TRL.target = function () { const G = K.G, t = G && G.trail; if (!t) return null;
+  if (t.t === 'q') { const d = REG.quest[t.id], s = G.q[t.id]; if (!d || !s || s.st !== 'active') return null; const st = d.steps[s.step], m = K.quest.marker(st); return m ? { x: m[0], z: m[1], nome: d.nome, sub: st ? st.text : '', q: true } : null; }
+  const po = REG.poi[t.id]; return po ? { x: po.x, z: po.z, nome: po.nome || po.id, sub: 'Lugar', r: Math.max(5, Math.min(10, (po.region || 8) * .6)) } : null; };
+TRL.update = function (dt) {
+  const G = K.G; if (!G) return; const t = G.trail; if (!t) { TRL.path = null; if (TRL.mesh) TRL.mesh.visible = false; return; }
+  if (t.t === 'q' && !(G.q[t.id] && G.q[t.id].st === 'active')) { TRL.clear(false, G.q[t.id] && G.q[t.id].st === 'done' ? 'Missão feita: rastreio encerrado' : 'Rastreio encerrado'); return; }
+  const tg = TRL.target(), p = G.pl; if (!tg) { TRL.path = null; if (TRL.mesh) TRL.mesh.visible = false; return; }
+  const d = Math.hypot(tg.x - p.x, tg.z - p.z);
+  if (!tg.q && d < tg.r) { K.sfx('missao_ok'); TRL.clear(true); K.ui.toast('Você chegou: ' + tg.nome, 3); return; }   /* lugar: o rastro some ao chegar */
+  TRL.near = d < 6;                                                                                                   /* missão: perto do objetivo o rastro se esconde (volta se afastar) */
+  TRL._t -= dt; const moved = !TRL._from || Math.hypot(TRL._from[0] - p.x, TRL._from[1] - p.z) > 2.5, tmoved = !TRL._to || Math.hypot(TRL._to[0] - tg.x, TRL._to[1] - tg.z) > 1.5;
+  if (!TRL.path || tmoved || (moved && TRL._t <= 0)) { TRL._t = .6; TRL._from = [p.x, p.z]; TRL._to = [tg.x, tg.z]; TRL.path = K.navPath(p.x, p.z, tg.x, tg.z) || [[p.x, p.z], [tg.x, tg.z]]; }
+  const P = TRL.path; while (P.length > 2) { const a = P[1], b = P[2], vx = b[0] - a[0], vz = b[1] - a[1], wx = p.x - a[0], wz = p.z - a[1]; if (Math.hypot(wx, wz) < 2 || wx * vx + wz * vz > 0) P.splice(1, 1); else break; }   /* ponto que ficou para trás sai */
+  P[0] = [p.x, p.z]; trailMesh(P);
+};
+/* ---- setas no chão: duas malhas instanciadas (tinta por baixo + amarelo por cima), andando em direção ao alvo ---- */
+const TRL_MAX = 28, TRL_GAP = 2.2, TRL_LEN = 52, _tm = new THREE.Matrix4(), _tq = new THREE.Quaternion(), _tv = new THREE.Vector3(), _ts = new THREE.Vector3(), _ty = new THREE.Vector3(0, 1, 0);
+function trailGeo(k) { const s = new THREE.Shape(); s.moveTo(0, .55 * k); s.lineTo(.55 * k, -.05 * k); s.lineTo(.55 * k, -.38 * k); s.lineTo(0, .16 * k); s.lineTo(-.55 * k, -.38 * k); s.lineTo(-.55 * k, -.05 * k); s.closePath(); const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); return g; }
+function trailMeshMake() { const grp = new THREE.Group(); grp.name = 'trail';
+  const mat = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, depthWrite: false, side: THREE.DoubleSide });
+  const ink = new THREE.InstancedMesh(trailGeo(1.32), mat('#101830', .85), TRL_MAX), sun = new THREE.InstancedMesh(trailGeo(1), mat('#FFD23F', .97), TRL_MAX);
+  ink.renderOrder = 3; sun.renderOrder = 4; ink.frustumCulled = sun.frustumCulled = false; grp.add(ink, sun); grp.userData = { ink, sun }; return grp; }
+function trailMesh(P) {
+  const R3 = K.r3; if (!R3 || !R3.world) return; if (!TRL.mesh) TRL.mesh = trailMeshMake(); if (TRL.mesh.parent !== R3.world) R3.world.add(TRL.mesh);
+  const { ink, sun } = TRL.mesh.userData, W = K.world; let n = 0;
+  if (!TRL.near) { let seg = 0, segS = 0, s = 1.6 + (K.time * 1.6) % TRL_GAP; const L = []; let tot = 0; for (let i = 1; i < P.length; i++) { const l = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); L.push(l); tot += l; }
+    const end = Math.min(TRL_LEN, tot - 1.2);
+    for (; s < end && n < TRL_MAX; s += TRL_GAP) { while (seg < L.length - 1 && s > segS + L[seg]) { segS += L[seg]; seg++; } const a = P[seg], b = P[seg + 1], u = clamp((s - segS) / (L[seg] || 1), 0, 1), x = lerp(a[0], b[0], u), z = lerp(a[1], b[1], u), dx = b[0] - a[0], dz = b[1] - a[1];
+      const y = Math.max(W.h(x, z), W.sea) + .14, sc = clamp((end - s) / 6, .35, 1) * clamp((s - .6) / 2.2, .35, 1);
+      _tq.setFromAxisAngle(_ty, Math.atan2(-dx, -dz)); _tv.set(x, y, z); _ts.set(sc, 1, sc); _tm.compose(_tv, _tq, _ts); ink.setMatrixAt(n, _tm); _tv.y += .02; _tm.compose(_tv, _tq, _ts); sun.setMatrixAt(n, _tm); n++; } }
+  ink.count = sun.count = n; ink.instanceMatrix.needsUpdate = sun.instanceMatrix.needsUpdate = true; TRL.mesh.visible = n > 0;
+}
+
 /*==ENGINE:game==  partida: estado K.G, jogador (andar, pular, rolar, combo, golpe carregado, habilidades), câmera em 3ª pessoa com alvo fixo, combate, ciclo dia/noite
  * Convenção: frente = (sin yaw, cos yaw) · y para cima · x leste · z sul. K.G existe só durante a partida. */
 K.G = null; const GRAV = 26, RUN = 6.4;
@@ -5462,7 +5556,7 @@ K.updateGame = function (dt) {
   if (!K.uiBlock) {
     G.tod = (G.tod + dt / 60 * (G.todSpeed || 1)) % 24; if (G.tod < dt / 60 * 1.01) G.day++; if (K.frame % 3 === 0) K.sky.set(G.tod);
     updPlayer(sdt); K.updateEnemies(edt); K.updateProjs(edt); K.updateDrops(sdt); K.updateWorldEntities(sdt); K.updateInteract(sdt); K.updateAmbient(sdt);
-    K.updateQuests && K.updateQuests(dt);
+    K.updateQuests && K.updateQuests(dt); K.trail && K.trail.update(dt);   /* 1.3.5: rastreio (caminho no minimapa, no mapa e setas no chão) */
   } else { G.pl.mi.update(dt); for (const e of G.enemies) e.mi.update(dt * .2); }
   W_.update(dt); K.fx.update(dt); updCamera(dt); updRegion(dt); K.ui.updateHud && K.ui.updateHud(dt);
 };
@@ -5831,7 +5925,7 @@ const Q = K.quest = {
   state: id => K.G.q[id] || null,
   active: () => Object.keys(K.G.q).filter(id => K.G.q[id].st === 'active'),
   done: id => !!(K.G.q[id] && K.G.q[id].st === 'done'),
-  start(id, silent) { const G = K.G, d = REG.quest[id]; if (!d || G.q[id]) return false; G.q[id] = { st: 'active', step: 0, n: 0, t: 0 }; if (!G.track || (d.tipo === 'main')) G.track = id; if (!silent) { K.ui.toast('Nova missão: ' + d.nome, 3.5); K.sfx('missao_nova'); } if (d.onStart) d.onStart(G); const s = d.steps[0]; if (s && s.onStart) s.onStart(G); K.emit('quest', { id, ev: 'start' }); return true; },
+  start(id, silent) { const G = K.G, d = REG.quest[id]; if (!d || G.q[id]) return false; G.q[id] = { st: 'active', step: 0, n: 0, t: 0 }; if (d.tipo !== 'main' && !G.pin && G.pin !== '') G.pin = id;   /* 1.3.5: a 1ª opcional que começa vai para o HUD (o jogador troca no menu de missões) */ if (!silent) { K.ui.toast('Nova missão: ' + d.nome, 3.5); K.sfx('missao_nova'); } if (d.onStart) d.onStart(G); const s = d.steps[0]; if (s && s.onStart) s.onStart(G); K.emit('quest', { id, ev: 'start' }); return true; },
   step(id) { const d = REG.quest[id], s = K.G.q[id]; return d && s && s.st === 'active' ? d.steps[s.step] : null; },
   advance(id) {
     const G = K.G, d = REG.quest[id], s = G.q[id]; if (!d || !s || s.st !== 'active') return; const st = d.steps[s.step]; if (st && st.onDone) { try { st.onDone(G); } catch (e) { console.error(e); } }
@@ -5840,9 +5934,13 @@ const Q = K.quest = {
   },
   complete(id) {
     const G = K.G, d = REG.quest[id], s = G.q[id]; s.st = 'done'; const r = d.reward || {}; if (r.xp) K.addXp(r.xp, G.pl.x, G.pl.z); if (r.coins) { G.coins += r.coins; } for (const it of (r.items || [])) K.inv.add(it.id, it.n || 1);
-    K.sfx('missao_ok'); K.ui.toast('Missão completa: ' + d.nome + (r.coins ? ' · +' + r.coins + ' cacos' : ''), 4); if (d.onComplete) d.onComplete(G); if (G.track === id) G.track = null; K.emit('quest', { id, ev: 'done' }); if (d.repeat) setTimeout(() => { if (K.G === G && G.q[id] && G.q[id].st === 'done') delete G.q[id]; }, 100); K.saveGame(true);
+    K.sfx('missao_ok'); K.ui.toast('Missão completa: ' + d.nome + (r.coins ? ' · +' + r.coins + ' cacos' : ''), 4); if (d.onComplete) d.onComplete(G); if (G.pin === id) G.pin = null; K.emit('quest', { id, ev: 'done' }); if (d.repeat) setTimeout(() => { if (K.G === G && G.q[id] && G.q[id].st === 'done') delete G.q[id]; }, 100); K.saveGame(true);
   },
-  tracked() { const G = K.G; let id = G.track && G.q[G.track] && G.q[G.track].st === 'active' ? G.track : null; if (!id) { const a = Q.active(); id = a.find(x => REG.quest[x].tipo === 'main') || a[0] || null; } if (!id) return null; const d = REG.quest[id], s = G.q[id], st = d.steps[s.step]; return { id, d, s, st, text: st ? st.text : d.nome, mark: Q.marker(st) }; },
+  /* missão em foco (objetivo do mapa, bot): a rastreada; senão a principal; senão a fixada; senão a 1ª ativa */
+  tracked() { const G = K.G, A = x => x && G.q[x] && G.q[x].st === 'active'; const tq = G.trail && G.trail.t === 'q' ? G.trail.id : null, a = Q.active(); let id = A(tq) ? tq : (a.find(x => REG.quest[x].tipo === 'main') || (A(G.pin) ? G.pin : null) || a[0] || null); if (!id) return null; const d = REG.quest[id], s = G.q[id], st = d.steps[s.step]; return Q.info(id); },
+  info(id) { const G = K.G, d = REG.quest[id], s = G.q[id]; if (!d || !s || s.st !== 'active') return null; const st = d.steps[s.step]; return { id, d, s, st, text: st ? st.text : d.nome, mark: Q.marker(st) }; },
+  /* HUD (1.3.5, item 16): [principal, opcional fixada] — a principal sempre que ativa; a opcional é G.pin (escolhida no menu de missões) */
+  hud() { const G = K.G, a = Q.active(), out = []; const m = a.find(x => REG.quest[x].tipo === 'main'); if (m) out.push(Q.info(m)); if (G.pin && G.q[G.pin] && G.q[G.pin].st === 'active' && REG.quest[G.pin].tipo !== 'main') out.push(Q.info(G.pin)); return out; },
   marker(st) {
     if (!st) return null; if (st.at) return st.at; const o = st.obj || {}; const G = K.G;
     if (o.type === 'talk' || o.type === 'deliver') { const n = REG.npc[o.npc]; return n && n.x !== undefined ? [n.x, n.z] : null; }
@@ -5898,11 +5996,13 @@ K.sell = (id, price) => { if (!K.inv.has(id)) return false; const G = K.G; if (K
 K.craft = function (id) { const G = K.G, r = REG.recipe[id]; if (!r) return false; for (const k in r.in) if (!K.inv.has(k, r.in[k])) { K.sfx('erro'); K.ui.toast('Faltam materiais.'); return false; } for (const k in r.in) K.inv.remove(k, r.in[k]); K.inv.add(r.out.id, r.out.n || 1); K.sfx('fabricar'); K.ui.toast('Fabricado: ' + REG.item[r.out.id].nome); K.emit('craft', { id }); return true; };
 /* ---------------------------------------------------------------- salvar / carregar */
 K.snapshot = function () {
-  const G = K.G, p = G.pl; return { v: 1, lvl: G.lvl, xp: G.xp, coins: G.coins, inv: Object.assign({}, G.inv), equip: Object.assign({}, G.equip), q: JSON.parse(JSON.stringify(G.q)), flags: Object.assign({}, G.flags), nodes: Object.assign({}, G.nodes), opened: Object.assign({}, G.opened), kills: G.kills, deaths: G.deaths, dodges: G.dodges || 0, dodgesPerfect: G.dodgesPerfect || 0, play: G.play, tod: G.tod, day: G.day, x: G.rest.x, z: G.rest.z, hp: p.hp, pots: G.pots.slice(), slots: Object.assign({}, G.slots), won: G.won, track: G.track };
+  const G = K.G, p = G.pl; return { v: 1, lvl: G.lvl, xp: G.xp, coins: G.coins, inv: Object.assign({}, G.inv), equip: Object.assign({}, G.equip), q: JSON.parse(JSON.stringify(G.q)), flags: Object.assign({}, G.flags), nodes: Object.assign({}, G.nodes), opened: Object.assign({}, G.opened), kills: G.kills, deaths: G.deaths, dodges: G.dodges || 0, dodgesPerfect: G.dodgesPerfect || 0, play: G.play, tod: G.tod, day: G.day, x: G.rest.x, z: G.rest.z, hp: p.hp, pots: G.pots.slice(), slots: Object.assign({}, G.slots), won: G.won, pin: G.pin === undefined ? null : G.pin, trail: G.trail || null };
 };
 K.applySnapshot = function (s) {
   const G = K.G, p = G.pl; Object.assign(G, { lvl: s.lvl, xp: s.xp, coins: s.coins, inv: s.inv, equip: Object.assign({ weapon: 'espada_madeira', charm: null }, s.equip || {}),   /* save antigo (sem as chaves novas) = slots vazios */
-    q: s.q, flags: s.flags || {}, nodes: s.nodes || {}, opened: s.opened || {}, kills: s.kills || 0, deaths: s.deaths || 0, dodges: s.dodges || 0, dodgesPerfect: s.dodgesPerfect || 0, play: s.play || 0, day: s.day || 1, pots: s.pots || G.pots, won: !!s.won, track: s.track || null });
+    q: s.q, flags: s.flags || {}, nodes: s.nodes || {}, opened: s.opened || {}, kills: s.kills || 0, deaths: s.deaths || 0, dodges: s.dodges || 0, dodgesPerfect: s.dodgesPerfect || 0, play: s.play || 0, day: s.day || 1, pots: s.pots || G.pots, won: !!s.won, trail: s.trail || null });
+  /* 1.3.5: G.pin = missão opcional fixada no HUD (null = automática, '' = nenhuma). Save antigo trazia G.track (a missão acompanhada): se era opcional, vira a fixada */
+  G.pin = s.pin !== undefined ? s.pin : (s.track && REG.quest[s.track] && REG.quest[s.track].tipo !== 'main' ? s.track : null);
   if (s.slots) G.slots = s.slots; G.rest = { x: s.x, z: s.z }; p.x = s.x; p.z = s.z; p.y = K.world.h(p.x, p.z);
 };
 K.saveGame = function (quiet) { if (!K.G || K.debug.nosave) return; SAVE.game = K.snapshot(); SAVE.meta.time = (SAVE.meta.time || 0); K.persist(); if (!quiet) K.ui.toast && K.ui.toast('Jogo salvo.'); };
@@ -5950,6 +6050,14 @@ body{--mm:11.5rem}body.mm0{--mm:8.2rem}body.mm2{--mm:15.5rem}
 .safebadge{font:400 .95rem 'Lilita One';color:var(--ink);background:#FFD23F;border:.2rem solid var(--ink);border-radius:.6rem;padding:.05rem .6rem;display:none;box-shadow:.15rem .2rem 0 rgba(16,24,48,.5)}
 .qtrack{background:rgba(244,241,232,.94);color:var(--ink);border:.22rem solid var(--ink);border-radius:.8rem;padding:.4rem .7rem;font-size:.9rem;width:100%;box-sizing:border-box;box-shadow:.25rem .3rem 0 rgba(16,24,48,.5)}
 .qtrack b{font-family:'Lilita One';font-weight:400;display:block;color:var(--coral2)}
+/* 1.3.5 (itens 15/16/17): HUD clicável (.hudtap; os filhos não pegam o clique, o elemento inteiro pega), duas missões na tela e o chip do rastreio */
+.hudtap{pointer-events:auto;cursor:pointer}.hudtap *{pointer-events:none}
+.qbox{display:flex;flex-direction:column;gap:.35rem;width:100%}.qtrack.on{box-shadow:0 0 0 .2rem var(--sun),.25rem .3rem 0 rgba(16,24,48,.5)}.qtrack:hover{background:#fff}
+.qtrack .tag{display:inline-block;font:400 .68rem/1.15 'Lilita One';letter-spacing:.06em;color:var(--paper);background:var(--ink);border-radius:.35rem;padding:.05rem .35rem;margin-right:.35rem;vertical-align:.12rem}.qtrack .tag.opt{background:var(--sky)}
+.trailchip{display:flex;align-items:center;gap:.35rem;width:100%;box-sizing:border-box;background:var(--sun);color:var(--ink);border:.2rem solid var(--ink);border-radius:.7rem;padding:.12rem .25rem .12rem .55rem;font:400 .9rem 'Lilita One';box-shadow:.2rem .25rem 0 rgba(16,24,48,.5)}
+.trailchip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.trailchip .x{pointer-events:auto;flex:none;width:1.7rem;height:1.7rem;border:.16rem solid var(--ink);border-radius:.5rem;background:var(--paper);color:var(--ink);font:400 .95rem/1 'Lilita One';cursor:pointer;padding:0}
+.toast.hudtap:hover{opacity:.85}.q-acts{flex-wrap:wrap;margin-top:.35rem;gap:.4rem}.q-acts .btn{min-height:2rem}.q-pin{font:400 .85rem 'Lilita One';color:var(--ink2)}.q-help{font-size:.85rem;font-weight:800;color:var(--ink2);margin:-.2rem 0 .4rem}
+.mp-row .btn{min-height:1.8rem;padding:.05rem .55rem;font-size:.8rem;flex:none}.mp-row.trk{border-color:var(--ink);background:var(--sun)}
 .hud-bot{position:absolute;left:50%;bottom:calc(var(--sb) + 1rem);transform:translateX(-50%);display:flex;gap:.55rem;align-items:flex-end}
 .slot{position:relative;width:3.6rem;height:3.6rem;border-radius:.9rem;background:var(--paper);border:.22rem solid var(--ink);box-shadow:.18rem .22rem 0 var(--ink);display:grid;place-items:center;font:400 1.4rem 'Lilita One';color:var(--ink);overflow:hidden}
 .slot small{position:absolute;left:.25rem;top:.1rem;font-size:.7rem;color:var(--ink2)}.slot .cd{position:absolute;left:0;right:0;bottom:0;background:rgba(16,24,48,.72)}
@@ -6029,10 +6137,22 @@ UI.hudBuild = function () {
   const tr = h('div', 'hud-tr', '', E_); H.mm = h('canvas', '', '', tr); H.mm.id = 'mm'; H.mm.width = H.mm.height = 230; K.setMmSize(SAVE.opt.mms === undefined ? 1 : SAVE.opt.mms);
   /* 1.3.1: clicar (ou tocar) no minimapa abre o MESMO mapa-múndi do menu de pausa. Fica fechado se já há painel, fala ou tela de fogueira/loja aberta. */
   H.mm.title = 'Abrir o mapa'; H.mm.addEventListener('click', () => K.openMap());
-  H.clock = h('div', 'clock', '', tr); H.safe = h('div', 'safebadge', '✦ Área segura', tr); H.qt = h('div', 'qtrack', '', tr);
+  H.clock = h('div', 'clock', '', tr); H.safe = h('div', 'safebadge', '✦ Área segura', tr);
+  /* 1.3.5 (item 16): duas missões na tela, a PRINCIPAL sempre e UMA opcional (G.pin, escolhida no menu de missões). Clicar em qualquer uma abre o menu de missões (item 15). Embaixo, o chip do rastreio (item 9/17): clicar abre o mapa ou as missões; ✕ para de rastrear. */
+  H.qt = h('div', 'qbox', '', tr); H.qc = [0, 1].map(() => { const c = h('div', 'qtrack hudtap', '', H.qt); c.title = 'Abrir o menu de missões'; c.style.display = 'none'; c.addEventListener('click', e => { e.stopPropagation(); K.sfx('ui'); K.openFromHud('quests'); }); return c; });
+  H.trk = h('div', 'trailchip hudtap', '<span></span>', H.qt); H.trk.style.display = 'none'; H.trk.title = 'Rastreio: abrir onde ele foi escolhido'; H.trk.addEventListener('click', e => { e.stopPropagation(); const t = K.G && K.G.trail; K.sfx('ui'); K.openFromHud(t && t.t === 'q' ? 'quests' : 'map'); });
+  { const x = h('button', 'x hudtap', '✕', H.trk); x.title = 'Parar de rastrear'; x.setAttribute('aria-label', 'Parar de rastrear'); x.addEventListener('click', e => { e.stopPropagation(); K.trail.clear(); }); }
   H.toasts = h('div', 'toasts', '', E_); H.pops = h('div', 'pops', '', E_); H.banner = h('div', 'banner', '', E_); H.prompt = h('div', 'prompt', '', E_); H.mhint = h('div', 'mousehint', 'Clique no jogo para a câmera seguir o mouse', E_); H.lock = h('div', 'lockmark', '', E_); H.dodge = h('div', 'dodgemsg', '', E_);
   const bb = H.bossbar = h('div', 'bossbar', '<div class="nm"></div>', E_); H.bossBarEl = h('div', 'bar', '', bb); H.bossFill = h('i', '', '', H.bossBarEl); H.bossFill.style.background = '#FF5A5F'; H.bossMarks = h('div', '', '', H.bossBarEl);
   const bot = h('div', 'hud-bot', '', E_); H.slots = {}; for (const [k, lab] of [['pot1', 'V'], ['skill1', 'Q'], ['skill2', 'R'], ['skill3', 'X'], ['pot2', '2']]) { const s = h('div', 'slot', '<small>' + (k.startsWith('pot') ? (k === 'pot1' ? '1' : '2') : lab) + '</small><span></span><div class="cd"></div><span class="n"></span>', bot); H.slots[k] = s; }
+  /* 1.3.5 (item 15): TUDO o que fica visível no HUD responde a clique e toque (leva a algum lugar ou diz o que é). No celular o toque chega pelo encaminhamento de 01-input (.hudtap). */
+  const tap = (el, fn, title) => { el.classList.add('hudtap'); if (title) el.title = title; el.addEventListener('click', e => { e.stopPropagation(); K.sfx('ui'); fn(e); }); };
+  tap(r1, () => K.openFromHud('char'), 'Personagem: nível, vida, brilho e fôlego'); tap(H.xp.b, () => K.openFromHud('char'), 'Experiência até o próximo nível'); tap(H.coins, () => K.openFromHud('inv'), 'Cacos (dinheiro) e fragmentos: abrir o inventário');
+  tap(H.clock, () => { const G = K.G, nt = K.sky.night > .6; UI.toast('Dia ' + G.day + ', ' + H.clock.textContent.split(' ')[0] + (nt ? ' · noite: os monstros ficam mais atrevidos. Dormir na fogueira pula para a manhã.' : ' · dia. À noite os monstros ficam mais atrevidos.'), 4); }, 'Relógio do jogo');
+  tap(H.safe, () => UI.toast('Área segura: monstros não entram e você não leva dano aqui.', 3.5), 'Área segura');
+  tap(H.prompt, () => K.input.tap('interact'), 'Interagir'); tap(bb, () => { const e = H.bossE; if (e) UI.toast(e.def.nome + ' · ' + Math.ceil(clamp(e.hp / e.maxhp, 0, 1) * 100) + '% de vida', 2.6); }, 'Chefe');
+  for (const k in H.slots) tap(H.slots[k], () => { const G = K.G; if (k.startsWith('pot')) { const id = G.pots[k === 'pot1' ? 0 : 1]; if (id && REG.item[id] && K.openFromHud('inv')) UI.itemModal(id, 'info'); else if (!id) UI.toast('Espaço de poção vazio', 2.4); return; }
+    const sk = REG.skill[G.slots[k]]; UI.toast(sk ? sk.nome + (G.lvl < (sk.lvl || 1) ? ' · libera no nível ' + sk.lvl : ' · ' + (sk.mp || 0) + ' de brilho') + (sk.desc ? ': ' + sk.desc : '') : 'Espaço de habilidade vazio', 4); });
   H.vig = h('div', '', '', E_); H.vig.style.cssText = 'position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 8rem 2rem rgba(255,90,95,0);transition:box-shadow .2s';
   return H;
 };
@@ -6042,7 +6162,11 @@ UI.updateHud = function (dt) {
   H.vig.style.boxShadow = 'inset 0 0 8rem 2rem rgba(255,90,95,' + (p.hp / p.maxhp < .3 ? .45 : p.hurtT > 0 ? .5 : 0) + ')';
   const hr = G.tod | 0, mn = (G.tod % 1 * 60) | 0; H.clock.textContent = (hr < 10 ? '0' : '') + hr + ':' + (mn < 10 ? '0' : '') + mn + (K.sky.night > .6 ? ' ☾' : ' ☀') + ' · dia ' + G.day;
   H.safe.style.display = G.inSafe ? 'block' : 'none'; const mh = K.input.canLock() && !K.debug.noHint; if (mh !== H._mh) { H._mh = mh; H.mhint.style.display = mh ? 'block' : 'none'; document.body.classList.toggle('mhint', mh); }   // 1.1.0: dica enquanto o mouse está solto
-  const T = K.quest.tracked(); G.trackInfo = T; if (T) { const o = T.st && T.st.obj || {}; const pr = (o.n > 1 && (o.type === 'kill' || o.type === 'gather' || o.type === 'collect' || o.type === 'chest')) ? ' (' + (T.s.n || 0) + '/' + o.n + ')' : ''; let dist = ''; if (T.mark) dist = ' · ' + Math.round(Math.hypot(T.mark[0] - p.x, T.mark[1] - p.z)) + ' m'; H.qt.innerHTML = '<b>' + esc(T.d.nome) + '</b>' + esc(T.text) + pr + dist; H.qt.style.display = ''; } else H.qt.style.display = 'none';
+  const T = K.quest.tracked(); G.trackInfo = T; const HQ = K.quest.hud(), trl = G.trail;
+  for (let i = 0; i < 2; i++) { const c = H.qc[i], Q_ = HQ[i]; if (!Q_) { if (c.style.display !== 'none') c.style.display = 'none'; continue; } const o = Q_.st && Q_.st.obj || {}, main = Q_.d.tipo === 'main';
+    const pr = (o.n > 1 && (o.type === 'kill' || o.type === 'gather' || o.type === 'collect' || o.type === 'chest')) ? ' (' + (Q_.s.n || 0) + '/' + o.n + ')' : '', dist = Q_.mark ? ' · ' + Math.round(Math.hypot(Q_.mark[0] - p.x, Q_.mark[1] - p.z)) + ' m' : '';
+    const html = '<b><span class="tag' + (main ? '' : ' opt') + '">' + (main ? 'PRINCIPAL' : 'OPCIONAL') + '</span>' + esc(Q_.d.nome) + '</b>' + esc(Q_.text) + pr + dist; if (c._h !== html) { c._h = html; c.innerHTML = html; } c.dataset.q = Q_.id; c.classList.toggle('on', !!(trl && trl.t === 'q' && trl.id === Q_.id)); c.style.display = ''; }
+  if (trl) { const tg = K.trail.target(), txt = '⟶ ' + K.trail.label(trl) + (tg ? ' · ' + Math.round(Math.hypot(tg.x - p.x, tg.z - p.z)) + ' m' : ' · sem lugar fixo'); const sp = H.trk.firstChild; if (sp.textContent !== txt) sp.textContent = txt; H.trk.style.display = ''; } else H.trk.style.display = 'none';
   // slots de habilidade e poções
   for (const k of K.slotKeys) { const s = H.slots[k], id = G.slots[k], sk = REG.skill[id]; const sp = s.children[1]; if (!sk) { s.classList.add('lock'); sp.textContent = '·'; continue; } const locked = G.lvl < (sk.lvl || 1); s.classList.toggle('lock', locked || p.mp < (sk.mp || 0)); sp.textContent = locked ? 'Nv' + sk.lvl : (sk.icon || sk.nome[0]); const cd = (p.cd[id] || 0) / (sk.cd || 5); s.children[2].style.height = clamp(cd, 0, 1) * 100 + '%'; s.title = sk.nome; }
   G.pots.forEach((id, i) => { const s = H.slots['pot' + (i + 1)], it = REG.item[id]; s.children[1].textContent = it ? (it.icon || it.nome[0]) : '·'; s.children[3].textContent = K.inv.count(id); s.classList.toggle('lock', !K.inv.has(id)); });
@@ -6054,21 +6178,34 @@ UI.updateHud = function (dt) {
   if (G.lock && G.lock.alive) { const v = new THREE.Vector3(G.lock.x, G.lock.y + G.lock.h * .6, G.lock.z).project(K.r3.cam); if (v.z < 1) { H.lock.style.display = 'block'; H.lock.style.left = (v.x * .5 + .5) * 100 + '%'; H.lock.style.top = (-v.y * .5 + .5) * 100 + '%'; } else H.lock.style.display = 'none'; } else H.lock.style.display = 'none';
   drawMinimap();
 };
+/* MINIMAPA (1.3.5, item 31): GIRA com a câmera, o que está à frente na tela fica para cima (opção "norte para cima" nas Opções: SAVE.opt.mmrot = 0).
+ * Tudo do mundo é desenhado no quadro girado; o losango do objetivo, a seta do jogador e o N da bússola são desenhados depois, em pé, nas posições já giradas.
+ * O caminho do rastreio (K.trail.path) é linha de tinta + tracejado amarelo andando em direção ao alvo (nunca um ícone de lugar). */
 function drawMinimap() {
-  const H = UI.hud, G = K.G, W_ = K.world, p = G.pl, c = H.mm, g = c.getContext('2d'), S = c.width, view = 62, half = view / 2, ppu = S / view; g.clearRect(0, 0, S, S); g.save(); g.beginPath(); g.arc(S / 2, S / 2, S / 2 - 2, 0, TAU); g.clip();
-  g.fillStyle = '#1f6fd0'; g.fillRect(0, 0, S, S); if (W_.mapCanvas) { const mc = W_.mapCanvas, k = mc.width / (W_.half * 2); g.imageSmoothingEnabled = true; g.drawImage(mc, (p.x + W_.half - half) * k, (p.z + W_.half - half) * k, view * k, view * k, 0, 0, S, S); }
-  const P = (x, z) => [(x - p.x + half) * ppu, (z - p.z + half) * ppu];
-  const dot = (x, z, col, r, sq) => { const [px, pz] = P(x, z); if (px < -6 || pz < -6 || px > S + 6 || pz > S + 6) return false; g.fillStyle = col; g.strokeStyle = '#101830'; g.lineWidth = 2; g.beginPath(); if (sq) g.rect(px - r, pz - r, r * 2, r * 2); else g.arc(px, pz, r, 0, TAU); g.fill(); g.stroke(); return true; };
+  const H = UI.hud, G = K.G, W_ = K.world, p = G.pl, c = H.mm, g = c.getContext('2d'), S = c.width, view = 62, half = view / 2, ppu = S / view, C = S / 2;
+  const cy = G.cam.yaw, rot = SAVE.opt.mmrot === 0 ? 0 : -Math.PI / 2 - Math.atan2(Math.cos(cy), Math.sin(cy)), cr = Math.cos(rot), sr = Math.sin(rot); H.mmRot = rot;
+  const P = (x, z) => [(x - p.x + half) * ppu, (z - p.z + half) * ppu];                                                                 /* quadro do mundo (antes do giro) */
+  const PR = (x, z) => { const dx = (x - p.x) * ppu, dz = (z - p.z) * ppu; return [C + dx * cr - dz * sr, C + dx * sr + dz * cr]; };   /* tela (depois do giro) */
+  K.mmProject = PR;
+  g.clearRect(0, 0, S, S); g.save(); g.beginPath(); g.arc(C, C, C - 2, 0, TAU); g.clip(); g.fillStyle = '#1f6fd0'; g.fillRect(0, 0, S, S);
+  g.save(); g.translate(C, C); g.rotate(rot); g.translate(-C, -C);
+  if (W_.mapCanvas) { const mc = W_.mapCanvas, k = mc.width / (W_.half * 2), eh = half * 1.45; g.imageSmoothingEnabled = true; g.drawImage(mc, (p.x + W_.half - eh) * k, (p.z + W_.half - eh) * k, eh * 2 * k, eh * 2 * k, C - eh * ppu, C - eh * ppu, eh * 2 * ppu, eh * 2 * ppu); }
+  const dot = (x, z, col, r, sq) => { const [px, pz] = P(x, z); if (Math.hypot(px - C, pz - C) > C + 6) return false; g.fillStyle = col; g.strokeStyle = '#101830'; g.lineWidth = 2; g.beginPath(); if (sq) g.rect(px - r, pz - r, r * 2, r * 2); else g.arc(px, pz, r, 0, TAU); g.fill(); g.stroke(); return true; };
   for (const zn of K.safeList()) { const [zx, zz] = P(zn.x, zn.z); g.save(); g.strokeStyle = '#FFD23F'; g.lineWidth = 3; g.setLineDash([9, 7]); g.beginPath(); g.arc(zx, zz, zn.safe * ppu, 0, TAU); g.stroke(); g.restore(); }   // área segura (1.1.0)
+  const tp = G.trail && !K.trail.near && K.trail.path; if (tp && tp.length > 1) { g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); tp.forEach((q, i) => { const [x, z] = P(q[0], q[1]); g[i ? 'lineTo' : 'moveTo'](x, z); }); g.strokeStyle = '#101830'; g.lineWidth = 7; g.stroke(); g.setLineDash([7, 6]); g.lineDashOffset = -(K.time * 18) % 13; g.strokeStyle = '#FFD23F'; g.lineWidth = 3.6; g.stroke(); g.restore(); }   /* rastro (1.3.5) */
   for (const d of G.drops) dot(d.x, d.z, d.col, d.id === '_coin' ? 3 : 5, d.id !== '_coin');       // coletáveis SEMPRE aparecem (regra d)
   for (const n of G.nodeList || []) if (!(G.nodes[n.key] > 0)) dot(n.x, n.z, n.def.color || '#3DDC84', 4, true);
   for (const c_ of G.chestList || []) if (!G.opened[c_.c.id]) dot(c_.c.x, c_.c.z, '#FFD23F', 5, true);
   for (const n of G.npcs || []) dot(n.x, n.z, '#2BD4C8', 5); for (const cp of G.camps || []) dot(cp.c.x, cp.c.z, '#FF8A3D', 5, true);
   for (const e of G.enemies) if (e.alive) dot(e.x, e.z, e.def.boss ? '#FF5A5F' : '#C23A40', e.def.boss ? 7 : 4);
-  const T = G.trackInfo; if (T && T.mark) { let [mx, mz] = P(T.mark[0], T.mark[1]); const dx = mx - S / 2, dz = mz - S / 2, d = Math.hypot(dx, dz), lim = S / 2 - 14; if (d > lim) { mx = S / 2 + dx / d * lim; mz = S / 2 + dz / d * lim; } g.save(); g.translate(mx, mz); g.rotate(Math.PI / 4); g.fillStyle = '#FFD23F'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.fillRect(-7, -7, 14, 14); g.strokeRect(-7, -7, 14, 14); g.restore(); }
-  g.translate(S / 2, S / 2); g.rotate(-p.yaw + Math.PI); g.fillStyle = '#ffffff'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill(); g.stroke(); g.restore();
+  g.restore();   /* fim do giro */
+  /* objetivo: o alvo do rastreio, senão o da missão em foco. Fora do círculo, fica preso na borda apontando a direção */
+  const tg = K.trail.target(), T = G.trackInfo, mk = tg ? [tg.x, tg.z] : T && T.mark; if (mk) { let [mx, mz] = PR(mk[0], mk[1]); const dx = mx - C, dz = mz - C, d = Math.hypot(dx, dz), lim = C - 14; if (d > lim) { mx = C + dx / d * lim; mz = C + dz / d * lim; } g.save(); g.translate(mx, mz); g.rotate(Math.PI / 4); g.fillStyle = tg ? '#FFD23F' : '#FFD23F'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.fillRect(-7, -7, 14, 14); g.strokeRect(-7, -7, 14, 14); g.restore(); }
+  /* bússola: o N anda pela borda conforme o mapa gira */
+  { const nx = C + sr * (C - 15), nz = C - cr * (C - 15); g.save(); g.beginPath(); g.arc(nx, nz, 11, 0, TAU); g.fillStyle = '#F4F1E8'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = '#101830'; g.stroke(); g.fillStyle = '#FF5A5F'; g.font = "400 15px 'Lilita One',sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('N', nx, nz + 1); g.restore(); }
+  g.translate(C, C); g.rotate(rot - p.yaw + Math.PI); g.fillStyle = '#ffffff'; g.strokeStyle = '#101830'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
-UI.toast = function (txt, secs) { const H = UI.hud; if (!H) return; const t = h('div', 'toast', esc(txt), H.toasts); while (H.toasts.children.length > 3) H.toasts.firstChild.remove(); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 450); }, (secs || 2.6) * 1000 / Math.max(1, K.speed > 2 ? 1 : 1)); };
+UI.toast = function (txt, secs) { const H = UI.hud; if (!H) return; const t = h('div', 'toast hudtap', esc(txt), H.toasts); t.title = 'Fechar aviso'; t.addEventListener('click', e => { e.stopPropagation(); t.remove(); }); while (H.toasts.children.length > 3) H.toasts.firstChild.remove(); setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 450); }, (secs || 2.6) * 1000 / Math.max(1, K.speed > 2 ? 1 : 1)); };
 UI.pop = function (txt, col) { const H = UI.hud; if (!H) return; const t = h('div', 'pop', esc(txt), H.pops); t.style.color = col || '#fff'; while (H.pops.children.length > 6) H.pops.firstChild.remove(); setTimeout(() => { t.style.transition = 'opacity .5s'; t.style.opacity = 0; setTimeout(() => t.remove(), 520); }, 2200); };
 /* aviso de ESQUIVA (1.2.0): "ESQUIVOU!" / "ESQUIVA PERFEITA!" no alto da tela + sequência (×N). Reinicia a animação a cada esquiva */
 UI.dodge = function (perfect, streak) { const H = UI.hud; if (!H || !H.dodge) return; const d = H.dodge; d.className = 'dodgemsg' + (perfect ? ' perf' : ''); d.innerHTML = (perfect ? 'ESQUIVA PERFEITA!' : 'ESQUIVOU!') + (streak > 1 ? '<b>×' + streak + '</b>' : ''); void d.offsetWidth; d.classList.add('on'); clearTimeout(UI._dt); UI._dt = setTimeout(() => { d.classList.remove('on'); }, 1150); };
@@ -6120,10 +6257,20 @@ UI.invPanel = function (l) {
     const ps = h('div', '', '<b>Atributos</b>', right); ps.style.marginTop = '.6rem'; const pl = G.pl; h('div', 'kv', `<b>Nível</b><span>${G.lvl}</span><b>Ataque</b><span>${pl.atk}</span><b>Defesa</b><span>${Math.round(pl.defv)}</span><b>Vida</b><span>${pl.maxhp}</span><b>Brilho</b><span>${pl.maxmp}</span><b>Crítico</b><span>${Math.round(pl.crit * 100)}%</span>`, ps); setFocus(UI.focusIdx); };
   render();
 };
+/* MISSÕES (1.3.5, itens 16 e 17): cada missão ativa tem "Rastrear" (caminho no minimapa + setas no chão; um rastreio por vez, troca o anterior)
+ * e, se for opcional, "Mostrar na tela" (a opcional do HUD; só uma). A principal fica sempre na tela. Clicar no cartão não faz nada (só os botões agem). */
 UI.questPanel = function (l) {
   const G = K.G, p = panelFrame(l, 'Missões', 52); const act = K.quest.active(), done = Object.keys(G.q).filter(i => G.q[i].st === 'done');
-  const sec = (t, ids) => { h('h3', '', t, p); if (!ids.length) h('div', '', '<i>Nenhuma.</i>', p); ids.forEach(id => { const d = REG.quest[id], s = G.q[id], st = d.steps[s.step]; const c = h('div', 'card', '', p); c.style.textAlign = 'left'; c.style.marginBottom = '.4rem'; c.dataset.nav = 1; c.innerHTML = '<b style="font-family:\'Lilita One\';font-size:1.1rem">' + esc(d.nome) + '</b> <small>(' + ({ main: 'principal', side: 'secundária', sandbox: 'livre' }[d.tipo] || d.tipo) + ')</small><br>' + esc(s.st === 'done' ? d.desc || '' : (st ? st.text : '')); if (s.st === 'active') c.addEventListener('click', () => { G.track = id; K.sfx('ui_ok'); UI.panelOpen('quests'); }); if (G.track === id && s.st === 'active') c.classList.add('sel'); }); };
-  sec('Ativas (toque para acompanhar)', act); sec('Concluídas', done);
+  const re = () => { const fi = UI.focusIdx; l.el.innerHTML = ''; UI.questPanel(l); setFocus(fi, true); };
+  h('div', 'q-help', 'Na tela ficam a principal e uma opcional à sua escolha. Rastrear desenha o caminho no minimapa e setas no chão (uma missão ou um lugar por vez).', p);
+  const order = id => { const o = { main: 0, side: 1, sandbox: 2 }[REG.quest[id].tipo]; return o === undefined ? 3 : o; };
+  const sec = (t, ids, live) => { h('h3', '', t, p); if (!ids.length) h('div', '', '<i>Nenhuma.</i>', p); ids.slice().sort((a, b) => order(a) - order(b)).forEach(id => { const d = REG.quest[id], s = G.q[id], st = d.steps[s.step]; const c = h('div', 'card', '', p); c.style.cssText = 'text-align:left;margin-bottom:.4rem;cursor:default'; c.dataset.qcard = id;
+    c.innerHTML = '<b style="font-family:\'Lilita One\';font-size:1.1rem">' + esc(d.nome) + '</b> <small>(' + ({ main: 'principal', side: 'secundária', sandbox: 'livre' }[d.tipo] || d.tipo) + ')</small><br>' + esc(s.st === 'done' ? d.desc || '' : (st ? st.text : ''));
+    if (!live) return; const on = K.trail.is({ t: 'q', id }), main = d.tipo === 'main', pin = main || G.pin === id, row = h('div', 'row q-acts', '', c); if (on) c.classList.add('sel');
+    const tb = UI.btn(on ? 'Parar de rastrear' : 'Rastrear', () => { K.trail.toggle({ t: 'q', id }); re(); }, { parent: row, cls: 'small' + (on ? '' : ' pri') }); tb.dataset.trk = id;
+    if (main) h('span', 'q-pin', '★ sempre na tela', row); else { const pb = UI.btn(pin ? 'Tirar da tela' : 'Mostrar na tela', () => { G.pin = pin ? '' : id; K.ui.toast(pin ? 'Missão tirada da tela' : 'Na tela: ' + d.nome, 2.2); re(); }, { parent: row, cls: 'small' }); pb.dataset.pin = id; if (pin) h('span', 'q-pin', '★ na tela', row); }
+    if (!K.quest.marker(st)) h('small', '', 'sem lugar fixo agora', row); }); };
+  sec('Ativas', act, true); sec('Concluídas', done);
 };
 /* MAPA-MÚNDI (1.1.0): refeito para ser lido de relance. Antes: bolinhas amarelas iguais para tudo (inclusive cada ponto da trilha), nomes uns em cima dos outros e
  * nenhuma pista de onde o jogador está ou para onde ir. Agora: nome de cada bioma escrito no chão, ícone próprio por tipo de lugar (vila, fragmento, chefe, acampamento,
@@ -6186,10 +6333,13 @@ UI.mapPanel = function (l) {
       const cand = [[0, -gap - hgt / 2], [0, gap + hgt / 2], [gap + w / 2, 0], [-gap - w / 2, 0], [gap * .8 + w / 2, -gap], [-gap * .8 - w / 2, -gap], [gap * .8 + w / 2, gap], [-gap * .8 - w / 2, gap], [0, -gap * 2 - hgt], [0, gap * 2 + hgt], [gap * 1.6 + w / 2, -gap * 1.2], [-gap * 1.6 - w / 2, -gap * 1.2], [gap * 1.6 + w / 2, gap * 1.2], [-gap * 1.6 - w / 2, gap * 1.2]]; let done_ = false; const force = major || it === hlIt;
       for (let i = 0; i < cand.length + (force ? 1 : 0); i++) { const [dx, dz] = cand[i < cand.length ? i : 1], cx = clamp(x + dx, w / 2 + 6, S - w / 2 - 6), cz = clamp(z + dz, hgt / 2 + 4, S - hgt / 2 - 4), r = [cx - w / 2 - 3, cz - hgt / 2, cx + w / 2 + 3, cz + hgt / 2]; if (i < cand.length && hit(r)) continue; rects.push(r); done_ = true; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = MAP_PAPER; g.strokeText(nm, cx, cz); g.fillStyle = MAP_INK; g.fillText(nm, cx, cz); break; } if (!done_) console.warn('MAPLABEL sem lugar: ' + nm); }
     g.restore();
+    /* rastro (1.3.5): o mesmo caminho do minimapa e das setas no chão; o lugar rastreado ganha anel amarelo */
+    const tp = G.trail && K.trail.path; if (tp && tp.length > 1) { g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); tp.forEach((q, i) => { const [x, z] = P(q[0], q[1]); g[i ? 'lineTo' : 'moveTo'](x, z); }); g.strokeStyle = MAP_INK; g.lineWidth = 9; g.stroke(); g.setLineDash([10, 8]); g.strokeStyle = '#FFD23F'; g.lineWidth = 5; g.stroke(); g.restore(); }
+    if (G.trail && G.trail.t === 'poi' && REG.poi[G.trail.id]) { const po = REG.poi[G.trail.id], [x, z] = P(po.x, po.z); g.save(); g.lineWidth = 6; g.strokeStyle = MAP_INK; g.beginPath(); g.arc(x, z, 25, 0, TAU); g.stroke(); g.lineWidth = 3.5; g.strokeStyle = '#FFD23F'; g.stroke(); g.restore(); }
     /* lugar destacado pela lista */
     if (hl) { const [x, z] = P(hl.it.po.x, hl.it.po.z); g.save(); g.lineWidth = 5; g.strokeStyle = '#FF5A5F'; g.setLineDash([]); g.beginPath(); g.arc(x, z, 27, 0, TAU); g.stroke(); g.lineWidth = 2.5; g.strokeStyle = MAP_PAPER; g.beginPath(); g.arc(x, z, 31, 0, TAU); g.stroke(); g.restore(); }
     /* linha jogador → objetivo */
-    if (tm) { if (moved) { g.save(); g.lineCap = 'round'; g.lineWidth = 6; g.strokeStyle = MAP_INK; g.beginPath(); g.moveTo(otx, otz); g.lineTo(ox, oz); g.stroke(); g.lineWidth = 3; g.strokeStyle = '#FF5A5F'; g.stroke(); g.beginPath(); g.arc(otx, otz, 6, 0, TAU); g.fillStyle = '#FF5A5F'; g.fill(); g.lineWidth = 3; g.strokeStyle = MAP_INK; g.stroke(); g.restore(); } g.save(); g.setLineDash([3, 9]); g.lineCap = 'round'; g.lineWidth = 5; g.strokeStyle = MAP_INK; g.beginPath(); g.moveTo(px, pz); g.lineTo(ox, oz); g.stroke(); g.lineWidth = 3; g.strokeStyle = '#FF5A5F'; g.stroke(); g.restore(); mapIcon(g, 'objetivo', ox, oz, 13); }
+    if (tm && !(tp && G.trail.t === 'q')) { if (moved) { g.save(); g.lineCap = 'round'; g.lineWidth = 6; g.strokeStyle = MAP_INK; g.beginPath(); g.moveTo(otx, otz); g.lineTo(ox, oz); g.stroke(); g.lineWidth = 3; g.strokeStyle = '#FF5A5F'; g.stroke(); g.beginPath(); g.arc(otx, otz, 6, 0, TAU); g.fillStyle = '#FF5A5F'; g.fill(); g.lineWidth = 3; g.strokeStyle = MAP_INK; g.stroke(); g.restore(); } g.save(); g.setLineDash([3, 9]); g.lineCap = 'round'; g.lineWidth = 5; g.strokeStyle = MAP_INK; g.beginPath(); g.moveTo(px, pz); g.lineTo(ox, oz); g.stroke(); g.lineWidth = 3; g.strokeStyle = '#FF5A5F'; g.stroke(); g.restore(); } if (tm) mapIcon(g, 'objetivo', ox, oz, 13);
     g.save(); g.translate(px, pz); g.rotate(-PL.yaw + Math.PI); mapIcon(g, 'voce', 0, 0, 11); g.restore();
     g.save(); g.font = "400 17px 'Lilita One',sans-serif"; g.textAlign = 'center'; g.lineWidth = 6; g.lineJoin = 'round'; g.strokeStyle = MAP_INK; g.strokeText('VOCÊ', px, pz + 28); g.fillStyle = '#fff'; g.fillText('VOCÊ', px, pz + 28); g.restore();
     g.restore(); /* fim do zoom: bússola fica fixa na tela */
@@ -6203,8 +6353,10 @@ UI.mapPanel = function (l) {
   const sl = sec('Legenda'), lg = h('div', 'mp-leg', '', sl); const legItem = (kind, txt) => { const cv = h('canvas', '', '', lg), li = cv; cv.width = cv.height = 34; mapIcon(cv.getContext('2d'), kind, 17, 17, kind === 'vila' ? 11 : 9); const t = h('span', '', txt, lg); li.style.cssText = 'width:1.6rem;height:1.6rem'; t.style.alignSelf = 'center'; };
   for (const k of ['voce']) legItem(k, 'Você (a seta aponta para onde olha)'); if (tm) legItem('objetivo', 'Objetivo da missão'); for (const k in MAP_KIND) legItem(MAP_KIND[k][1], MAP_KIND[k][0]);
   { const cv = h('canvas', '', '', lg); cv.width = cv.height = 34; const q = cv.getContext('2d'); q.setLineDash([5, 4]); q.lineWidth = 3.5; q.strokeStyle = '#E0B52A'; q.beginPath(); q.arc(17, 17, 12, 0, TAU); q.fillStyle = 'rgba(255,210,63,.35)'; q.fill(); q.stroke(); cv.style.cssText = 'width:1.6rem;height:1.6rem'; h('span', '', 'Área segura (monstros não entram)', lg).style.alignSelf = 'center'; }
+  /* rastreio (1.3.5, item 9): o que está sendo rastreado, com botão de parar; cada lugar da lista tem Rastrear */
+  const st_ = sec('Rastreio'), stb = h('div', '', '', st_), trkBtns = []; const trkUpd = () => { stb.innerHTML = ''; const t = G.trail; if (t) { h('div', '', '<b>⟶ ' + esc(K.trail.label(t)) + '</b> <small>(' + (t.t === 'q' ? 'missão' : 'lugar') + ')</small>', stb); UI.btn('Parar de rastrear', () => { K.trail.clear(); trkUpd(); draw(); }, { cls: 'small', parent: stb }).dataset.trkstop = 1; } else h('div', '', '<i>Nada. Toque em Rastrear num lugar abaixo, ou numa missão no menu de missões.</i>', stb); trkBtns.forEach(([b, r, id]) => { const on = K.trail.is({ t: 'poi', id }); b.textContent = on ? 'Parar' : 'Rastrear'; r.classList.toggle('trk', on); }); };
   const sp = sec('Lugares (toque para destacar)'), ls = h('div', 'mp-list', '', sp); const KIND_ORDER = { vila: 0, chefe: 1, fragmento: 2, acampamento: 3, santuario: 4, ruina: 5 };
-  places.slice().sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || a.d - b.d).forEach(it => { const r = h('div', 'mp-row', '', ls); r.dataset.nav = 1; const cv = h('canvas', '', '', r); cv.width = cv.height = 34; mapIcon(cv.getContext('2d'), it.kind, 17, 17, it.kind === 'vila' ? 11 : 9, it.done); cv.style.cssText = 'width:1.5rem;height:1.5rem;flex:none'; h('span', '', esc(it.nome) + (it.done ? ' ✓' : ''), r).style.flex = 1; h('small', '', Math.round(it.d) + ' m', r);
+  places.slice().sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || a.d - b.d).forEach(it => { const r = h('div', 'mp-row', '', ls); r.dataset.nav = 1; const cv = h('canvas', '', '', r); cv.width = cv.height = 34; mapIcon(cv.getContext('2d'), it.kind, 17, 17, it.kind === 'vila' ? 11 : 9, it.done); cv.style.cssText = 'width:1.5rem;height:1.5rem;flex:none'; h('span', '', esc(it.nome) + (it.done ? ' ✓' : ''), r).style.flex = 1; h('small', '', Math.round(it.d) + ' m', r); const rb = UI.btn('Rastrear', () => { K.trail.toggle({ t: 'poi', id: it.po.id }); trkUpd(); draw(); }, { cls: 'small', parent: r }); rb.dataset.trkpoi = it.po.id; rb.title = 'Mostrar o caminho até aqui no minimapa e no chão'; trkBtns.push([rb, r, it.po.id]);
     r.addEventListener('click', () => { hl = (hl && hl.it === it) ? null : { it }; ls.querySelectorAll('.mp-row').forEach(x => x.classList.remove('sel')); if (hl) { r.classList.add('sel'); if (view.z > 1) { const [x, z] = P(it.po.x, it.po.z); view.x = x; view.y = z; clampView(); } } K.sfx('ui'); draw(); }); });
   /* zoom do mapa (1.3.0): + / − / tudo, roda do mouse, arrastar para andar, pinça no toque. Só dentro do bloco do mapa. */
   const clampView = () => { view.z = clamp(view.z, 1, 5); const m = S / 2 / view.z; view.x = clamp(view.x, m, S - m); view.y = clamp(view.y, m, S - m); };
@@ -6221,7 +6373,7 @@ UI.mapPanel = function (l) {
   const up = e => { ptrs.delete(e.pointerId); pinch = 0; last = ptrs.size === 1 ? [...ptrs.values()][0] : null; };
   c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
   c.addEventListener('wheel', e => { e.preventDefault(); const q = cpos(e); zoomTo(view.z * (e.deltaY < 0 ? 1.25 : 1 / 1.25), q.x, q.y); }, { passive: false });
-  K.mapView = view; K.mapZoom = (z, x, y) => { view.z = z; view.x = x === undefined ? S / 2 : x; view.y = y === undefined ? S / 2 : y; clampView(); draw(); upd(); };
+  trkUpd(); K.mapView = view; K.mapZoom = (z, x, y) => { view.z = z; view.x = x === undefined ? S / 2 : x; view.y = y === undefined ? S / 2 : y; clampView(); draw(); upd(); };
   draw();
 };
 /* opções (regras e, h, i): volumes, sensibilidade, gráficos, "Zerar progresso" com confirmação; opção do jogador é sagrada */
@@ -6241,7 +6393,8 @@ UI.slider = function (min, max, step, val) {
 };
 /* tela cheia dentro do jogo (1.3.1): mesmo K.fullscreen() da tela inicial. Com a tela já cheia o botão vira "Sair da tela cheia"; se o jogador sai pelo Esc, os botões abertos se atualizam sozinhos. */
 /* 1.3.1 (item 12): abre o mapa-múndi a partir do minimapa (clique no PC; toque chega aqui por 01-input). Só com o jogo livre: sem painel, fala, fogueira ou loja. */
-K.openMap = () => { if (K.paused || K.uiBlock || K.dlg || !K.G || K.sceneName !== 'play') return; UI.lastTab = null; K.pause('map'); };
+K.openFromHud = tab => { if (K.paused || K.uiBlock || K.dlg || !K.G || K.sceneName !== 'play') return false; UI.lastTab = null; K.pause(tab); return true; };   /* 1.3.5: qualquer HUD clicável abre a sua tela (missões, personagem, inventário...) com as mesmas travas */
+K.openMap = () => K.openFromHud('map');
 K.fsLabel = () => document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia';
 K.fsToggle = () => { if (document.fullscreenElement) { try { document.exitFullscreen().catch(() => {}); } catch (e) {} } else K.fullscreen(); };
 document.addEventListener('fullscreenchange', () => document.querySelectorAll('[data-fs]').forEach(b => { b.textContent = K.fsLabel(); }));
@@ -6256,6 +6409,8 @@ UI.optPanel = function (l, back) {
   l.el.addEventListener('click', e => { const bg = l._bg && e.target === l.el; l._bg = false; if (!bg || l.el.querySelector('.zerar')) return; K.resume(); K.input.relock(); });
   const tog = (txt, key, inv) => { const b = UI.btn('', () => { o[key] = o[key] ? 0 : 1; upd(); K.persist(); K.r3.resize(); }, { cls: 'small' }); const upd = () => { b.textContent = txt + ': ' + (o[key] ? 'ligado' : 'desligado'); }; upd(); p.appendChild(b); b.style.margin = '.25rem .25rem 0 0'; };
   tog('Inverter eixo Y', 'inv'); tog('Contornos', 'outl'); tog('Sombras', 'shadow'); tog('Vibração', 'hap'); tog('Tremor de câmera', 'shake');
+  /* 1.3.5 (item 31): o minimapa gira com a câmera (padrão) ou fica com o norte para cima; escolha do jogador, salva */
+  { const b = UI.btn('', () => { o.mmrot = o.mmrot === 0 ? 1 : 0; u(); K.persist(); }, { cls: 'small', parent: p }), u = () => { b.textContent = 'Minimapa: ' + (o.mmrot === 0 ? 'norte para cima' : 'gira com a câmera'); }; b.dataset.mmrot = 1; b.style.margin = '.25rem .25rem 0 0'; u(); }
   const q = UI.btn(K.qLabel(), () => { K.qCycle(); q.textContent = K.qLabel(); }, { cls: 'small', parent: p }); q.style.margin = '.25rem .25rem 0 0';
   row('Campo de visão', rng_('fov', .85, 1.2, .05, v => { o.fov = v; }), v => (+v).toFixed(2), 'fov');
   /* tamanho do minimapa (1.1.0): 3 botões, o escolhido fica destacado; vale na hora (e vale no mapa da pausa de fundo) */
@@ -6507,7 +6662,7 @@ SC('title', {
     K.ui.btn('Opções', () => { const o = K.ui.layer('opt', { modal: true, onBack: () => K.ui.drop(o) }); K.ui.optPanel(o, () => K.ui.drop(o)); }, { parent: col }); K.ui.btn('Créditos', () => K.go('credits'), { parent: col });
     K.ui.btn('Tela cheia', () => K.fullscreen(), { parent: col, cls: 'ghost small' });
     const v = h('div', '', 'v' + K.version + ' · Pedro Javarotti · Motor JGK', l.el); v.style.cssText = 'position:absolute;left:calc(var(--sl) + 1rem);bottom:calc(var(--sb) + .6rem);font:400 .9rem \'Lilita One\';color:#F4F1E8;text-shadow:.08rem .1rem 0 #101830';
-    const ctl = h('div', '', 'WASD mover · Mouse câmera · Botão esq. atacar (segure: giro) · Shift rolar · Espaço pular · Q/R/X habilidades · E interagir · F alvo · I/J/M menus', l.el); ctl.style.cssText = 'position:absolute;right:calc(var(--sr) + 1rem);bottom:calc(var(--sb) + .6rem);font:800 .8rem Nunito;color:#F4F1E8;text-shadow:.06rem .08rem 0 #101830;max-width:calc(var(--vw,1vw)*40);text-align:right';
+    const ctl = h('div', '', 'WASD mover · Mouse câmera · Botão esq. atacar (segure: giro) · Shift rolar · Espaço pular · Q/R/X habilidades · E interagir · F alvo · I/J/M menus · segure Alt para clicar no HUD', l.el); ctl.style.cssText = 'position:absolute;right:calc(var(--sr) + 1rem);bottom:calc(var(--sb) + .6rem);font:800 .8rem Nunito;color:#F4F1E8;text-shadow:.06rem .08rem 0 #101830;max-width:calc(var(--vw,1vw)*40);text-align:right';
     K.ui.focusIdx = 0; setTimeout(() => { const it = [...l.el.querySelectorAll('[data-nav]')]; if (it[0]) it[0].classList.add('focus'); }, 0);
   },
   update(dt) { this.t += dt; K.ui.update(dt); const g = K.menuGroup(), U = g.userData; const a = this.t * .18; K.r3.cam.position.set(Math.sin(a) * 2.2 + 8.5, (U.camY || 3) + 1.2 + Math.sin(this.t * .4) * .3, 10.5 - Math.cos(a) * 1.2); K.r3.cam.lookAt(0, 1.8, 0); K.r3.cam.fov = 52; K.r3.cam.updateProjectionMatrix(); g.rotation.y = Math.sin(this.t * .15) * .12; if (U.shard) { U.shard.rotation.y += dt * 1.4; U.shard.position.y = 4.2 + Math.sin(this.t * 2) * .25; } if (U.hero) U.hero.update(dt); g.children.forEach(c => { if (c.userData && c.userData.fl !== undefined) { c.rotation.y += dt; c.position.y += Math.sin(this.t * 1.5 + c.userData.fl) * dt * .4; } }); K.sky.follow(0, 0, 0, dt); K.fx.update(dt); },
@@ -9085,7 +9240,7 @@ K.buildTitleUI = function () {
   hh('div', 'tt-ver', 'v' + K.version + ' · Pedro Javarotti · Motor JGK', l.el);
   const ctl = hh('div', 'tt-ctl', '', l.el);
   const HINT = {
-    kb: 'WASD mover · Mouse câmera · Botão esq. atacar · Shift rolar · Espaço pular<br>Q/R/X habilidades · E interagir · F mirar · I/J/M menus',
+    kb: 'WASD mover · Mouse câmera · Botão esq. atacar · Shift rolar · Espaço pular<br>Q/R/X habilidades · E interagir · F mirar · I/J/M menus · segure Alt para clicar no HUD',
     touch: 'Joystick esquerdo move · Arraste a tela para a câmera<br>Botões à direita: atacar, rolar, pular e habilidades',
     pad: 'Analógico move/câmera · RT atacar · A pular · B rolar<br>Gatilhos e bumpers: habilidades · Y interagir'
   };
