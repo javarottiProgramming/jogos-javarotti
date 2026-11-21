@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.3.1</title>
+<title>Sinuca Intergaláctica · v0.3.2</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.3.1', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.3.2', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -1058,7 +1058,7 @@ K.defScene('partida', {
     K.music(T.musica || (REG.planet[cfg.planeta] || {}).musica || 'partida');
     regra.setup(M); Object.assign(MV, tableView(T)); M.art = K.tableArt(T, MV.s * 2); M.br = {}; M.bh = {}; M.rp = PL.R * MV.s; M.roll = {};
     for (let i = 0; i <= 15; i++) { M.br[i] = K.ballArt(i, M.rp * 2, K.v.HK / 2); M.bh[i] = K.ballArt(i, HUDR * 2, K.v.HK / 2); }   // bolas do HUD: mesma arte lisa da mesa (0.3.1), desenhadas na camada hi-res
-    M.ang = Math.atan2(T.foot.y - T.head.y, T.foot.x - T.head.x); M.guia = K.guia(M);
+    M.ang = Math.atan2(T.foot.y - T.head.y, T.foot.x - T.head.x); M.guia = K.guia(M); M.tacoRival = K.cueDoRival(rival.id);
     M.tempoMax = Math.round((25 + 6 * (up.tempo || 0)) * (cfg.planeta ? K.dif().tempo : 1)); M.clock = M.tempoMax; M.vez = cfg.comeca === 1 ? 1 : 0;
     if (M.vez === 1) this.cpuStart(M);
     this.say(M, 'inicio');
@@ -1148,9 +1148,11 @@ K.defScene('partida', {
       amp = base * Math.max(.4, 1 - calma * .2) * firme * (1 - .8 * (M.hk || 0)) * Math.PI / 180;
     return amp * (Math.sin(K.time * 1.3) * .75 + Math.sin(K.time * 2.1 + 1) * .25); },
   shootNow(M) {
-    if (M.fase !== 'mira' || M.S.moving) return; const ang = M.ang + (M.vez === 0 && !M.bot ? this.wobble(M) : 0), pow = clamp(M.pow, .02, 1) * (M.taco.forca || 1);
+    if (M.fase !== 'mira' || M.S.moving) return;
+    const tc = M.vez === 0 ? { forca: M.taco.forca || 1, efeito: M.taco.efeito || 1 } : { forca: 1, efeito: 1 };   // 0.3.2: atributos do taco só valem para o JOGADOR; o taco do rival é só visual (a IA é calibrada à parte, qa:ia)
+    const ang = M.ang + (M.vez === 0 && !M.bot ? this.wobble(M) : 0), pow = clamp(M.pow, .02, 1) * tc.forca;
     M.pre = M.regra.antes ? M.regra.antes(M, M.vez) : null;   // FOTO de antes da tacada: é com ela que a regra julga (0.3.0)
-    PL.shoot(M.S, ang, Math.min(1, pow), { f: M.fx.f * (M.taco.efeito || 1), s: M.fx.s * (M.taco.efeito || 1) }); M.fase = 'rolando'; M.seen = 0; M.tacadas++; M.lastPow = M.pow;
+    PL.shoot(M.S, ang, Math.min(1, pow), { f: M.fx.f * tc.efeito, s: M.fx.s * tc.efeito }); M.fase = 'rolando'; M.seen = 0; M.tacadas++; M.lastPow = M.pow;
     K.sfx('tacada', .4 + M.pow * .6); K.emit('shot', { M, ang, pow }); M.pow = 0; M.spinOpen = false; M.carga = 0; M.rot = M.barDrag = M.powDrag = M.fine = null;
   },
   cpuStart(M) { if (M.fase !== 'mao') M.fase = 'pensa'; M.aimT = 0; M.plan = null; M.gen = null; },
@@ -1259,7 +1261,7 @@ K.defScene('partida', {
       else if (!hitOk && G >= 2 && wall.t < 1e8) { const vx = dx, vy = dy, d = vx * wall.nx + vy * wall.ny, ra = Math.atan2(vy - 2 * d * wall.ny, vx - 2 * d * wall.nx); path(e[0], e[1], ra, 22 * (1 + .3 * Math.max(0, G - 2)), 0, 'rgba(244,248,255,.6)', 1.2, 0); }   // branca na tabela: mostra a volta
     }
     const back = rp + 4 + M.pow * 44;
-    K.drawCue(h, X - dx * back, Y - dy * back, -dx, -dy, 175, M.taco, 1);
+    K.drawCue(h, X - dx * back, Y - dy * back, -dx, -dy, 175, M.vez === 0 ? M.taco : M.tacoRival, 1);   // cada rival joga com o SEU taco (0.3.2), nunca com o seu
   },
   /* bolas que FALTAM de cada jogador (ids), na ordem do HUD; 8 sozinha quando acabou o grupo; null enquanto a mesa está aberta */
   faltam(M, j) { if (!M.grupos[j]) return null; const L = M.S.balls.filter(b => !b.in && K.grupo(b.id) === M.grupos[j]).map(b => b.id); return L.length ? L : [8]; },
@@ -1305,30 +1307,6 @@ K.defScene('partida', {
     K.disc(g, cx + M.fx.s * 20, cy - M.fx.f * 20, 3, P.pink); K.txt(g, 'EFEITO', cx, cy - 44, { al: 'c', c: P.gold }); K.txt(g, 'cima = siga · baixo = puxe · lados = efeito na tabela', cx, cy + 34, { al: 'c', c: P.grey }); },
 });
 /* céu estrelado padrão (3 camadas que piscam; gráfico baixo = 1 camada parada) */
-/* TACO LISO (pedido do Pedro, 2026-11-21): desenho vetorial suave na camada 2×, igual às bolas. Partida E loja usam esta mesma função.
- * K.drawCue(h, xPonta, yPonta, dx, dy, comprimento, taco, escala) — (dx,dy) aponta da ponta para o cabo. Afina na ponta, contorno no tom escuro
- * da própria cor (nunca preto), brilho contínuo em cima, virola branca, ponta colorida, anel de junção e empunhadura. */
-K.drawCue = (h, x0, y0, dx, dy, len, taco, sc) => {
-  sc = sc || 1; const col = (taco && taco.cor) || '#C8D3E6', pt = (taco && taco.ponta) || '#3BE8FF', nx = -dy, ny = dx, L = len * sc;
-  const P2 = (t, w) => [x0 + dx * L * t + nx * w * sc, y0 + dy * L * t + ny * w * sc];
-  const corpo = (t0, t1, w0, w1, fill, sh) => { const a = P2(t0, w0), b = P2(t1, w1), c = P2(t1, -w1), d = P2(t0, -w0), o = sh || 0;
-    h.beginPath(); h.moveTo(a[0] + o, a[1] + o); h.lineTo(b[0] + o, b[1] + o); h.lineTo(c[0] + o, c[1] + o); h.lineTo(d[0] + o, d[1] + o); h.closePath(); h.fillStyle = fill; h.fill(); };
-  const W = t => 1.8 + 2.7 * t;                                      // meia-largura: 1,8 na ponta → 4,5 no cabo (visível)
-  h.save(); h.lineJoin = 'round'; h.lineCap = 'round';
-  corpo(0, 1, W(0) + .6, W(1) + .6, 'rgba(4,6,18,.35)', 3 * sc);     // sombra no pano
-  corpo(0, 1, W(0) + .9, W(1) + .9, K.mix(col, '#0B0D1A', .62));     // contorno escuro da própria cor
-  const gr = h.createLinearGradient(P2(.5, W(.5))[0], P2(.5, W(.5))[1], P2(.5, -W(.5))[0], P2(.5, -W(.5))[1]);
-  gr.addColorStop(0, K.mix(col, '#FFFFFF', .45)); gr.addColorStop(.35, col); gr.addColorStop(1, K.mix(col, '#0B0D1A', .35));
-  corpo(0, 1, W(0), W(1), gr);                                       // corpo com volume (luz em cima)
-  corpo(.70, 1, W(.70), W(1), K.mix(col, '#0B0D1A', .5));            // empunhadura
-  for (let i = 0; i < 5; i++) corpo(.74 + i * .05, .755 + i * .05, W(.75) + .05, W(.76) + .05, K.mix(col, '#0B0D1A', .7));   // listras do grip
-  corpo(.62, .645, W(.62) + .3, W(.645) + .3, pt);                   // anel da junção na cor da ponta
-  corpo(.985, 1, W(.985) + .2, W(1) + .2, K.mix(col, '#0B0D1A', .7)); // tampa do cabo
-  corpo(.012, .045, W(.012) + .15, W(.045) + .15, '#F4F8FF');        // virola branca
-  corpo(0, .014, W(0) + .2, W(.014) + .2, pt);                       // ponta colorida
-  const a = P2(.05, W(.05) * .45), b = P2(.6, W(.6) * .45); h.strokeStyle = 'rgba(255,255,255,.55)'; h.lineWidth = .9 * sc; h.beginPath(); h.moveTo(a[0], a[1]); h.lineTo(b[0], b[1]); h.stroke();   // brilho contínuo
-  h.restore();
-};
 K.drawSpace = (g, t) => { K.bands(g, 0, 0, K.v.W, K.v.H, '#05071A', '#16113A', 10); const r = rng(77), n = K.q() === 0 ? 60 : 140;
   for (let i = 0; i < n; i++) { const x = r() * K.v.W, y = r() * K.v.H, z = r(), tw = K.q() > 0 ? Math.sin(t * (1 + z * 3) + i) > .7 : false; K.rect(g, (x + t * z * 4 * (K.q() > 0)) % K.v.W, y, 1, 1, tw ? '#FFFFFF' : z > .7 ? '#9FB4FF' : '#4A5578'); } };
 
@@ -1428,8 +1406,98 @@ K.tableArt = (T, s) => {
   cv.pad = pad; return cv;
 };
 
+/*==ENGINE:tacos==  TACOS COLECIONÁVEIS (0.3.2, pedido do Pedro). REGRA DO MOTOR: cada rival da campanha tem o SEU taco (nunca a réplica do taco do jogador).
+ *  · Na partida o rival joga com o taco dele (só visual: a IA não ganha nem perde nada, ver docs/ENGINE_API.md).
+ *  · Vencer o rival pela 1ª vez LIBERA o taco dele na loja, por um preço baixo. Os atributos e o enfeite crescem com o AVANÇO na campanha:
+ *      nivel = (ordem do planeta − 1) × 5 + posição do rival no planeta (0 a 4)   →   quanto mais longe, melhor o taco e mais trabalhado o desenho.
+ *  · O conteúdo (src/content/22-tacos.js) só dá a ARTE: K.defCue(id, { rival, nome, desc, cor, cor2, ponta, motivo }) + K.cueMotivo(motivo, {...}).
+ *    O motor preenche forca / mira / efeito / preco / libera pela curva abaixo (o que o conteúdo escrever explicitamente vale mais que a curva).
+ *  · Desenho (K.drawCue): nivel 0 = o taco do jogador com poucos detalhes na cor do rival; cada nível acima fica maior, mais largo e mais enfeitado
+ *    (anéis, brilho em volta, faíscas girando). Planeta novo = motivos novos e nível maior. K.drawCue é usada pela partida, pela loja e pelo resultado. */
+
+K.CUE_POR_PLANETA = 5;
+K.CUE_CURVA = {
+  forca: n => Math.min(1.5, 1 + .03 * (n + 1)),                       // ×: 1,03 · 1,06 · 1,09 · 1,12 · 1,15 (planeta 1)
+  mira: n => Math.min(3, Math.floor((n + 1) / 2.5)),                  // níveis de linha: 0 · 0 · 1 · 1 · 2
+  efeito: n => Math.min(1.8, 1 + .08 * n),                            // ×: 1 · 1,08 · 1,16 · 1,24 · 1,32
+  preco: n => 10 * Math.round((50 + 35 * n + 5 * n * n) / 10),        // 50 · 90 · 140 · 200 · 270 (a 1ª custa menos que o prêmio da 1ª partida)
+};
+K.CUE_RIVAL_PADRAO = { id: 'rival_padrao', nome: 'TACO DO RIVAL', cor: '#9DB0D8', ponta: '#3BE8FF' };
+
+/* distribui taco ↔ partida: o 1º taco cujo `rival` bate com o rival da partida (planetas na ordem do mapa). Refaz sozinho quando algo é registrado. */
+let _tacosPrep = false; K.on('def', () => { _tacosPrep = false; });
+K.cuesPrep = () => {
+  if (_tacosPrep) return; _tacosPrep = true; const usados = new Set(), L = Object.values(REG.cue);
+  K.planets().forEach(pl => pl.partidas.forEach((p, k) => {
+    const c = L.find(q => q.rival === p.rival); if (!c || usados.has(c.id)) return; usados.add(c.id);
+    const n = ((pl.ordem === undefined ? 1 : pl.ordem) - 1) * K.CUE_POR_PLANETA + k; c.planeta = pl.id; c.tier = k; c.nivel = n; c.libera = p.id;
+    c._auto = c._auto || { forca: c.forca === undefined, mira: c.mira === undefined, efeito: c.efeito === undefined, preco: c.preco === undefined };
+    for (const a of ['forca', 'mira', 'efeito', 'preco']) if (c._auto[a]) c[a] = K.CUE_CURVA[a](n);
+  }));
+};
+K.cueDoRival = id => { K.cuesPrep(); return Object.values(REG.cue).find(c => c.rival === id && c.libera !== undefined) || K.CUE_RIVAL_PADRAO; };
+K.cueLiberado = c => c.libera === undefined || !!(SAVE.game && (SAVE.game.vencidas[c.libera] || (SAVE.game.tacos && SAVE.game.tacos[c.id])));
+/* ordem da loja: o taco de bar, a coleção dos rivais (do planeta 1 em diante) e depois os tacos de loja */
+K.cuesLista = () => { K.cuesPrep(); const L = Object.values(REG.cue), col = L.filter(c => c.libera !== undefined).sort((a, b) => a.nivel - b.nivel), r = L.filter(c => c.libera === undefined);
+  return [...r.filter(c => !c.preco), ...col, ...r.filter(c => c.preco)]; };
+
+/* ------------------------------------------------------------------ desenho
+ * Motivos: K.cueMotivo('viral', { fundo(c), corpo(c), frente(c), faisca: 'estrela' | 'quadrado' }) — o conteúdo desenha os detalhes de cada rival.
+ * `c` (contexto): h · t (segundos) · sc (escala de largura) · lv (nível de arte) · col col2 ponta (cores) · W(t) (meia-largura) · P2(t, w) ponto absoluto · em(t, f) ponto em t (0 ponta … 1 cabo)
+ * e f (−1…1 da meia-largura) · tira(t0, t1, f0, f1, cor) · anel(t0, t1, cor, mais) · ponto(t, f, r, cor) (r em meias-larguras) · estrela(x, y, s, cor, a) · coracao(x, y, s, cor) · poli(pontos, cor) · alpha(a). */
+K.CUE_MOTIVOS = {};
+K.cueMotivo = (id, def) => { K.CUE_MOTIVOS[id] = def; return def; };
+/* nível de arte (−1 = taco liso de loja, sem enfeite): cresce com o avanço na campanha; passa de 4 nos planetas seguintes */
+K.cueArte = tc => { const lv = tc && typeof tc.nivel === 'number' ? Math.max(0, Math.min(tc.nivel, 9)) : -1;
+  if (lv < 0) return { lv, comp: 1, larg: 1, aura: 0, faiscas: 0, aneis: 0 };
+  return { lv, comp: 1 + .03 * lv, larg: 1 + .035 * lv + (lv >= 4 ? .05 : 0), aura: Math.max(0, Math.min(1, (lv - 1) / 3)), faiscas: lv >= 3 ? Math.min(6, lv - 1) : 0, aneis: 1 + (lv >> 1) }; };
+
+/* TACO LISO (pedido do Pedro, 2026-11-21): desenho vetorial suave na camada 2×, igual às bolas. Partida, loja e resultado usam esta mesma função.
+ * K.drawCue(h, xPonta, yPonta, dx, dy, comprimento, taco, escala) — (dx,dy) aponta da ponta para o cabo. Afina na ponta, contorno no tom escuro
+ * da própria cor (nunca preto), brilho contínuo em cima, virola branca, ponta colorida, anel de junção e empunhadura.
+ * taco.cabo = cor do cabo (opcional). taco.sil = silhueta escura (taco ainda trancado na loja): só o corpo, sem motivo, brilho nem faísca. */
+K.drawCue = (h, x0, y0, dx, dy, len, taco, sc) => {
+  sc = sc || 1; const col = (taco && taco.cor) || '#C8D3E6', pt = (taco && taco.ponta) || '#3BE8FF', col2 = (taco && taco.cor2) || pt, nx = -dy, ny = dx, sil = !!(taco && taco.sil);
+  const A = K.cueArte(taco), mo = !sil && taco && K.CUE_MOTIVOS[taco.motivo], ws = sc * A.larg, L = len * sc * A.comp, T = K.time;
+  const P2 = (t, w) => [x0 + dx * L * t + nx * w * ws, y0 + dy * L * t + ny * w * ws];
+  const W = t => 1.8 + 2.7 * t;                                      // meia-largura: 1,8 na ponta → 4,5 no cabo (visível)
+  const poli = (pts, fill, o) => { h.beginPath(); pts.forEach((p, i) => i ? h.lineTo(p[0] + (o || 0), p[1] + (o || 0)) : h.moveTo(p[0] + (o || 0), p[1] + (o || 0))); h.closePath(); h.fillStyle = fill; h.fill(); };
+  const corpo = (t0, t1, w0, w1, fill, sh) => poli([P2(t0, w0), P2(t1, w1), P2(t1, -w1), P2(t0, -w0)], fill, sh);
+  const c = { h, t: T, sc: ws, lv: A.lv, col, col2, ponta: pt, W, P2,
+    em: (t, f) => P2(t, W(t) * f), tira: (t0, t1, f0, f1, fill) => poli([P2(t0, W(t0) * f0), P2(t1, W(t1) * f0), P2(t1, W(t1) * f1), P2(t0, W(t0) * f1)], fill),
+    anel: (t0, t1, fill, mais) => corpo(t0, t1, W(t0) + (mais || 0), W(t1) + (mais || 0), fill),
+    ponto: (t, f, r, fill) => { const p = P2(t, W(t) * f); h.beginPath(); h.arc(p[0], p[1], Math.max(.3, r * W(t) * ws), 0, TAU); h.fillStyle = fill; h.fill(); },
+    estrela: (x, y, s, fill, a) => { h.save(); h.globalAlpha = a === undefined ? 1 : a; h.fillStyle = fill; h.beginPath(); h.moveTo(x, y - s); h.quadraticCurveTo(x, y, x + s, y); h.quadraticCurveTo(x, y, x, y + s); h.quadraticCurveTo(x, y, x - s, y); h.quadraticCurveTo(x, y, x, y - s); h.fill(); h.restore(); },
+    coracao: (x, y, s, fill) => { h.save(); h.translate(x, y); h.rotate(Math.atan2(dx, -dy)); h.fillStyle = fill; h.beginPath(); h.moveTo(0, s * .9); h.bezierCurveTo(-s * 1.5, -s * .1, -s * .7, -s * 1.1, 0, -s * .35); h.bezierCurveTo(s * .7, -s * 1.1, s * 1.5, -s * .1, 0, s * .9); h.fill(); h.restore(); },   // ponta do coração aponta para a ponta do taco
+    poli, alpha: a => { h.globalAlpha = a; } };
+  h.save(); h.lineJoin = 'round'; h.lineCap = 'round';
+  if (!sil && A.aura > 0) { const pulso = .85 + .15 * Math.sin(T * 3), a = P2(0, 0), b = P2(1, 0), cc = h.strokeStyle;   // brilho em volta (nível ≥ 2): três traços largos e fracos, sem borrão caro
+    [[1, .07], [.62, .09], [.34, .1]].forEach(([k, al]) => { h.globalAlpha = al * A.aura * pulso; h.strokeStyle = col2; h.lineWidth = (W(.5) * 2 + 9 * k) * ws; h.beginPath(); h.moveTo(a[0], a[1]); h.lineTo(b[0], b[1]); h.stroke(); }); h.globalAlpha = 1; h.strokeStyle = cc; }
+  if (mo && mo.fundo) mo.fundo(c);
+  corpo(0, 1, W(0) + .6, W(1) + .6, 'rgba(4,6,18,.35)', 3 * sc);     // sombra no pano
+  corpo(0, 1, W(0) + .9, W(1) + .9, K.mix(col, '#0B0D1A', .62));     // contorno escuro da própria cor
+  const gr = h.createLinearGradient(P2(.5, W(.5))[0], P2(.5, W(.5))[1], P2(.5, -W(.5))[0], P2(.5, -W(.5))[1]);
+  gr.addColorStop(0, K.mix(col, '#FFFFFF', .45)); gr.addColorStop(.35, col); gr.addColorStop(1, K.mix(col, '#0B0D1A', .35));
+  corpo(0, 1, W(0), W(1), gr);                                       // corpo com volume (luz em cima)
+  const cabo = (taco && taco.cabo) || K.mix(col, '#0B0D1A', .5);       // cabo: tom escuro do corpo (ouro vira marrom: nesse caso o taco define `cabo`)
+  corpo(.70, 1, W(.70), W(1), cabo);                                 // empunhadura
+  for (let i = 0; i < 5; i++) corpo(.74 + i * .05, .755 + i * .05, W(.75) + .05, W(.76) + .05, K.mix(cabo, '#0B0D1A', .45));   // listras do grip
+  if (mo && mo.corpo) mo.corpo(c);
+  corpo(.62, .645, W(.62) + .3, W(.645) + .3, pt);                   // anel da junção na cor da ponta
+  corpo(.985, 1, W(.985) + .2, W(1) + .2, K.mix(cabo, '#0B0D1A', .45)); // tampa do cabo
+  corpo(.012, .045, W(.012) + .15, W(.045) + .15, '#F4F8FF');        // virola branca
+  corpo(0, .014, W(0) + .2, W(.014) + .2, pt);                       // ponta colorida
+  const a = P2(.05, W(.05) * .45), b = P2(.6, W(.6) * .45); h.strokeStyle = 'rgba(255,255,255,.55)'; h.lineWidth = .9 * ws; h.beginPath(); h.moveTo(a[0], a[1]); h.lineTo(b[0], b[1]); h.stroke();   // brilho contínuo
+  if (mo && mo.frente) mo.frente(c);
+  if (!sil && A.faiscas) { const quad = mo && mo.faisca === 'quadrado';   // coisas em volta do taco (nível ≥ 3): faíscas que sobem do cabo até a ponta
+    for (let i = 0; i < A.faiscas; i++) { const ph = (T * .17 + i / A.faiscas) % 1, t = .06 + ph * .9, lado = i % 2 ? 1 : -1, al = Math.sin(Math.PI * ph), s = (1.9 + 1.1 * Math.sin(T * 5 + i * 2)) * ws;
+      const p = P2(t, lado * (W(t) + 3.5 * ws + 2.2 * ws * Math.sin(T * 2.3 + i * 2)));
+      if (quad) { h.globalAlpha = al * .9; h.fillStyle = i % 2 ? col2 : '#F4F8FF'; h.fillRect(p[0] - s * .5, p[1] - s * .5, s, s); h.globalAlpha = 1; } else c.estrela(p[0], p[1], s, i % 2 ? col2 : '#FFFFFF', al); } }
+  h.restore();
+};
+
 /*==ENGINE:scenes==  cenas padrão (o time sobrescreve com K.defScene do mesmo nome): titulo · menu · mapa · planeta · historia · loja · opcoes · creditos · som · resultado.
- * Campanha: SAVE.game = { creditos, vencidas: {partidaId: 1}, up: {mira, tempo, calma}, tacos: {id: 1}, taco, planeta }.
+ * Campanha: SAVE.game = { creditos, vencidas: {partidaId: 1}, up: {mira, tempo, calma}, tacos: {id: 1}, taco, planeta }. Tacos dos rivais: 09b-tacos.js (liberados ao vencer o rival).
  * Planeta (K.defPlanet): { nome, ordem, emBreve? (aparece trancado com 'EM BREVE'), mapa: {x, y, cor}, regra?, musica?, fundo(g,t)?, historia: {chegada, saida}, partidas: [{ id, mesa, rival, premio }] } */
 /* Dificuldade da campanha (pedido do Pedro, 2026-11-21): escolhida no início de cada campanha e guardada no save. Só vale nas partidas da campanha (cfg.planeta).
  * erro/pensa multiplicam o nível do rival (menos erro = mira melhor; mais candidatos = escolhe melhor) · tempo multiplica o relógio · premio multiplica os créditos. */
@@ -1505,13 +1573,21 @@ K.defScene('planeta', {
     pl.partidas.forEach((p, i) => K.txt(g, '+' + Math.round((p.premio || 0) * K.dif().premio), 250, 68 + i * 22, { c: P.lime })); },
 });
 K.defScene('resultado', {
-  enter(r) { this.r = r; const cfg = r.cfg || {}; this.ganho = 0;
-    if (r.venceu && SAVE.game) { this.ganho = Math.round((cfg.premio || 0) * (cfg.planeta ? K.dif().premio : 1)); SAVE.game.creditos += this.ganho; if (cfg.partida) SAVE.game.vencidas[cfg.partida] = 1; K.persist(); }
+  enter(r) { this.r = r; const cfg = r.cfg || {}; this.ganho = 0; this.novo = null;
+    if (r.venceu && SAVE.game) { const jaVenceu = !!(cfg.partida && SAVE.game.vencidas[cfg.partida]); this.ganho = Math.round((cfg.premio || 0) * (cfg.planeta ? K.dif().premio : 1)); SAVE.game.creditos += this.ganho; if (cfg.partida) SAVE.game.vencidas[cfg.partida] = 1;
+      if (cfg.partida && !jaVenceu) this.novo = K.cuesLista().find(c => c.libera === cfg.partida && !SAVE.game.tacos[c.id]) || null;   // 0.3.2: 1ª vitória sobre o rival libera o taco dele na loja
+      K.persist(); }
     const pl = REG.planet[cfg.planeta], fim = pl && K.planetDone(pl) && r.venceu && pl.historia && pl.historia.saida && !SAVE.meta.visto[pl.historia.saida];
     UI.button({ x: W_() / 2 - 60, y: 150, w: 120, h: 18, label: r.venceu ? 'CONTINUAR' : 'MENU', on: () => !r.venceu ? K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) : fim ? K.go('historia', { id: pl.historia.saida, depois: 'mapa' }) : K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) });
-    if (!r.venceu) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'REVANCHE', on: () => K.partida(cfg) }); UI.focus = 0; },
-  draw(g) { K.drawSpace(g, K.time); const r = this.r; K.txt(g, r.venceu ? 'VITÓRIA' : 'DERROTA', W_() / 2, 40, { al: 'c', c: r.venceu ? P.lime : P.pink, s: 3 });
-    K.txt(g, 'tacadas: ' + r.tacadas + ' · faltas: ' + r.faltas, W_() / 2, 90, { al: 'c', c: P.white }); if (this.ganho) K.txt(g, '+' + this.ganho + ' ' + K.game.moeda, W_() / 2, 106, { al: 'c', c: P.gold, s: 2 }); },
+    if (!r.venceu) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'REVANCHE', on: () => K.partida(cfg) });
+    if (this.novo) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'VER NA LOJA', c: P.gold, on: () => K.go('loja') });
+    UI.focus = 0; },
+  draw(g) { K.drawSpace(g, K.time); const r = this.r, W = W_(), o = this.novo ? -24 : 0; K.txt(g, r.venceu ? 'VITÓRIA' : 'DERROTA', W / 2, 40 + o, { al: 'c', c: r.venceu ? P.lime : P.pink, s: 3 });
+    K.txt(g, 'tacadas: ' + r.tacadas + ' · faltas: ' + r.faltas, W / 2, 90 + o, { al: 'c', c: P.white }); if (this.ganho) K.txt(g, '+' + this.ganho + ' ' + K.game.moeda, W / 2, 106 + o, { al: 'c', c: P.gold, s: 2 });
+    const c = this.novo; if (c) { K.panel(g, W / 2 - 120, 106, 240, 41, { line: P.gold, line2: P.line2, a: 1 }); K.txt(g, (K.time * 2 | 0) % 2 ? 'NOVO TACO NA LOJA!' : 'NOVO TACO NA LOJA', W / 2, 109, { al: 'c', c: P.gold });
+      K.txt(g, c.nome, W / 2 - 112, 134, { c: P.white, o: false }); K.txt(g, '◆ ' + c.preco, W / 2 + 112, 134, { al: 'r', c: P.lime }); } },
+  /* o taco novo, liso, na camada 2× (a mesma K.drawCue da partida e da loja) */
+  drawHi(h) { const c = this.novo; if (c) { const A = K.cueArte(c), sc = Math.min(1.5, 300 / (150 * A.comp)); K.drawCue(h, W_() - 150 * sc * A.comp / 2, 125 * 2, 1, 0, 150, c, sc); } },   // grande: é a recompensa
 });
 K.defScene('loja', {
   enter() { K.music('loja'); this.build(); },
@@ -1519,7 +1595,7 @@ K.defScene('loja', {
     Object.values(REG.upgrade).forEach(u => { const lv = G.up[u.id] || 0, max = u.precos.length, preco = u.precos[lv];
       UI.button({ x: 20, y, w: 170, h: 18, label: u.nome + ' ' + '◆'.repeat(lv) + '·'.repeat(max - lv), dis: () => lv >= max ? 'NÍVEL MÁXIMO' : null,
         on: () => UI.confirm({ titulo: u.nome + ' NÍVEL ' + (lv + 1), texto: u.desc + ' Custa ' + preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < preco ? 'Faltam ' + (preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= preco; G.up[u.id] = lv + 1; K.persist(); K.sfx('comprar'); this.build(); } }) }); y += 22; });
-    y = 36; Object.values(REG.cue).forEach(c => { const tem = G.tacos[c.id], eq = G.taco === c.id;
+    y = 36; K.cuesLista().filter(K.cueLiberado).forEach(c => { const tem = G.tacos[c.id], eq = G.taco === c.id;
       UI.button({ x: 200, y, w: 164, h: 18, label: (eq ? '● ' : '') + c.nome + (tem ? '' : ' · ' + c.preco), c: c.cor,
         on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), this.build()) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); this.build(); } }) }); y += 22; });
     backBtn('mapa'); UI.fsIcon(); UI.focus = 0; },
@@ -1894,6 +1970,67 @@ R_('apresentadora', 'APRESENTADORA', { erro: .2, pensa: 8, posicao: .85 }, { ins
   falta: ['Falta, e o público adora.', 'Escândalo! Rende audiência.'],
   vitoria: ['Fim de temporada pra você.', 'Obrigada, obrigada. Podem sentar.'],
   derrota: ['...Corta! Corta!', 'Isso vai ser editado. Muito.'] });
+
+}
+{
+/*==CONTENT:tacos==  DONO: gerente (arte dos tacos: docs/ART_BIBLE.md). Um taco para CADA rival da campanha (regra do motor 0.3.2, src/engine/09b-tacos.js).
+ * Aqui só vai a ARTE e o texto: K.defCue(id, { rival, nome (≤ 16 letras), desc, cor (corpo), cor2 (detalhe), ponta, motivo }) e K.cueMotivo(motivo, { fundo, corpo, frente, faisca }).
+ * NÃO escreva forca / mira / efeito / preco aqui: o motor calcula pela posição do rival na campanha (planeta e ordem da partida), e o taco entra na loja quando o jogador vence o rival.
+ * Planeta 1 (Terra): 1 ZYX (parecido com o do jogador, detalhes rosa) → 5 APRESENTADORA (o maior e mais enfeitado: brilho, faíscas, microfone). Planeta novo = motivos novos. */
+K.defCue('taco_zyx', { rival: 'zyx', nome: 'TACO VIRAL', desc: 'Parecido com o seu, mas com filtro rosa.', cor: '#C8D3E6', cor2: '#FF3E9A', ponta: '#FF7BC4', motivo: 'viral' });
+K.defCue('taco_glub', { rival: 'glub', nome: 'TACO DA LAGOA', desc: 'Verde da ponta ao cabo. Tem olhos. Não pergunte.', cor: '#38C45F', cor2: '#E4FF6A', ponta: '#E4FF6A', motivo: 'sapo' });
+K.defCue('taco_orion', { rival: 'orion', nome: 'TACO DA LENDA', desc: 'Campeão antes de você nascer. Tem até estrelas.', cor: '#2F4FB0', cor2: '#FFC83D', ponta: '#FFC83D', motivo: 'lenda' });
+K.defCue('taco_patroc', { rival: 'patroc', nome: 'TACO PREMIUM', desc: 'Patrocinado. Cada luz é um anúncio.', cor: '#4B5A8C', cor2: '#3BE8FF', ponta: '#3BE8FF', motivo: 'anuncio' });
+K.defCue('taco_apresentadora', { rival: 'apresentadora', nome: 'TACO HOLOFOTE', desc: 'O mais caro do programa. Vem com plateia.', cor: '#FFC83D', cor2: '#FF3E9A', ponta: '#FFFFFF', cabo: '#8E1B63', motivo: 'palco' });
+
+const TC_ESC = '#0B0D1A';
+/* ZYX · influencer: o taco do jogador com detalhes rosa e um coração de "curtir" */
+K.cueMotivo('viral', {
+  corpo(c) { const R = c.col2; c.tira(.09, .40, -.14, .14, R); c.anel(.79, .805, R, .05); c.anel(.89, .905, R, .05);
+    const p = c.em(.52, 0); c.coracao(p[0], p[1], 2.7 * c.sc, R); const q = c.em(.52, -.2); c.h.fillStyle = 'rgba(255,255,255,.85)'; c.h.beginPath(); c.h.arc(q[0], q[1], .55 * c.sc, 0, TAU); c.h.fill(); },
+});
+/* GLUB · sapo do interior: corpo verde com pintas e DOIS OLHOS no cabo */
+K.cueMotivo('sapo', {
+  corpo(c) { const e = K.mix(c.col, '#0B3A22', .5);
+    [[.18, .38, .5], [.27, -.4, .42], [.38, .3, .5], [.47, -.32, .42], [.56, .28, .4]].forEach(([t, f, r]) => c.ponto(t, f, r, e));
+    [[.76, 0, .32], [.82, .45, .26], [.82, -.45, .26], [.9, 0, .32]].forEach(([t, f, r]) => c.ponto(t, f, r, c.col2)); },
+  frente(c) { const h = c.h; [-1, 1].forEach(s => { const p = c.P2(1.012, s * c.W(1) * .62), r = 3.1 * c.sc;
+    h.fillStyle = K.mix(c.col, TC_ESC, .55); h.beginPath(); h.arc(p[0], p[1], r + .9 * c.sc, 0, TAU); h.fill();
+    h.fillStyle = '#F4F8FF'; h.beginPath(); h.arc(p[0], p[1], r, 0, TAU); h.fill();
+    h.fillStyle = '#15233A'; h.beginPath(); h.arc(p[0] + .5 * c.sc, p[1], r * .5, 0, TAU); h.fill();
+    h.fillStyle = '#FFFFFF'; h.beginPath(); h.arc(p[0] + .1 * c.sc, p[1] - r * .22, r * .17, 0, TAU); h.fill(); }); },
+});
+/* VELHO ORION · ex-campeão: azul de troféu, faixas e estrelas douradas e uma bola de troféu no cabo */
+K.cueMotivo('lenda', {
+  corpo(c) { const G = c.col2; c.anel(.30, .318, G, .35); c.anel(.34, .352, G, .35); c.anel(.57, .61, G, .3); c.anel(.80, .815, G, .1); c.anel(.90, .915, G, .1);
+    [.17, .45].forEach(t => { const p = c.em(t, 0); c.estrela(p[0], p[1], 2.6 * c.sc, '#F4F8FF'); }); },
+  frente(c) { const h = c.h, p = c.P2(1.02, 0), r = c.W(1) * 1.05 * c.sc, g = h.createRadialGradient(p[0] - r * .35, p[1] - r * .35, r * .1, p[0], p[1], r);
+    g.addColorStop(0, '#FFF6C2'); g.addColorStop(.45, c.col2); g.addColorStop(1, K.mix(c.col2, TC_ESC, .45)); h.fillStyle = K.mix(c.col2, TC_ESC, .62); h.beginPath(); h.arc(p[0], p[1], r + .8 * c.sc, 0, TAU); h.fill();
+    h.fillStyle = g; h.beginPath(); h.arc(p[0], p[1], r, 0, TAU); h.fill(); },
+});
+/* PATROC-1 · IA do patrocinador: grafite com LEDs correndo, código de barras no cabo e anéis holográficos em volta */
+K.cueMotivo('anuncio', {
+  faisca: 'quadrado',
+  corpo(c) { const h = c.h, ga = h.globalAlpha;
+    for (let i = 0; i < 10; i++) { const t = .1 + i * .052, a = .3 + .7 * Math.max(0, Math.sin(c.t * 6 - i * .75)); h.globalAlpha = a; c.tira(t, t + .034, -.24, .24, c.col2); h.globalAlpha = a * .8; c.tira(t + .004, t + .03, -.08, .08, '#FFFFFF'); }
+    h.globalAlpha = ga; const B = K.mix(c.col, '#FFFFFF', .72); [[.72, .726], [.737, .75], [.762, .768], [.78, .795], [.805, .81], [.822, .832]].forEach(([a, b]) => c.anel(a, b, B, .02)); },
+  frente(c) { const h = c.h, a = Math.atan2(c.P2(0, 1)[1] - c.P2(0, 0)[1], c.P2(0, 1)[0] - c.P2(0, 0)[0]) + Math.PI / 2;
+    [.27, .47].forEach((t, i) => { const p = c.P2(t, 0), rx = (c.W(t) + 4.2 + Math.sin(c.t * 3 + i * 2)) * c.sc, ry = 1.25 * c.sc;
+      h.fillStyle = 'rgba(59,232,255,.14)'; h.strokeStyle = 'rgba(59,232,255,.85)'; h.lineWidth = .9 * c.sc; h.beginPath(); h.ellipse(p[0], p[1], rx, ry, a, 0, TAU); h.fill(); h.stroke(); }); },
+});
+/* APRESENTADORA · diva do programa: ouro com espiral rosa, gemas no cabo e um MICROFONE no lugar da tampa */
+K.cueMotivo('palco', {
+  corpo(c) { const h = c.h;
+    for (let i = 0; i < 6; i++) { const t = .07 + i * .095; c.poli([c.P2(t, -c.W(t)), c.P2(t + .035, -c.W(t + .035)), c.P2(t + .075, c.W(t + .075)), c.P2(t + .04, c.W(t + .04))], c.col2); }
+    c.anel(.93, .965, c.col2, .5);
+    [[.78, '#3BE8FF'], [.865, '#FF3E9A']].forEach(([t, g]) => { const p = c.P2(t, 0), r = c.W(t) * .62 * c.sc;
+      h.fillStyle = K.mix(g, TC_ESC, .6); h.beginPath(); h.arc(p[0], p[1], r + .8 * c.sc, 0, TAU); h.fill(); h.fillStyle = g; h.beginPath(); h.arc(p[0], p[1], r, 0, TAU); h.fill();
+      h.fillStyle = 'rgba(255,255,255,.85)'; h.beginPath(); h.arc(p[0] - r * .3, p[1] - r * .32, r * .3, 0, TAU); h.fill(); }); },
+  frente(c) { const h = c.h, p = c.P2(1.04, 0), r = c.W(1) * 1.5 * c.sc, g = h.createRadialGradient(p[0] - r * .35, p[1] - r * .35, r * .1, p[0], p[1], r);
+    g.addColorStop(0, '#FFFFFF'); g.addColorStop(.55, '#C8D3E6'); g.addColorStop(1, '#6A7694'); h.fillStyle = '#2A3358'; h.beginPath(); h.arc(p[0], p[1], r + .9 * c.sc, 0, TAU); h.fill();
+    h.fillStyle = g; h.beginPath(); h.arc(p[0], p[1], r, 0, TAU); h.fill();
+    h.strokeStyle = 'rgba(42,51,88,.55)'; h.lineWidth = .7 * c.sc; h.beginPath(); h.arc(p[0], p[1], r * .62, 0, TAU); h.stroke(); h.beginPath(); h.moveTo(p[0] - r, p[1]); h.lineTo(p[0] + r, p[1]); h.moveTo(p[0], p[1] - r); h.lineTo(p[0], p[1] + r); h.stroke(); },
+});
 
 }
 {
@@ -2431,7 +2568,7 @@ K.defScene('planeta', {
 });
 
 /* ====================================================================== LOJA */
-const ZLJ = { y: 38, p: 48, ph: 46, pw: 110, bw: 56 };
+const ZLJ = { y: 38, p: 48, ph: 46, pw: 110, bw: 56, pag: 3 };   // pag = tacos por página (0.3.2: a coleção dos rivais ocupa 2 páginas)
 const ZFX = { mira: 'LINHA MAIS LONGA E MÃO FIRME', tempo: '+6 SEGUNDOS EM CADA TACADA', calma: 'MÃO MAIS FIRME E RESPIRO LONGO' };
 function Zicon(g, id, x, y, c) {   // ícones 16×16 dos treinos, desenhados com primitivas
   K.disc(g, x + 8, y + 8, 8, P.ink); K.disc(g, x + 8, y + 8, 7, P.night);
@@ -2440,44 +2577,57 @@ function Zicon(g, id, x, y, c) {   // ícones 16×16 dos treinos, desenhados com
   else if (id === 'calma') { [-3, 0, 3].forEach((dy, k) => { for (let i = 0; i < 10; i++) K.rect(g, x + 3 + i, y + 8 + dy + [0, 1, 1, 0, -1, -1, 0, 1, 1, 0][(i + k * 2) % 10], 1, 1, c); }); }
   else K.rect(g, x + 4, y + 4, 8, 8, c);
 }
-function Zfx(c) {
+function Zfx(c) {   // uma linha por atributo (cabe nas 3 linhas do cartão)
   if (c.preco === 0 && c.desc) return [c.desc];
   const t = []; if (c.forca > 1) t.push('FORÇA +' + Math.round((c.forca - 1) * 100) + '%'); if (c.mira) t.push('MIRA +' + c.mira); if (c.efeito > 1) t.push('EFEITO +' + Math.round((c.efeito - 1) * 100) + '%');
   return t.length ? t : [c.desc || ''];
 }
+const Zsil = c => Object.assign({}, c, { sil: true, cor: '#27315F', ponta: '#3A4780', cor2: '#27315F', cabo: undefined });   // taco trancado: só a silhueta escura (o tamanho já mostra o quanto ele é especial)
+const Zrival = c => REG.rival[c.rival] || { nome: c.rival };
+const Zmotivo = c => { const pl = REG.planet[c.planeta], k = c.tier, p = pl && pl.partidas[k]; return 'Vença ' + Zrival(c).nome + (p ? ' (' + pl.nome + ', partida ' + (k + 1) + ')' : '') + ' para liberar'; };
 K.defScene('loja', {
-  enter() { if (!SAVE.game) K.newGame(); K.music('loja'); this.build(); },
-  build() {
-    UI.clear(); const G = SAVE.game; this.bt = [];
+  enter(a) { if (!SAVE.game) K.newGame(); K.music('loja'); const C = K.cuesLista(), G = SAVE.game; a = a || {};
+    const novo = C.findIndex(c => c.libera !== undefined && K.cueLiberado(c) && !G.tacos[c.id]);   // chegou com taco novo liberado: já abre na página dele
+    this.pg = novo >= 0 ? Math.floor(novo / ZLJ.pag) : 0; this.build(); },
+  build(keep) {
+    UI.clear(); const G = SAVE.game, C = K.cuesLista(), np = Math.ceil(C.length / ZLJ.pag); this.pg = clamp(this.pg | 0, 0, np - 1); this.bt = [];
+    this.rows = C.slice(this.pg * ZLJ.pag, this.pg * ZLJ.pag + ZLJ.pag); this.vis = this.rows.map(c => K.cueLiberado(c) ? c : Zsil(c));
+    const rebuild = k => this.build(k);
     Object.values(REG.upgrade).forEach((u, i) => { const lv = G.up[u.id] || 0, max = u.precos.length, preco = u.precos[lv], y = ZLJ.y + i * ZLJ.p;
-      this.bt.push(UI.button({ x: 10 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: lv >= max ? 'MÁXIMO' : '◆ ' + preco, c: lv >= max ? P.gold : G.creditos >= preco ? P.lime : P.chrome, dis: () => lv >= max ? 'NÍVEL MÁXIMO' : null,
-        on: () => UI.confirm({ titulo: u.nome + ' NÍVEL ' + (lv + 1), texto: u.desc + ' Custa ' + preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < preco ? 'Faltam ' + (preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= preco; G.up[u.id] = lv + 1; K.persist(); K.sfx('comprar'); this.build(); } }) })); });
-    Object.values(REG.cue).forEach((c, i) => { const tem = G.tacos[c.id], eq = G.taco === c.id, y = ZLJ.y + i * ZLJ.p;
-      this.bt.push(UI.button({ x: 198 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome,
-        on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), this.build()) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); this.build(); } }) })); });
-    Zback('mapa'); UI.fsIcon(); UI.focus = 0;
+      this.bt.push(UI.button({ key: 'u:' + u.id, x: 10 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: lv >= max ? 'MÁXIMO' : '◆ ' + preco, c: lv >= max ? P.gold : G.creditos >= preco ? P.lime : P.chrome, dis: () => lv >= max ? 'NÍVEL MÁXIMO' : null,
+        on: () => UI.confirm({ titulo: u.nome + ' NÍVEL ' + (lv + 1), texto: u.desc + ' Custa ' + preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < preco ? 'Faltam ' + (preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= preco; G.up[u.id] = lv + 1; K.persist(); K.sfx('comprar'); rebuild('u:' + u.id); } }) })); });
+    this.rows.forEach((c, i) => { const lib = K.cueLiberado(c), tem = G.tacos[c.id], eq = G.taco === c.id, y = ZLJ.y + i * ZLJ.p;
+      this.bt.push(UI.button({ key: 'c:' + c.id, x: 198 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: !lib ? 'TRANCADO' : eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: !lib ? P.dim : eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome, dis: !lib ? Zmotivo(c) : null,
+        on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), rebuild('c:' + c.id)) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + (c.preco ? ' ' + Zfx(c).join(', ') + '.' : '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); rebuild('c:' + c.id); } }) })); });
+    if (np > 1) { UI.button({ key: 'pg-', x: 336, y: 21, w: 18, h: 13, label: '←', dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
+      UI.button({ key: 'pg+', x: 356, y: 21, w: 18, h: 13, label: '→', dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
+    Zback('mapa'); UI.fsIcon(); const L = UI.list(), k = L.findIndex(b => b.key === keep); UI.focus = k >= 0 ? k : 0;
   },
   back() { K.go('mapa'); },
   draw(g) {
     const t = K.time, W = Zw(), G = SAVE.game, cur = UI.list()[UI.focus]; Zsky(g, t);
     K.txt(g, 'LOJA', 8, 6, { c: P.gold, s: 2 }); const cr = 'CRÉDITOS ◆ ' + G.creditos, w1 = K.tw(cr) + 12; Zchip(g, W - 24 - w1, 4, w1, cr, P.lime);
     K.txt(g, 'TREINO', 10, 24, { c: P.line }); K.rect(g, 10, 35, 176, 1, P.line2); K.txt(g, 'TACOS', 198, 24, { c: P.line }); K.rect(g, 198, 35, 176, 1, P.line2);
-    const U = Object.values(REG.upgrade), C = Object.values(REG.cue);
+    const col = K.cuesLista().filter(c => c.libera !== undefined), tem = col.filter(c => G.tacos[c.id]).length, np = Math.ceil(K.cuesLista().length / ZLJ.pag);
+    if (col.length) K.txt(g, 'COLEÇÃO ' + tem + '/' + col.length, 198 + K.tw('TACOS') + 10, 24, { c: tem === col.length ? P.gold : P.grey });
+    if (np > 1) K.txt(g, (this.pg + 1) + '/' + np, 332, 24, { al: 'r', c: P.grey });
+    const U = Object.values(REG.upgrade);
     U.forEach((u, i) => {
       const x = 10, y = ZLJ.y + i * ZLJ.p, lv = G.up[u.id] || 0, max = u.precos.length, hot = cur === this.bt[i];
       K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : P.line, line2: hot ? P.lime2 : P.line2, a: 1 }); Zicon(g, u.id, x + 5, y + 5, P.line);
       K.txt(g, u.nome, x + 26, y + 3, { c: P.gold }); for (let k = 0; k < max; k++) Zdiamond(g, x + 26 + k * 10, y + 14, k < lv);
       K.wrap(ZFX[u.id] || (u.desc || '').split('.')[0], ZLJ.pw - 10).slice(0, 2).forEach((l, j) => K.txt(g, l, x + 5, y + 23 + j * 9, { c: P.white }));
     });
-    C.forEach((c, i) => {
-      const x = 198, y = ZLJ.y + i * ZLJ.p, hot = cur === this.bt[U.length + i], eq = G.taco === c.id;
-      K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : eq ? P.lime2 : P.line, line2: hot ? P.lime2 : P.line2, a: 1 });
-      K.txt(g, c.nome, x + 6, y + 3, { c: P.gold }); if (eq) K.txt(g, '●', x + ZLJ.pw - 8, y + 3, { al: 'r', c: P.lime });
-      K.wrap(Zfx(c).join(' · '), ZLJ.pw - 10).slice(0, 2).forEach((l, j) => K.txt(g, l, x + 6, y + 23 + j * 9, { c: P.white }));
+    this.rows.forEach((c, i) => {
+      const x = 198, y = ZLJ.y + i * ZLJ.p, hot = cur === this.bt[U.length + i], eq = G.taco === c.id, lib = K.cueLiberado(c);
+      K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : eq ? P.lime2 : lib ? P.line : P.dim, line2: hot ? P.lime2 : P.line2, a: 1 });
+      K.txt(g, lib ? c.nome : '? ? ?', x + 6, y + 3, { c: lib ? P.gold : P.dim }); if (eq) K.txt(g, '●', x + ZLJ.pw - 8, y + 3, { al: 'r', c: P.lime });
+      const L = lib ? Zfx(c) : K.wrap('VENÇA ' + Zrival(c).nome + ' PARA LIBERAR', ZLJ.pw - 12);
+      (lib && c.preco === 0 ? K.wrap(L[0], ZLJ.pw - 10) : L).slice(0, 3).forEach((l, j) => K.txt(g, l, x + 6, y + 21 + j * 8, { c: lib ? P.white : P.grey }));
     });
   },
-  /* tacos LISOS na camada 2× com a mesma função da partida (K.drawCue, pedido do Pedro 2026-11-21): ponta à esquerda, cabo à direita */
-  drawHi(h) { Object.values(REG.cue).forEach((c, i) => K.drawCue(h, (198 + 8) * 2, (ZLJ.y + i * ZLJ.p + 17) * 2, 1, 0, 145, c, 1.3)); },
+  /* tacos LISOS na camada 2× com a mesma função da partida (K.drawCue, pedido do Pedro 2026-11-21): ponta à esquerda, cabo à direita. Trancado = silhueta escura */
+  drawHi(h) { this.rows.forEach((c, i) => { const A = K.cueArte(c); K.drawCue(h, (198 + 8) * 2, (ZLJ.y + i * ZLJ.p + 14.5) * 2, 1, 0, 150, this.vis[i], Math.min(1.1, 188 / (150 * A.comp))); }); },
 });
 
 }
