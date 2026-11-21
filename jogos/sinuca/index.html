@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.2.1</title>
+<title>Sinuca Intergaláctica · v0.2.2</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.2.1', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.2.2', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -341,7 +341,7 @@ IN.init = () => {
   cv.addEventListener('wheel', e => { e.preventDefault(); IN.q.push(['wh', { dy: sign(e.deltaY) }]); }, { passive: false });
   cv.addEventListener('contextmenu', e => e.preventDefault());
   /* perder o foco descarta teclas e dedos (regra 22): ninguém fica "segurando" um botão fantasma */
-  const drop = () => { IN.keys = {}; IN.ptr = {}; IN.p.down = false; IN.p.id = null; };
+  const drop = () => { IN.keys = {}; IN.ptr = {}; IN.p.down = false; IN.p.id = null; const s = sc(); s.cancel && s.cancel(); };
   addEventListener('blur', drop); document.addEventListener('visibilitychange', () => { if (document.hidden) drop(); });
 };
 const sc = () => K.scene || {};
@@ -366,7 +366,7 @@ IN.poll = () => {
     else if (t === 'pu' || t === 'pc') {
       const st = IN.ptr[d.id]; delete IN.ptr[d.id];
       if (IN.p.id === d.id) { IN.p.down = false; IN.p.x = d.x; IN.p.y = d.y; }
-      if (t === 'pc') continue;
+      if (t === 'pc') { const s = sc(); s.cancel && s.cancel(d); continue; }   // toque cancelado pelo sistema: a cena solta tudo (nada fica preso)
       const tap = st && Math.hypot(d.x - st.x0, d.y - st.y0) < 6 && K.time - st.t0 < .6;
       if (!K.ui.release(d, tap)) { const s = sc(); s.release && s.release(d, st); if (tap && s.tap) s.tap(d); }
     }
@@ -886,7 +886,7 @@ UI.draw = g => {
  * Abrir: K.partida({ mesa: 'classica', rival: 'zorg', regra?, aposta?, depois(res) })  →  res = { venceu, mesa, rival, tacadas, faltas }
  * Controles (PC): mover o mouse mira · clicar e PUXAR para trás dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
  *   teclado/gamepad: ←/→ mira (Shift fino) · segurar Espaço/A carrega, soltar tacada · E/X efeito · Q/Y respiro · P/Start pausa
- *   toque: arrastar na mesa gira a mira em volta da bola (toque curto aponta) · barra de força à esquerda: puxar para baixo e soltar · botões EFEITO e RESPIRO */
+ *   toque (como no 8 Ball Pool): 1º dedo em qualquer lado é a mira — de lado gira, PARA TRÁS do taco carrega a força, soltar tacada · 2 dedos: um mira, o outro vai e volta (barra F ou qualquer ponto) · bola na mão: arraste e solte */
 const MV = { };   // visão da mesa: escala e deslocamento
 function tableView(T) { const W = K.v.W, H = K.v.H, top = 24, bot = 16, side = 28; const s = Math.min((W - side * 2) / (T.w + 14), (H - top - bot) / (T.h + 14)); return { s, ox: Math.round((W - T.w * s) / 2), oy: Math.round(top + (H - top - bot - T.h * s) / 2) }; }
 const toS = (x, y) => ({ x: MV.ox + x * MV.s, y: MV.oy + y * MV.s });
@@ -911,7 +911,7 @@ K.defScene('partida', {
     // botões de toque (só aparecem no toque) — à direita, longe das bordas (regra 22) e sem sobrepor (regra 24)
     const tch = () => K.input.last !== 'touch' || M.fase === 'fim' || M.vez === 1 && !M.bot;
     UI.button({ id: 'efeito', x: K.v.W - 34, y: K.v.H - 70, w: 30, h: 24, label: 'EF', nonav: true, hidden: tch, on: () => { M.spinOpen = !M.spinOpen; } });
-    UI.button({ id: 'pausa', x: K.v.W - 34, y: 26, w: 30, h: 11, label: 'II', nonav: true, hidden: () => K.input.last !== 'touch', on: () => this.pause(M) });
+    UI.button({ id: 'pausa', x: K.v.W / 2 + 40, y: 1, w: 26, h: 18, label: 'II', nonav: true, hidden: () => K.input.last !== 'touch', on: () => this.pause(M) });
     UI.button({ id: 'respiro', x: K.v.W - 34, y: K.v.H - 42, w: 30, h: 24, label: 'Q', nonav: true, hidden: tch, on: () => {} });
   },
   free() { const M = M0(); return !M.pausa; },
@@ -935,18 +935,26 @@ K.defScene('partida', {
   press(p) {
     const M = M0(); if (M.pausa || !this.human(M) || M.fase === 'fim') return;
     if (M.spinOpen) { this.spinAt(M, p); M.spinDrag = true; return; }
-    if (M.fase === 'mao') { M.handDrag = p.id; return; }
+    if (M.fase === 'mao') { M.handDrag = p.id; if (p.type === 'touch') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return;
-    if (p.type === 'touch' && p.x < 26) { M.barDrag = { id: p.id, y0: p.y }; return; }                    // barra de força do toque
-    if (p.type === 'touch') { M.rot = { id: p.id, x: p.x, y: p.y, t0: K.time, moved: 0 }; return; }
+    /* TOQUE (mesma mecânica do 8 Ball Pool): o 1º dedo, em qualquer lado, é a MIRA. Arrastar de lado gira; arrastar PARA TRÁS do taco carrega a força; soltar tacada.
+     * Com 2 dedos: um mira e o outro (barra F ou qualquer ponto da tela) vai e volta para dar a força; soltar esse dedo dá a tacada. */
+    if (p.type === 'touch') {
+      if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y }; return; }
+      if (p.x < 26 && !M.rot) { M.barDrag = { id: p.id, y0: p.y }; return; }
+      if (M.rot) return;
+      M.rot = { id: p.id, x: p.x, y: p.y, x0: p.x, y0: p.y, t0: K.time, moved: 0, mode: null, a0: M.ang }; return; }
     { const c = this.cueS(M); M.powDrag = { x0: p.x, y0: p.y, a: Math.atan2(p.y - c.y, p.x - c.x) }; }   // mouse: puxar para trás (e girar devagar, 0.2.1)
   },
   move(p) {
     const M = M0(); if (!M || M.pausa || !this.human(M)) return;
     if (M.spinOpen && M.spinDrag) return this.spinAt(M, p);
-    if (M.fase === 'mao') { const t = toT(p.x, p.y); if (PL.freeSpot(M.S, M.T, t.x, t.y)) { const c = M.S.balls[0]; c.x = t.x; c.y = t.y; c.in = false; } return; }
+    if (M.fase === 'mao') { if (M.handDrag === p.id || p.type === 'mouse') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return; const c = this.cueS(M);
-    if (M.barDrag && M.barDrag.id === p.id) { M.pow = clamp((p.y - M.barDrag.y0) / 90, 0, 1); return; }
+    if (M.barDrag && M.barDrag.id === p.id) { M.pow = clamp((p.y - M.barDrag.y0) / 60, 0, 1); return; }
+    if (M.rot && M.rot.id === p.id && M.rot.mode === 'forca') { const R = M.rot; M.pow = clamp(-((p.x - R.x0) * Math.cos(R.a0) + (p.y - R.y0) * Math.sin(R.a0)) / 60, 0, 1); return; }   // puxar para trás do taco
+    if (M.rot && M.rot.id === p.id && !M.rot.mode) { const R = M.rot, dx = p.x - R.x0, dy = p.y - R.y0;                  // decide: para trás = força · lateral = mira
+      if (Math.hypot(dx, dy) > 7) { const back = -(dx * Math.cos(M.ang) + dy * Math.sin(M.ang)), lat = Math.abs(-dx * Math.sin(M.ang) + dy * Math.cos(M.ang)); R.mode = back > lat * 1.1 && !M.barDrag ? 'forca' : 'mira'; R.a0 = M.ang; if (R.mode === 'forca') { M.pow = clamp(back / 60, 0, 1); return; } R.x = R.x0; R.y = R.y0; } else return; }
     if (M.rot && M.rot.id === p.id) { const ax = M.rot.x - c.x, ay = M.rot.y - c.y, bx = p.x - c.x, by = p.y - c.y, d2 = Math.max(400, ax * ax + ay * ay); M.ang += (ax * by - ay * bx) / d2 * .45 * K.sens(); M.rot.moved += Math.hypot(p.x - M.rot.x, p.y - M.rot.y); M.rot.x = p.x; M.rot.y = p.y; return; }
     if (M.powDrag) {   /* segurando o clique: o movimento lateral gira a mira em volta da bola, mais devagar (×0,35); puxar para trás dá força (pedido do Pedro, 0.2.1) */
       const a = Math.atan2(p.y - c.y, p.x - c.x); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang += angDiff(M.powDrag.a, a) * (K.input.down('fine') ? .1 : .35); M.powDrag.a = a;
@@ -955,11 +963,15 @@ K.defScene('partida', {
   },
   release(p) {
     const M = M0(); if (!M) return; M.spinDrag = false;
-    if (M.fase === 'mao' && M.handDrag !== undefined && this.human(M)) { M.handDrag = undefined; if (p.type !== 'mouse') return; this.placeCue(M); return; }
+    if (M.fase === 'mao' && M.handDrag !== undefined && this.human(M)) { M.handDrag = undefined; this.placeCue(M); return; }   // soltar o dedo (ou o clique) confirma a bola na mão
     if (M.barDrag && M.barDrag.id === p.id) { M.barDrag = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; return; }
+    if (M.rot && M.rot.id === p.id && M.rot.mode === 'forca') { M.rot = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; return; }
     if (M.rot && M.rot.id === p.id) { if (M.rot.moved < 5 && K.time - M.rot.t0 < .35) { const c = this.cueS(M); M.ang = Math.atan2(p.y - c.y, p.x - c.x); } M.rot = null; return; }
     if (M.powDrag) { M.powDrag = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; }
   },
+  /* solta tudo (toque cancelado, janela sem foco): nenhum arrasto fica preso */
+  cancel() { const M = M0(); if (!M) return; M.rot = M.barDrag = M.powDrag = null; M.handDrag = undefined; M.spinDrag = false; if (M.fase === 'mira') M.pow = 0; },
+  handTo(M, p) { const t = toT(p.x, p.y); if (PL.freeSpot(M.S, M.T, t.x, t.y)) { const c = M.S.balls[0]; c.x = t.x; c.y = t.y; c.in = false; } },
   wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M)) M.ang += dy * .004; },
   spinAt(M, p) { const cx = K.v.W / 2, cy = K.v.H / 2; M.fx.s = clamp((p.x - cx) / 26, -1, 1); M.fx.f = clamp(-(p.y - cy) / 26, -1, 1); if (Math.hypot(M.fx.s, M.fx.f) > 1) { const k = Math.hypot(M.fx.s, M.fx.f); M.fx.s /= k; M.fx.f /= k; } },
   placeCue(M) { const c = M.S.balls[0]; if (!PL.freeSpot(M.S, M.T, c.x, c.y)) { K.sfx('erro'); return; } c.in = false; M.fase = 'mira'; M.clock = M.tempoMax; K.sfx('ui_ok'); },
@@ -1074,7 +1086,7 @@ K.defScene('partida', {
     g.drawImage(M.bh[0], W - 11 - M.bh[0].width / 2 | 0, 126 - M.bh[0].height / 2 | 0); K.rect(g, Math.round(W - 11 + M.fx.s * 2), Math.round(126 - M.fx.f * 2), 1, 1, P.pink); K.txt(g, 'E', W - 11, 132, { al: 'c', c: P.grey });
     K.rect(g, 0, H - 14, W, 14, P.ink); K.rect(g, 0, H - 14, W, 1, P.line2);
     if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 0, 10, 48, 18, 4, H - 13, 24, 9); K.txt(g, M.rival.nome + ':', 32, H - 12, { c: P.gold }); K.txt(g, M.fala, 38 + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
-    else if (this.human(M) && M.fase === 'mira') K.txt(g, K.input.last === 'touch' ? 'arraste para mirar · puxe a barra F · EF efeito · segure Q' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
+    else if (this.human(M) && M.fase === 'mira') K.txt(g, K.input.last === 'touch' ? 'arraste para mirar · puxe p/ trás = força · 2º dedo = força' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
   },
   drawSpin(g, M) { const cx = K.v.W / 2, cy = K.v.H / 2; g.globalAlpha = .7; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; if (!M.spinArt) M.spinArt = K.ballArt(0, 26); g.drawImage(M.spinArt, cx - M.spinArt.width / 2 | 0, cy - M.spinArt.height / 2 | 0);
     K.disc(g, cx + M.fx.s * 20, cy - M.fx.f * 20, 3, P.pink); K.txt(g, 'EFEITO', cx, cy - 44, { al: 'c', c: P.gold }); K.txt(g, 'cima = siga · baixo = puxe · lados = efeito na tabela', cx, cy + 34, { al: 'c', c: P.grey }); },
@@ -1281,7 +1293,7 @@ K.defScene('resultado', {
   enter(r) { this.r = r; const cfg = r.cfg || {}; this.ganho = 0;
     if (r.venceu && SAVE.game) { this.ganho = Math.round((cfg.premio || 0) * (cfg.planeta ? K.dif().premio : 1)); SAVE.game.creditos += this.ganho; if (cfg.partida) SAVE.game.vencidas[cfg.partida] = 1; K.persist(); }
     const pl = REG.planet[cfg.planeta], fim = pl && K.planetDone(pl) && r.venceu && pl.historia && pl.historia.saida && !SAVE.meta.visto[pl.historia.saida];
-    UI.button({ x: W_() / 2 - 60, y: 150, w: 120, h: 18, label: 'CONTINUAR', on: () => fim ? K.go('historia', { id: pl.historia.saida, depois: 'mapa' }) : K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) });
+    UI.button({ x: W_() / 2 - 60, y: 150, w: 120, h: 18, label: r.venceu ? 'CONTINUAR' : 'MENU', on: () => !r.venceu ? K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) : fim ? K.go('historia', { id: pl.historia.saida, depois: 'mapa' }) : K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) });
     if (!r.venceu) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'REVANCHE', on: () => K.partida(cfg) }); UI.focus = 0; },
   draw(g) { K.drawSpace(g, K.time); const r = this.r; K.txt(g, r.venceu ? 'VITÓRIA' : 'DERROTA', W_() / 2, 40, { al: 'c', c: r.venceu ? P.lime : P.pink, s: 3 });
     K.txt(g, 'tacadas: ' + r.tacadas + ' · faltas: ' + r.faltas, W_() / 2, 90, { al: 'c', c: P.white }); if (this.ganho) K.txt(g, '+' + this.ganho + ' ' + K.game.moeda, W_() / 2, 106, { al: 'c', c: P.gold, s: 2 }); },
