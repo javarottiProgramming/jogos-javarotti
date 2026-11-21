@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.2.2</title>
+<title>Sinuca Intergaláctica · v0.3.0</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.2.2', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.3.0', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -513,29 +513,35 @@ K.on('def', d => { if (d.kind !== 'song') return; const s = REG.song[d.id];
   s.tr = s.tracks.map(t => { const dm = t.drums ? (t.drums === true ? DRUMS : Object.assign({}, DRUMS, Object.fromEntries(Object.entries(t.drums).map(([k, v]) => [k, typeof v === 'string' ? [v, 60] : v])))) : null;
     const L = parsePat(t.pat, !!dm), I = parsePat(t.intro, !!dm); return Object.assign({}, t, { dm, ev: L.ev, n: L.n || 16, iev: I.ev, in: I.n, last: null }); });
   s.introLen = Math.max(0, ...s.tr.map(t => t.in)); s.len = Math.max(...s.tr.map(t => t.n)); });
+/* troca de música (0.3.0, Pedro: "a trilha engasga na troca de tela"): as vozes da anterior SOLTAM (release curto, sem estalo) e a nova entra 0,12 s depois.
+ * Cada música tem um ganho medido (K.ganhoMusica, src/content/63-volume-musicas.js) para todas soarem no mesmo volume, em qualquer tela. */
+K.ganhoMusica = K.ganhoMusica || {};
 K.music = (name, o) => {
   if (AU.name === name && !(o && o.restart)) return; AU.name = name; AU.cur = REG.song[name] || null; AU.step = 0;
-  if (AU.c) { const t = AU.c.currentTime; for (const v of AU.voices) v.off(t + .01); AU.voices = []; AU.next = t + .08; if (AU.cur) AU.setEcho(AU.cur.echo || {}); }
+  if (AU.cur) for (const tr of AU.cur.tr || []) { tr.last = null; tr.lastM = undefined; }
+  if (AU.c) { const t = AU.c.currentTime; for (const v of AU.voices) v.off(t + .02); AU.voices = []; AU.next = t + .12; if (AU.cur) AU.setEcho(AU.cur.echo || {}); }
 };
 K.musicName = () => AU.name;
 function alloc(t) { AU.voices = AU.voices.filter(v => v.end > t); if (AU.voices.length >= AU.MAXV) { const v = AU.voices.shift(); v.off(t); } }   // 8 vozes: rouba a mais antiga
 /* agenda os passos até o tempo 'ate' (tempo real: agora + 0,22 s; render offline: a música inteira) */
 AU.schedule = ate => {
-  const s = AU.cur; if (!s) return; const sd = 60 / s.bpm / 4; let guard = 0;
+  const s = AU.cur; if (!s) return; const sd = 60 / s.bpm / 4, gm = K.ganhoMusica[AU.name] || 1; let guard = 0;
   while (AU.next < ate && guard++ < 4096) {
     const i = AU.step, t = AU.next, intro = i < s.introLen, j = intro ? i : i - s.introLen;
     if (s.loop === false && !intro && j >= s.len) { AU.cur = null; if (s.then) { const th = s.then; AU.name = null; K.music(th); } return; }
     for (const tr of s.tr) {
       const e = intro ? tr.iev[j] : tr.ev[j % tr.n]; if (!e) continue;
-      if (tr.dm) { for (const kk of e.k.split('+')) { const d = tr.dm[kk]; if (d) { alloc(t); const v = AU.note(d[0], d[1], t, null, (tr.vol || .8) * e.vel, { pan: tr.pan, echo: tr.echo }); if (v) AU.voices.push(v); } } continue; }   // 'k+x' = bumbo + prato juntos
-      const dur = sd * e.n * (tr.gate || .9), vol = (tr.vol === undefined ? .7 : tr.vol) * e.vel / Math.sqrt(e.m.length);
+      if (tr.dm) { for (const kk of e.k.split('+')) { const d = tr.dm[kk]; if (d) { alloc(t); const v = AU.note(d[0], d[1], t, null, (tr.vol || .8) * e.vel * gm, { pan: tr.pan, echo: tr.echo }); if (v) AU.voices.push(v); } } continue; }   // 'k+x' = bumbo + prato juntos
+      const dur = sd * e.n * (tr.gate || .9), vol = (tr.vol === undefined ? .7 : tr.vol) * e.vel * gm / Math.sqrt(e.m.length);
       if (tr.mono && tr.last) tr.last.off(t);
       for (const m of e.m) { alloc(t); const v = AU.note(tr.inst, m, t, dur, vol, { pan: tr.pan, echo: tr.echo, from: tr.mono && tr.lastM !== undefined ? tr.lastM : undefined, glide: tr.glide }); if (v) { AU.voices.push(v); tr.last = v; } tr.lastM = m; }
     }
     AU.step++; AU.next += sd * (s.swing ? (i % 2 === 0 ? 1 + s.swing : 1 - s.swing) : 1);
   }
 };
-AU.tick = () => { const c = AU.c; if (!c || AU.offline || !AU.cur || !SAVE.opt.mv || AU.asleep) return; if (AU.next < c.currentTime - .5) AU.next = c.currentTime + .05; AU.schedule(c.currentTime + .22); };
+/* agenda 0,45 s à frente (0.3.0: era 0,22 s — um quadro travado, como montar a mesa ao entrar na partida, deixava a música sem notas). Se mesmo assim
+ * ficar para trás, a música RECOMEÇA do ponto onde parou um instante depois, em vez de despejar as notas atrasadas todas juntas (o "engasgo"). */
+AU.tick = () => { const c = AU.c; if (!c || AU.offline || !AU.cur || !SAVE.opt.mv || AU.asleep) return; if (AU.next < c.currentTime + .01) AU.next = c.currentTime + .04; AU.schedule(c.currentTime + .45); };
 /* render offline (sem tocar): devolve {l, r, rate} da música — usado por tools/ouvir.js (gera .wav para o Pedro e o gerente ouvirem/medirem) */
 AU.render = async (name, secs) => {
   const keep = { c: AU.c, name: AU.name, cur: AU.cur, step: AU.step, next: AU.next, voices: AU.voices };
@@ -596,20 +602,26 @@ function cutWalls(polys, pockets) {
   for (const poly of polys) for (let i = 0; i < poly.length; i++) {
     const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length], L = Math.hypot(bx - ax, by - ay); if (L < .01) continue;
     let iv = [[0, 1]];
-    for (const p of pockets) { const m = p.boca || p.r * 1.05, q = segDist(p.x, p.y, ax, ay, bx, by); if (q.d >= m) continue; const half = Math.sqrt(m * m - q.d * q.d) / L, t0 = q.t - half, t1 = q.t + half;
+    for (const p of pockets) { const m = p.boca || p.r + PL.BOCA_ARO, q = segDist(p.x, p.y, ax, ay, bx, by); if (q.d >= m) continue; const half = Math.sqrt(m * m - q.d * q.d) / L, t0 = q.t - half, t1 = q.t + half;
       iv = iv.flatMap(([a, b]) => t1 <= a || t0 >= b ? [[a, b]] : [[a, Math.max(a, t0)], [Math.min(b, t1), b]].filter(([u, v]) => v - u > 1e-3)); }
     for (const [a, b] of iv) segs.push([ax + (bx - ax) * a, ay + (by - ay) * a, ax + (bx - ax) * b, ay + (by - ay) * b]);
   }
   return segs;
 }
 /* mesa retangular padrão (6 caçapas). K.tableRect({w:256, h:128, ...extras}) */
-K.tableRect = o => { o = o || {}; const w = o.w || 256, h = o.h || 128, rc = o.rc || 6.6, rm = o.rm || 6.0;
-  return Object.assign({ w, h, poly: [[0, 0], [w, 0], [w, h], [0, h]], pockets: [{ x: 1, y: 1, r: rc }, { x: w / 2, y: -1.5, r: rm }, { x: w - 1, y: 1, r: rc }, { x: 1, y: h - 1, r: rc }, { x: w / 2, y: h + 1.5, r: rm }, { x: w - 1, y: h - 1, r: rc }],
+/* 0.3.0: caçapas um pouco maiores (canto 7,0 · meio 6,3) — jogo de celular pede boca generosa; a boca física segue o aro desenhado (ver PL.prep) */
+K.tableRect = o => { o = o || {}; const w = o.w || 256, h = o.h || 128, rc = o.rc || 7.0, rm = o.rm || 6.3;
+  return Object.assign({ w, h, poly: [[0, 0], [w, 0], [w, h], [0, h]], pockets: [{ x: .8, y: .8, r: rc }, { x: w / 2, y: -2, r: rm }, { x: w - .8, y: .8, r: rc }, { x: .8, y: h - .8, r: rc }, { x: w / 2, y: h + 2, r: rm }, { x: w - .8, y: h - .8, r: rc }],
     head: { x: w * .25, y: h / 2 }, foot: { x: w * .73, y: h / 2 }, kitchen: w * .25 }, o); };
 /* prepara a mesa (uma vez por registro): segmentos de parede, gradiente do relevo em grade, área válida */
+/* BOCA = ARO DESENHADO (0.3.0, achado do Pedro: "a bola bate numa quina que não existe e volta"): a arte pinta o aro até r + 2,5, mas a tabela física
+ * continuava por baixo dele até r × 1,05 — uma parede invisível dentro do aro. Agora a boca nunca é menor que r + 2,4, e o raio de captura nunca é
+ * menor que (boca − R + 0,35): uma bola que passa entre as quinas sem encostar nelas sempre cai (nunca fica presa entre a quina e o buraco). */
+PL.BOCA_ARO = 2.4;
 PL.prep = T => {
   if (T._prep) return T; const polys = T.polys || [T.poly];
-  T.segs = cutWalls(polys, T.pockets).concat((T.walls || []).map(s => s.slice()));
+  for (const p of T.pockets) { p.boca = Math.max(p.boca || 0, p.r + PL.BOCA_ARO); p.r = Math.max(p.r, p.boca - PL.R + .35); }
+  T.segs = cutWalls(polys, T.pockets).concat((T.walls || []).map(s => s.slice(0, 4))).map(s => [s[0], s[1], s[2], s[3], Math.min(s[0], s[2]) - PL.R, Math.max(s[0], s[2]) + PL.R, Math.min(s[1], s[3]) - PL.R, Math.max(s[1], s[3]) + PL.R]);
   if (T.hgt) { const n = T.gs || 4, gw = Math.ceil(T.w / n) + 1, gh = Math.ceil(T.h / n) + 1, gx = new Float32Array(gw * gh), gy = new Float32Array(gw * gh);
     for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { const x = i * n, y = j * n; gx[j * gw + i] = (T.hgt(x + 1, y) - T.hgt(x - 1, y)) / 2; gy[j * gw + i] = (T.hgt(x, y + 1) - T.hgt(x, y - 1)) / 2; }
     T._g = { n, gw, gh, gx, gy }; }
@@ -646,18 +658,26 @@ PL.step = (S, T, dt) => {
     if (Math.abs(b.vx) + Math.abs(b.vy) > PL.EPS) any = true; else if (!T._g || Math.hypot(...grad(T, b.x, b.y)) * PL.G < PL.MU_S * fm * .98) { b.vx = 0; b.vy = 0; } else any = true;
   }
   // bola × bola
-  for (let i = 0; i < nb; i++) { const a = B[i]; if (a.in) continue; for (let j = i + 1; j < nb; j++) { const b = B[j]; if (b.in) continue;
+  for (let i = 0; i < nb; i++) { const a = B[i]; if (a.in) continue; const ap = a.vx === 0 && a.vy === 0; for (let j = i + 1; j < nb; j++) { const b = B[j]; if (b.in || (ap && b.vx === 0 && b.vy === 0)) continue;
     const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy; if (d2 >= 4 * R * R || d2 === 0) continue;
-    const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, ov = 2 * R - d; a.x -= nx * ov / 2; a.y -= ny * ov / 2; b.x += nx * ov / 2; b.y += ny * ov / 2;
-    const rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny; if (rv <= 0) continue;
+    /* 0.3.0 (Pedro: "a bola não vai para onde a linha mostra"): VOLTA as duas bolas até o instante EXATO do contato (distância 2R) antes de calcular
+     * a normal. Antes a normal saía das bolas já sobrepostas (até R/3 por subpasso) e a bola alvo desviava até 4° da linha de mira. */
+    const wx = b.vx - a.vx, wy = b.vy - a.vy, ww = wx * wx + wy * wy, dw = dx * wx + dy * wy; let back = 0;
+    if (ww > 1e-6 && dw < 0) { const disc = dw * dw - ww * (d2 - 4 * R * R); back = clamp((dw + Math.sqrt(Math.max(0, disc))) / ww, 0, dt * 1.5); }
+    if (back > 0) { a.x -= a.vx * back; a.y -= a.vy * back; b.x -= b.vx * back; b.y -= b.vy * back; }
+    const ex = b.x - a.x, ey = b.y - a.y, d = Math.hypot(ex, ey) || 1e-6, nx = ex / d, ny = ey / d, ov = 2 * R - d;
+    if (ov > 0) { a.x -= nx * ov / 2; a.y -= ny * ov / 2; b.x += nx * ov / 2; b.y += ny * ov / 2; }
+    const rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny; if (rv <= 0) { if (back > 0) { a.x += a.vx * back; a.y += a.vy * back; b.x += b.vx * back; b.y += b.vy * back; } continue; }
     const imp = rv * (1 + PL.REST_BALL) / 2; a.vx -= imp * nx; a.vy -= imp * ny; b.vx += imp * nx; b.vy += imp * ny;
+    if (back > 0) { a.x += a.vx * back; a.y += a.vy * back; b.x += b.vx * back; b.y += b.vy * back; }
     if ((a.id === 0 || b.id === 0) && S.first === null) { S.first = a.id === 0 ? b.id : a.id; const c = a.id === 0 ? a : b;
       if (c.f) { const k = c.f * rv * .55; c.vx += Math.cos(c.dir) * k; c.vy += Math.sin(c.dir) * k; c.f = 0; } }   // siga (+) / puxe (−) depois do 1º contato
     S.log.push({ t: S.t, e: 'hit', a: a.id, b: b.id, v: rv }); any = true; } }
   // bola × parede · rebatedores · caçapas · fora da mesa
   for (const b of B) {
-    if (b.in) continue;
-    for (const s of T.segs) { const q = segDist(b.x, b.y, s[0], s[1], s[2], s[3]); if (q.d >= R || q.d === 0) continue;
+    if (b.in || (b.vx === 0 && b.vy === 0)) continue;      // bola parada não atravessa parede nem cai (economiza ~60% da simulação da IA)
+    for (const s of T.segs) { if (b.x < s[4] || b.x > s[5] || b.y < s[6] || b.y > s[7]) continue;   // caixa do segmento + R (rápido)
+      const q = segDist(b.x, b.y, s[0], s[1], s[2], s[3]); if (q.d >= R || q.d === 0) continue;
       const nx = (b.x - q.cx) / q.d, ny = (b.y - q.cy) / q.d, vn = b.vx * nx + b.vy * ny; b.x = q.cx + nx * R; b.y = q.cy + ny * R; if (vn >= 0) continue;
       const k = T.rest !== undefined ? T.rest : PL.REST_RAIL; b.vx -= (1 + k) * vn * nx; b.vy -= (1 + k) * vn * ny;
       if (b.s) { const tx = -ny, ty = nx, e = b.s * -vn * .35; b.vx += tx * e; b.vy += ty * e; b.s *= .5; }   // efeito lateral "pega" na tabela
@@ -694,77 +714,184 @@ PL.ray = (S, x, y, a, skip) => { const dx = Math.cos(a), dy = Math.sin(a), R = P
   for (const b of S.balls) { if (b.in || b.id === skip) continue; const fx = b.x - x, fy = b.y - y, t = fx * dx + fy * dy; if (t <= 0) continue; const pd2 = fx * fx + fy * fy - t * t; if (pd2 >= 4 * R * R) continue; const tt = t - Math.sqrt(4 * R * R - pd2); if (!best || tt < best.t) best = { t: tt, b }; }
   return best; };
 PL.rayWall = (T, x, y, a) => { const dx = Math.cos(a), dy = Math.sin(a); let best = 1e9; for (const s of T.segs) { const ex = s[2] - s[0], ey = s[3] - s[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-9) continue; const t = ((s[0] - x) * ey - (s[1] - y) * ex) / den, u = ((s[0] - x) * dy - (s[1] - y) * dx) / den; if (t > 0 && u >= 0 && u <= 1) best = Math.min(best, t); } return best - PL.R; };
+/* ---- 0.3.0: ferramentas para a regra e a IA ---- */
+/* distância entre dois segmentos (0 se cruzam) */
+const segSeg = (ax, ay, bx, by, cx, cy, dx, dy) => { const o = (px, py, qx, qy, rx, ry) => (qx - px) * (ry - py) - (qy - py) * (rx - px);
+  const d1 = o(cx, cy, dx, dy, ax, ay), d2 = o(cx, cy, dx, dy, bx, by), d3 = o(ax, ay, bx, by, cx, cy), d4 = o(ax, ay, bx, by, dx, dy);
+  if (((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0))) return 0;
+  return Math.min(segDist(ax, ay, cx, cy, dx, dy).d, segDist(bx, by, cx, cy, dx, dy).d, segDist(cx, cy, ax, ay, bx, by).d, segDist(dx, dy, ax, ay, bx, by).d); };
+PL.segSeg = segSeg;
+/* caminho livre para uma bola de raio R de (x0,y0) a (x1,y1): nenhuma outra bola a menos de 2R da trajetória e nenhuma parede/rebatedor a menos de R.
+ * ign: ids ignorados. Usado pela IA para escolher tacadas limpas (sem esbarrar em nada no caminho). */
+PL.clear = (S, T, x0, y0, x1, y1, ign) => { const R = PL.R;
+  for (const b of S.balls) { if (b.in || (ign && ign.includes(b.id))) continue; if (segDist(b.x, b.y, x0, y0, x1, y1).d < 2 * R - .02) return false; }
+  for (const s of T.segs) if (segSeg(x0, y0, x1, y1, s[0], s[1], s[2], s[3]) < R - .02) return false;
+  for (const p of T.bumpers || []) if (segDist(p.x, p.y, x0, y0, x1, y1).d < R + p.r) return false;
+  return true; };
+/* devolve uma bola à mesa (bola que voou, ou a 8 na quebra): no ponto do pé ou no lugar livre mais perto dele, em linha para trás */
+PL.respot = (S, T, id) => { const b = S.balls.find(x => x.id === id); if (!b) return; const f = T.foot || { x: T.w * .73, y: T.h / 2 };
+  b.in = true; b.out = false; b.vx = b.vy = 0;
+  for (let r = 0; r < 140; r += 1.5) for (let a = 0; a < TAU; a += r ? .4 / Math.max(1, r / 6) : TAU) { const x = f.x + Math.cos(a) * r, y = f.y + Math.sin(a) * r;
+    if (PL.freeSpot(S, T, x, y)) { b.x = x; b.y = y; b.in = false; b.pocket = undefined; return; } }
+};
+/* boca de cada caçapa vista de cada ângulo de chegada (faixas de 10°): meia-largura aceita (u) e o desvio do centro da janela. Medida com bolas sozinhas,
+ * SOB DEMANDA e guardada na mesa (a 1ª consulta de uma faixa custa ~25 simulações curtas). A IA usa para estimar a chance de encaçapar e mirar no meio da janela. */
+PL.mouthBase = (T, pi) => { T._mb = T._mb || []; if (T._mb[pi] !== undefined) return T._mb[pi]; const p = T.pockets[pi]; let sx = 0, sy = 0;
+  for (let a = 0; a < TAU; a += TAU / 72) { const x = p.x + Math.cos(a) * 20, y = p.y + Math.sin(a) * 20; if (T.dentro(x, y) && PL.freeSpot({ balls: [] }, T, x, y)) { sx += Math.cos(a); sy += Math.sin(a); } }
+  return T._mb[pi] = Math.atan2(sy, sx); };
+PL.mouthTab = (T, pi, k) => { T._mt = T._mt || {}; const key = pi * 100 + k; if (T._mt[key]) return T._mt[key]; const p = T.pockets[pi], a = PL.mouthBase(T, pi) + k * 10 * Math.PI / 180, ok = [];
+  for (let off = -9; off <= 9; off += .75) { const x = p.x + Math.cos(a) * 30 - Math.sin(a) * off, y = p.y + Math.sin(a) * 30 + Math.cos(a) * off; if (!PL.freeSpot({ balls: [] }, T, x, y)) continue;
+    const S = { balls: [{ id: 0, x, y, vx: 0, vy: 0, in: false, f: 0, s: 0 }], t: 0, log: [] }; PL.shoot(S, a + Math.PI, .35); PL.simulate(S, T, .5); if (S.log.some(e => e.e === 'pocket' && e.p === pi)) ok.push(off); }
+  return T._mt[key] = ok.length ? { w: Math.max(0, (ok[ok.length - 1] - ok[0]) / 2 - .4), c: (ok[ok.length - 1] + ok[0]) / 2 } : { w: 0, c: 0 }; };
+/* janela da caçapa pi para uma bola que se move na direção 'dir' (rad): { w, c } interpolado entre as faixas */
+PL.mouthAt = (T, pi, dir) => { const from = angDiff(PL.mouthBase(T, pi), dir + Math.PI) * 180 / Math.PI, k = from / 10; if (k < -8 || k > 8) return { w: 0, c: 0 };
+  const i = Math.floor(k), f = k - i, A = PL.mouthTab(T, pi, i), B = i + 1 > 8 ? A : PL.mouthTab(T, pi, i + 1); return { w: A.w + (B.w - A.w) * f, c: A.c + (B.c - A.c) * f }; };
+/* lugar livre mais perto de (x,y), em espiral */
+PL.spotNear = (S, T, x, y) => { for (let r = 0; r < 120; r += 3) for (let a = 0; a < TAU; a += .5) { const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r; if (PL.freeSpot(S, T, px, py)) return { x: px, y: py }; } return { x, y }; };
+/* raio até a parede com a normal (para a linha de mira mostrar a tabela): { t, nx, ny } — t já desconta o raio da bola */
+PL.rayWallN = (T, x, y, a) => { const dx = Math.cos(a), dy = Math.sin(a); let best = { t: 1e9, nx: 0, ny: 0 };
+  for (const s of T.segs) { const ex = s[2] - s[0], ey = s[3] - s[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-9) continue; const t = ((s[0] - x) * ey - (s[1] - y) * ex) / den, u = ((s[0] - x) * dy - (s[1] - y) * dx) / den;
+    if (t > 0 && u >= 0 && u <= 1) { const L = Math.hypot(ex, ey); let nx = -ey / L, ny = ex / L; if (nx * dx + ny * dy > 0) { nx = -nx; ny = -ny; } const tt = t - PL.R / Math.max(.2, -(nx * dx + ny * dy)); if (tt < best.t) best = { t: Math.max(0, tt), nx, ny }; } }
+  return best; };
 
-/*==ENGINE:rules==  REGRAS + IA. Regra = K.defRules(id, { nome, setup(M), legal(M, jogador) → ids que podem ser o 1º toque, avaliar(M, S) → resultado }).
- * Cada planeta pode trocar a regra (mesa.regra ou planeta.regra) ou só ajustar com ganchos (mesa.ganchos.avaliar). Partida = M (ver 08-match).
- * Resultado de avaliar: { falta: 'texto'|null, segue: bool (mesmo jogador joga de novo), vence: 0|1|null, msg, naMao: bool (bola na mão p/ o próximo) }
- * IA: K.ai.plan(M, nivel) devolve { ang, pow, fx, pos? } simulando candidatos com a física de verdade (PL.simulate num clone). */
+/*==ENGINE:rules==  REGRAS + IA. Regra = K.defRules(id, { nome, setup(M), legal(M, j) → ids que podem ser o 1º toque, antes(M, j) → foto, avaliar(M, S, foto) → resultado }).
+ * Cada planeta pode trocar a regra (mesa.regra ou planeta.regra) ou só ajustar com ganchos (mesa.ganchos.avaliar). Partida = M (ver 09-match).
+ * FOTO (0.3.0): o que vale para julgar a tacada é o estado de ANTES dela (quais bolas eram legais, mesa aberta, quebra). A partida tira a foto no
+ *   instante da tacada (M.pre = regra.antes(M, vez)). Bug que isso corrige (achado do Pedro): a regra conferia a 1ª bola tocada contra as bolas que
+ *   SOBRARAM depois da tacada; quem encaçapava a própria bola levava "TOCOU NA BOLA ERRADA", e a IA aprendia a NÃO encaçapar.
+ * Resultado de avaliar: { falta: 'texto'|null, segue: bool, vence: 0|1|null, msg, naMao: bool (bola na mão p/ o próximo), respot: [ids que voltam à mesa] }
+ * IA: K.ai.plan(M, nivel) devolve { ang, pow, fx } · K.ai.planner(M, nivel) faz o mesmo em pedaços (a partida chama alguns passos por quadro). */
 const lisa = id => id >= 1 && id <= 7, listrada = id => id >= 9 && id <= 15;
 K.grupo = id => id === 0 ? 'branca' : id === 8 ? 'oito' : lisa(id) ? 'lisas' : 'listradas';
+const NOME_G = { lisas: 'LISAS', listradas: 'LISTRADAS' };
 K.defRules('8bolas', {
   nome: '8 bolas', desc: 'Encaçape o seu grupo (lisas 1–7 ou listradas 9–15) e depois a 8. Encaçapar a 8 antes da hora é derrota.',
   setup(M) { M.grupos = [null, null]; M.aberta = true; M.quebra = true; },
   meus(M, j) { const g = M.grupos[j]; return g ? M.S.balls.filter(b => !b.in && K.grupo(b.id) === g).map(b => b.id) : []; },
   legal(M, j) { const vivos = M.S.balls.filter(b => !b.in && b.id !== 0).map(b => b.id); if (M.aberta) return vivos.filter(id => id !== 8 || vivos.length === 1); const m = this.meus(M, j); return m.length ? m : [8]; },
-  avaliar(M, S) {
-    const j = M.vez, out = { falta: null, segue: false, vence: null, msg: '', naMao: false };
-    const enc = S.log.filter(e => e.e === 'pocket').map(e => e.a), fora = S.log.filter(e => e.e === 'out').map(e => e.a), branca = enc.includes(0) || fora.includes(0);
-    const legal = this.legal(M, j), tabelaDepois = S.log.some(e => e.e === 'rail' && S.log.findIndex(x => x.e === 'hit' && (x.a === 0 || x.b === 0)) >= 0 && e.t >= (S.log.find(x => x.e === 'hit' && (x.a === 0 || x.b === 0)) || {}).t);
-    if (branca) out.falta = 'A BRANCA CAIU';
-    else if (S.first === null) out.falta = 'NÃO TOCOU EM NADA';
-    else if (!legal.includes(S.first)) out.falta = 'TOCOU NA BOLA ERRADA';
-    else if (!enc.length && !tabelaDepois && !M.quebra) out.falta = 'NENHUMA BOLA NA TABELA';
-    if (fora.some(id => id !== 0)) out.falta = out.falta || 'BOLA VOOU DA MESA';
-    if (enc.includes(8)) { const limpo = !M.aberta && this.meus(M, j).length === 0 && !out.falta; out.vence = limpo ? j : 1 - j; out.msg = limpo ? 'A 8 CAIU NA HORA CERTA!' : 'A 8 CAIU ANTES DA HORA'; return out; }
-    if (M.aberta && !out.falta && !M.quebra) { const p = enc.find(id => id !== 0); if (p) { M.grupos[j] = K.grupo(p); M.grupos[1 - j] = M.grupos[j] === 'lisas' ? 'listradas' : 'lisas'; M.aberta = false; out.msg = (j === 0 ? 'VOCÊ FICA COM AS ' : 'RIVAL FICA COM AS ') + M.grupos[j].toUpperCase(); } }
-    const meusEnc = M.aberta ? enc.filter(id => id !== 0) : enc.filter(id => K.grupo(id) === M.grupos[j]);
-    out.segue = !out.falta && meusEnc.length > 0; out.naMao = !!out.falta;
+  antes(M, j) { return { j, legal: this.legal(M, j), aberta: M.aberta, quebra: M.quebra, grupo: M.grupos[j] }; },
+  errada(pre, first) {
+    if (first === 8) return pre.aberta ? 'COM A MESA ABERTA A 8 NÃO PODE SER A PRIMEIRA' : 'A 8 SÓ DEPOIS DE TODAS AS ' + NOME_G[pre.grupo];
+    if (pre.legal.length === 1 && pre.legal[0] === 8) return 'SÓ FALTA A 8: ELA TEM QUE SER A PRIMEIRA';
+    return 'A PRIMEIRA BOLA TOCADA FOI A ' + first + ' (' + (lisa(first) ? 'LISA' : 'LISTRADA') + ')';
+  },
+  avaliar(M, S, pre) {
+    pre = pre || M.pre || this.antes(M, M.vez);
+    const j = pre.j, out = { falta: null, segue: false, vence: null, msg: '', naMao: false, respot: [] }, log = S.log;
+    const enc = log.filter(e => e.e === 'pocket' && e.a !== 0).map(e => e.a), fora = log.filter(e => e.e === 'out').map(e => e.a);
+    const hit0 = log.find(e => e.e === 'hit' && (e.a === 0 || e.b === 0)), first = S.first;
+    const tabela = !!hit0 && log.some(e => (e.e === 'rail' || e.e === 'bumper') && e.t >= hit0.t);
+    let falta = null;
+    if (log.some(e => e.e === 'pocket' && e.a === 0)) falta = 'A BRANCA CAIU NA CAÇAPA';
+    else if (fora.includes(0)) falta = 'A BRANCA VOOU DA MESA';
+    else if (first === null || first === undefined) falta = 'A BRANCA NÃO TOCOU EM NENHUMA BOLA';
+    else if (!pre.legal.includes(first)) falta = this.errada(pre, first);
+    else if (!pre.quebra && !enc.length && !tabela) falta = 'NENHUMA BOLA FOI NA TABELA DEPOIS DO TOQUE';
+    const voou = fora.filter(id => id !== 0 && id !== 8); out.respot.push(...voou); if (voou.length && !falta) falta = 'UMA BOLA VOOU DA MESA';
+    out.falta = falta; out.naMao = !!falta;
+    if (enc.includes(8) || fora.includes(8)) {
+      if (pre.quebra) { out.respot.push(8); out.msg = 'A 8 CAIU NA QUEBRA E VOLTA PARA A MESA'; }
+      else { const naHora = pre.legal.length === 1 && pre.legal[0] === 8, limpo = naHora && !falta && enc.includes(8);
+        out.vence = limpo ? j : 1 - j; out.msg = limpo ? 'A 8 CAIU NA HORA CERTA!' : naHora ? 'A 8 CAIU, MAS COM FALTA' : 'A 8 CAIU ANTES DA HORA'; M.quebra = false; return out; }
+    }
+    if (pre.aberta && !pre.quebra && !falta) { const p = enc.find(id => id !== 8); if (p) { M.grupos[j] = K.grupo(p); M.grupos[1 - j] = M.grupos[j] === 'lisas' ? 'listradas' : 'lisas'; M.aberta = false;
+      out.msg = (j === 0 ? 'VOCÊ FICA COM AS ' : 'RIVAL FICA COM AS ') + NOME_G[M.grupos[j]]; } }
+    const meusEnc = M.aberta ? enc.filter(id => id !== 8) : enc.filter(id => K.grupo(id) === M.grupos[j]);
+    out.segue = !falta && meusEnc.length > 0;
     M.quebra = false; return out;
   },
 });
 
-/* ------------------------------------------------------------------ IA
- * nível: { erro: graus de desvio (σ), pensa: nº de candidatos simulados, forca: [mín, máx], seguro: 0..1 (prefere deixar a branca segura) } */
+/* ------------------------------------------------------------------ IA (0.3.0, reescrita: "o bot tem que jogar sério, independente do nível")
+ * Todos os níveis pensam igual: procuram tacadas LIMPAS (caminho livre da branca até a bola-fantasma e da bola até a caçapa), estimam a chance real de
+ * encaçapar com a própria mira, simulam força e efeito com a física de verdade para não cair a branca e deixar a próxima, e fazem jogada de SEGURANÇA
+ * quando nada é bom. O nível muda a MÃO (erro em graus, σ) e quanto pensa na posição. Nada aqui olha como o humano está jogando.
+ * nível: { erro: σ da mira em graus, forca: σ relativo da força, pensa: candidatos simulados, posicao: 0..1 peso da próxima tacada, seguro: 0..1 } */
 const AI = K.ai = {};
-AI.cands = (M, j) => {
-  const S = M.S, T = M.T, c = S.balls[0], R = PL.R, legal = M.regra.legal(M, j), out = [];
+AI.base = { erro: 1, forca: .04, pensa: 6, posicao: .6, seguro: .7 };
+const erf = x => { const t = 1 / (1 + .3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
+/* chance de encaçapar: erro de mira σ (rad) vira desvio lateral na boca da caçapa */
+AI.chance = (d1, L, cut, w, sig) => { const sl = (L * d1 / (2 * PL.R * Math.max(.18, Math.cos(cut))) + d1) * sig + .15; return erf(w / (Math.SQRT2 * sl)); };
+/* tacadas diretas candidatas do jogador j (legal = foto de antes). Cada uma: { id, pi, ang, cut, d1, L, w, nota (chance estimada) } */
+AI.cands = (M, j, legal, sig) => {
+  const S = M.S, T = M.T, c = S.balls[0], R = PL.R, out = []; legal = legal || M.regra.legal(M, j); sig = (sig || 1) * Math.PI / 180;
+  if (c.in) return out;
   for (const id of legal) { const b = S.balls.find(x => x.id === id); if (!b || b.in) continue;
-    for (let pi = 0; pi < T.pockets.length; pi++) { const p = T.pockets[pi], ax = p.x - b.x, ay = p.y - b.y, L = Math.hypot(ax, ay); if (L < 1) continue;
-      const gx = b.x - ax / L * 2 * R, gy = b.y - ay / L * 2 * R, ang = Math.atan2(gy - c.y, gx - c.x), cut = Math.abs(angDiff(ang, Math.atan2(ay, ax)));
-      if (cut > 1.35) continue; const hit = PL.ray(S, c.x, c.y, ang, 0); if (!hit || hit.b.id !== id) continue;
-      const blk = PL.ray(S, b.x, b.y, Math.atan2(ay, ax), id); if (blk && blk.t < L - p.r) continue;
-      out.push({ id, pi, ang, cut, d: Math.hypot(gx - c.x, gy - c.y) + L, nota: Math.cos(cut) * 100 / (1 + (Math.hypot(gx - c.x, gy - c.y) + L) / 160) }); } }
-  out.sort((a, b) => b.nota - a.nota);
-  if (!out.length) for (const id of legal) { const b = S.balls.find(x => x.id === id); if (b && !b.in) out.push({ id, ang: Math.atan2(b.y - c.y, b.x - c.x), nota: 1, d: Math.hypot(b.x - c.x, b.y - c.y), toque: true }); }
-  return out;
+    for (let pi = 0; pi < T.pockets.length; pi++) { const p = T.pockets[pi], dir0 = Math.atan2(p.y - b.y, p.x - b.x); if (Math.hypot(p.x - b.x, p.y - b.y) < 1) continue;
+      const mo = PL.mouthAt(T, pi, dir0); if (mo.w < .5) continue;
+      const tx = p.x + Math.sin(dir0) * mo.c, ty = p.y - Math.cos(dir0) * mo.c, L = Math.hypot(tx - b.x, ty - b.y), ux = (tx - b.x) / L, uy = (ty - b.y) / L;
+      const gx = b.x - ux * 2 * R, gy = b.y - uy * 2 * R, d1 = Math.hypot(gx - c.x, gy - c.y); if (d1 < .5) continue;
+      const ang = Math.atan2(gy - c.y, gx - c.x), cut = angDiff(ang, Math.atan2(uy, ux)); if (Math.abs(cut) > 1.38) continue;
+      if (!PL.clear(S, T, c.x, c.y, gx, gy, [0])) continue;
+      const stop = Math.max(0, L - p.boca); if (stop > 0 && !PL.clear(S, T, b.x, b.y, b.x + ux * stop, b.y + uy * stop, [0, id])) continue;   // até a boca: sem bola e sem parede
+      if (S.balls.some(o => !o.in && o.id !== 0 && o.id !== id && PL.segDist(o.x, o.y, b.x, b.y, tx, ty).d < 2 * R - .02)) continue;                 // dentro da boca: só bola atrapalha
+      out.push({ id, pi, ang, cut, d1, L, w: mo.w, nota: AI.chance(d1, L, cut, mo.w, sig) }); } }
+  return out.sort((a, b) => b.nota - a.nota);
 };
-/* avalia uma tacada simulando (clone do estado + avaliação da regra num clone da partida) */
-AI.score = (M, j, ang, pow, fx) => {
-  const S = PL.clone(M.S); PL.shoot(S, ang, pow, fx); PL.simulate(S, M.T, 12);
-  const Mc = { vez: j, grupos: M.grupos.slice(), aberta: M.aberta, quebra: M.quebra, S: Object.assign(S, { balls: S.balls }), T: M.T, regra: M.regra };
-  const r = M.regra.avaliar.call(M.regra, Mc, S); let n = 0;
-  if (r.vence === j) n += 1000; else if (r.vence === 1 - j) n -= 1000;
-  if (r.falta) n -= 150; if (r.segue) n += 120;
-  n += (S.log.filter(e => e.e === 'pocket' && e.a !== 0).length) * 10;
-  if (r.segue) { const nx = AI.cands(Object.assign(Mc, { vez: j }), j)[0]; if (nx) n += nx.nota * .5; }   // posição para a próxima
-  return n;
+/* partida "de mentira" para simular: clone do estado + a mesma regra, com a foto de antes */
+const fake = (M, S, j) => ({ vez: j, grupos: M.grupos.slice(), aberta: M.aberta, quebra: M.quebra, S, T: M.T, regra: M.regra, cfg: M.cfg });
+/* simula UMA tacada e devolve { r, S, Mc } */
+AI.sim = (M, j, pre, ang, pow, fx) => { const S = PL.clone(M.S); PL.shoot(S, ang, pow, fx); PL.simulate(S, M.T, 12); const Mc = fake(M, S, j), r = M.regra.avaliar.call(M.regra, Mc, S, pre); for (const id of r.respot || []) PL.respot(S, M.T, id); return { r, S, Mc }; };
+/* melhor chance que o jogador k teria na mesa resultante (para posição e segurança). Bola na mão vale como uma tacada fácil. */
+AI.melhor = (Mc, k, sig, naMao) => { if (naMao) return .85; const L = Mc.regra.legal(Mc, k), cs = AI.cands(Mc, k, L, sig); return cs.length ? cs[0].nota : 0; };
+/* valor de um resultado simulado para o jogador j */
+AI.valor = (M, j, lv, s) => { const { r, Mc } = s;
+  if (r.vence === j) return 50; if (r.vence === 1 - j) return -50;
+  if (r.falta) return -1 - AI.melhor(Mc, 1 - j, 1.2, true);
+  if (r.segue) { const prox = Mc.regra.legal(Mc, j), so8 = prox.length === 1 && prox[0] === 8; return 1 + (so8 ? .3 : 0) + lv.posicao * AI.melhor(Mc, j, lv.erro, false) * (so8 ? 1.4 : 1); }
+  return -.25 - AI.melhor(Mc, 1 - j, 1.2, false);
 };
-AI.plan = (M, lv) => {
-  lv = Object.assign({ erro: 2.5, pensa: 8, forca: [.35, .9], seguro: .3 }, lv || {}); const j = M.vez, r = M.rng;
-  if (M.quebra) return { ang: Math.atan2(M.T.foot.y - M.S.balls[0].y, M.T.foot.x - M.S.balls[0].x) + (r() - .5) * .02, pow: .95, fx: { f: 0, s: 0 } };
-  const cs = AI.cands(M, j).slice(0, lv.pensa); let best = null;
-  for (const c of cs) for (const pow of [.38, .55, .75].map(p => clamp(p * (c.d / 200 + .6), lv.forca[0], lv.forca[1])))
-    for (const f of c.toque ? [0] : [0, .5, -.5]) { const s = AI.score(M, j, c.ang, pow, { f, s: 0 }); if (!best || s > best.s) best = { s, ang: c.ang, pow, fx: { f, s: 0 } }; }
-  if (!best) best = { ang: r() * TAU, pow: .5, fx: { f: 0, s: 0 } };
-  const gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += r(); return u - 3; };
-  best.ang += gauss() * lv.erro * Math.PI / 180 * .6; best.pow = clamp(best.pow * (1 + gauss() * lv.erro * .01), .05, 1);   // erro humano do nível
+/* planejador em pedaços (gerador): cada yield = ~1 simulação. Termina devolvendo { ang, pow, fx, tipo } (sem o erro da mão). */
+AI.planner = function* (M, lv) {
+  lv = Object.assign({}, AI.base, lv || {}); lv.pensa = Math.max(3, lv.pensa | 0); const j = M.vez, c = M.S.balls[0], T = M.T, pre = M.regra.antes(M, j);
+  if (M.quebra) { const f = T.foot; return { ang: Math.atan2(f.y - c.y, f.x - c.x) + (M.rng() - .5) * .012, pow: .96, fx: { f: .2, s: 0 }, tipo: 'quebra' }; }
+  let best = null; const consider = (o) => { if (!best || o.v > best.v) best = o; };
+  const cs = AI.cands(M, j, pre.legal, lv.erro).slice(0, lv.pensa); yield;
+  /* 1) tacadas de encaçapar: força e efeito simulados; valor esperado = chance × (resultado simulado) + (1 − chance) × (erro: o rival joga) */
+  for (const cd of cs) {
+    const need = clamp(.16 + (cd.d1 + cd.L * 1.6 / Math.max(.25, Math.cos(cd.cut))) / 520, .18, .8);
+    for (const pow of [need, need * 1.35, need * 1.8].map(p => clamp(p, .14, .95))) for (const f of [0, .55, -.55]) {
+      const s = AI.sim(M, j, pre, cd.ang, pow, { f, s: 0 }); yield;
+      const caiu = s.S.log.some(e => e.e === 'pocket' && e.a === cd.id), v = AI.valor(M, j, lv, s);
+      const miss = -.35 - .75 * clamp(1 - cd.nota, 0, 1) * .9, p = caiu ? cd.nota : 0;
+      consider({ v: caiu ? p * v + (1 - p) * miss : Math.min(v, miss), ang: cd.ang, pow, fx: { f, s: 0 }, tipo: 'bola ' + cd.id, chance: p });
+    } }
+  /* 2) segurança: tocar numa bola legal sem falta e deixar o rival sem tacada boa (todo nível faz; o nível muda só a mão) */
+  if (!best || best.chance < .55 || best.v < .2) {
+    const alvos = pre.legal.map(id => M.S.balls.find(b => b.id === id)).filter(b => b && !b.in).sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y)).slice(0, 4);
+    let n = 0;
+    for (const b of alvos) { const a0 = Math.atan2(b.y - c.y, b.x - c.x), d = Math.hypot(b.x - c.x, b.y - c.y), lim = Math.asin(clamp(2 * PL.R / d, 0, 1)) * .9;
+      for (const k of [0, -.55, .55, -.85, .85]) { const ang = a0 + k * lim; if (!PL.clear(M.S, T, c.x, c.y, c.x + Math.cos(ang) * Math.max(0, d - 2 * PL.R - .5), c.y + Math.sin(ang) * Math.max(0, d - 2 * PL.R - .5), [0, b.id])) continue;
+        for (const pow of [.2, .32, .48]) { const s = AI.sim(M, j, pre, ang, pow, { f: -.2, s: 0 }); yield; n++;
+          const v = AI.valor(M, j, lv, s); consider({ v: v * lv.seguro + (lv.seguro - 1) * .6, ang, pow, fx: { f: -.2, s: 0 }, tipo: 'segurança' }); } } }
+    /* 3) sem caminho direto para nenhuma bola legal: varre a mesa (tabela) atrás de um toque sem falta */
+    if (!n && (!best || best.v < -.5)) for (let a = 0; a < 180; a++) { const ang = a * TAU / 180; for (const pow of [.45]) { const s = AI.sim(M, j, pre, ang, pow, { f: 0, s: 0 }); if (a % 3 === 0) yield;
+      consider({ v: AI.valor(M, j, lv, s) - .1, ang, pow, fx: { f: 0, s: 0 }, tipo: 'tabela' }); } }
+  }
+  if (!best) best = { ang: M.rng() * TAU, pow: .5, fx: { f: 0, s: 0 }, tipo: 'chute' };
   return best;
 };
-/* bola na mão: testa lugares na mesa e fica com o que dá a melhor primeira tacada */
+const gauss = r => { let u = 0; for (let i = 0; i < 6; i++) u += r(); return (u - 3) / .7071; };   // σ ≈ 1
+/* erro humano do nível: aplicado DEPOIS de escolher (a escolha nunca depende do erro) */
+AI.mao = (M, best, lv) => { lv = Object.assign({}, AI.base, lv || {}); const r = M.rng, o = Object.assign({}, best, { fx: Object.assign({}, best.fx) });
+  if (best.tipo === 'quebra') return o; o.ang += gauss(r) * lv.erro * Math.PI / 180; o.pow = clamp(o.pow * (1 + gauss(r) * lv.forca), .05, 1); return o; };
+AI.plan = (M, lv) => { const g = AI.planner(M, lv); let it; do it = g.next(); while (!it.done); return AI.mao(M, it.value, lv); };
+/* bola na mão: lugares atrás da bola-fantasma de cada tacada possível (tacada quase reta), mais alguns aleatórios; fica com a maior chance */
 AI.place = (M, j) => {
-  const T = M.T, c = M.S.balls[0], r = M.rng; let best = null;
-  for (let k = 0; k < 40; k++) { const x = r() * T.w, y = r() * T.h; if (!PL.freeSpot(M.S, T, x, y)) continue; const ox = c.x, oy = c.y; c.x = x; c.y = y; c.in = false; const cd = AI.cands(M, j)[0]; const n = cd ? cd.nota : 0; c.x = ox; c.y = oy; if (!best || n > best.n) best = { x, y, n }; }
-  return best;
+  const T = M.T, S = M.S, c = S.balls[0], r = M.rng, R = PL.R, legal = M.regra.legal(M, j); let best = null; const ox = c.x, oy = c.y, oin = c.in;
+  const tenta = (x, y) => { if (!PL.freeSpot(S, T, x, y)) return; c.x = x; c.y = y; c.in = false; const cd = AI.cands(M, j, legal, 1)[0]; const n = cd ? cd.nota - Math.abs(cd.cut) * .05 : -1; if (!best || n > best.n) best = { x, y, n }; };
+  for (const id of legal) { const b = S.balls.find(x => x.id === id); if (!b || b.in) continue;
+    for (const p of T.pockets) { const L = Math.hypot(p.x - b.x, p.y - b.y), ux = (p.x - b.x) / L, uy = (p.y - b.y) / L;
+      for (const d of [12, 20, 32]) for (const k of [-.25, 0, .25]) { const ca = Math.cos(k), sa = Math.sin(k), vx = ux * ca - uy * sa, vy = ux * sa + uy * ca; tenta(b.x - ux * 2 * R - vx * d, b.y - uy * 2 * R - vy * d); } } }
+  for (let k = 0; k < 20; k++) tenta(r() * T.w, r() * T.h);
+  c.x = ox; c.y = oy; c.in = oin; return best;
+};
+/* depois de avaliar: devolve bolas à mesa, passa a vez e decide bola na mão. Igual na partida e nas simulações de teste (tools/ia-check.js). */
+K.turno = (M, r) => {
+  for (const id of r.respot || []) PL.respot(M.S, M.T, id);
+  if (!r.segue) M.vez = 1 - M.vez;
+  const c = M.S.balls[0]; if (c.in || r.naMao) { c.vx = c.vy = 0; const sp = PL.spotNear(M.S, M.T, M.T.head.x, M.T.head.y); c.x = sp.x; c.y = sp.y; c.in = false; c.out = false; return 'mao'; }
+  return 'mira';
 };
 
 /*==ENGINE:ui==  interface em canvas (tudo no framebuffer, nada de DOM por cima): botões com foco por teclado/gamepad (regra 32), controle deslizante próprio
@@ -881,17 +1008,27 @@ UI.draw = g => {
   }
 };
 
-/*==ENGINE:match==  A PARTIDA (cena 'partida'): desenho da mesa (relevo sombreado em pixel), bolas, taco, linha de mira, força, efeito, respiro,
- * relógio de tacada, bola na mão, vez da CPU (IA), regras, falas do rival, trapaças e fim de jogo.
+/*==ENGINE:match==  A PARTIDA (cena 'partida'): desenho da mesa, bolas, taco, linha de mira, força, efeito, respiro, relógio de tacada, bola na mão,
+ * vez da CPU (IA em pedaços), regras (com a foto de antes da tacada), falas do rival (só texto), pausa padrão JGK e fim de jogo.
  * Abrir: K.partida({ mesa: 'classica', rival: 'zorg', regra?, aposta?, depois(res) })  →  res = { venceu, mesa, rival, tacadas, faltas }
  * Controles (PC): mover o mouse mira · clicar e PUXAR para trás dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
  *   teclado/gamepad: ←/→ mira (Shift fino) · segurar Espaço/A carrega, soltar tacada · E/X efeito · Q/Y respiro · P/Start pausa
- *   toque: 1º dedo em qualquer lado é a mira — de lado gira, PARA TRÁS do taco carrega a força, soltar tacada · 2 dedos: um mira, o outro vai e volta (barra F ou qualquer ponto) · bola na mão: arraste e solte */
+ *   TOQUE (0.3.0, pedido do Pedro: "o taco tá duro, dois dedos não funcionam"): três zonas fixas, cada dedo faz uma coisa só, e dá para usar duas ao mesmo tempo:
+ *     · mesa: arrastar GIRA o taco em volta da bola (o ângulo acompanha o dedo, 1:1 × sensibilidade: rápido perto da bola, fino longe dela); tocar e soltar aponta ali;
+ *     · barra F (esquerda): puxar para BAIXO carrega a força, soltar dá a tacada (voltar ao topo cancela);
+ *     · faixa fina (direita): arrastar para cima/baixo é o ajuste fino da mira.
+ *     Um 2º dedo na mesa enquanto o 1º mira também carrega a força (vai e volta). Bola na mão: arraste e solte. */
 const MV = { };   // visão da mesa: escala e deslocamento
 function tableView(T) { const W = K.v.W, H = K.v.H, top = 24, bot = 16, side = 28; const s = Math.min((W - side * 2) / (T.w + 14), (H - top - bot) / (T.h + 14)); return { s, ox: Math.round((W - T.w * s) / 2), oy: Math.round(top + (H - top - bot - T.h * s) / 2) }; }
 const toS = (x, y) => ({ x: MV.ox + x * MV.s, y: MV.oy + y * MV.s });
 const toT = (x, y) => ({ x: (x - MV.ox) / MV.s, y: (y - MV.oy) / MV.s });
-/* arte da mesa e das bolas: src/engine/09a-arte-mesa.js (camada hi-res 2×) */
+/* zonas de toque (framebuffer 384×216) */
+const ZF = { x: 0, w: 30, y: 24, h: 150 }, ZA = () => ({ x: K.v.W - 30, w: 30, y: 24, h: K.v.H - 24 - 76 });
+const inZ = (z, p) => p.x >= z.x && p.x < z.x + z.w && p.y >= z.y && p.y < z.y + z.h;
+/* NÍVEL DA LINHA DE MIRA (0.3.0, pedido do Pedro): Normal e Difícil já vêm com a linha COMPLETA (nível 2: até a bola, o caminho da bola alvo e o desvio
+ * da branca). No Desafio Intergaláctico começa como antes (nível 0: linha curta, sem caminho) e o caminho se COMPRA: upgrade MIRA e tacos com "mira".
+ * Cada nível acima de 2 deixa as linhas mais longas (o caminho da bola mostra a tabela) e a mão 12% mais firme. Partida rápida = Normal. */
+K.guia = M => { const base = M.cfg.planeta ? (K.dif().guia === undefined ? 2 : K.dif().guia) : 2; return base + (M.up.mira || 0) + (M.taco.mira || 0); };
 K.partida = cfg => K.go('partida', cfg);
 const M0 = () => K.G;
 K.defScene('partida', {
@@ -899,30 +1036,44 @@ K.defScene('partida', {
     const T = PL.prep(REG.table[cfg.mesa] || REG.table.classica), rival = REG.rival[cfg.rival] || Object.values(REG.rival)[0];
     const regra = REG.rules[cfg.regra || T.regra || 'oito'] || REG.rules['8bolas'];
     const up = (SAVE.game && SAVE.game.up) || {}, taco = REG.cue[(SAVE.game && SAVE.game.taco) || 'padrao'] || { id: 'padrao', nome: 'Taco de bar', forca: 1, mira: 0, efeito: 1, cor: '#C8D3E6' };
-    const M = K.G = { cfg, T, regra, rival, taco, up, S: PL.newState(T, cfg.semente || (K.debug.semente || (Date.now() & 0xffff))), vez: 0, fase: 'mira', ang: Math.PI, pow: 0, fx: { f: 0, s: 0 }, rng: rng(cfg.semente || 99),
-      msg: null, msgT: 0, fala: null, falaT: 0, tacadas: 0, faltas: [0, 0], clock: 0, breath: 1, carga: 0, cargaDir: 1, spinOpen: false, pausa: false, quem: ['VOCÊ', rival.nome], bot: !!K.debug.botOn, aimT: 0, plan: null, seen: 0 };
+    const sem = cfg.semente || K.debug.semente || (Date.now() & 0xffff);
+    const M = K.G = { cfg, T, regra, rival, taco, up, S: PL.newState(T, sem), vez: 0, fase: 'mira', ang: Math.PI, pow: 0, fx: { f: 0, s: 0 }, rng: rng(sem * 7 + 3),
+      msg: null, msgT: 0, fala: null, falaT: 0, tacadas: 0, faltas: [0, 0], clock: 0, breath: 1, carga: 0, cargaDir: 1, spinOpen: false, pausa: false, quem: ['VOCÊ', rival.nome], bot: !!K.debug.botOn, aimT: 0, plan: null, gen: null, seen: 0 };
+    K.music(T.musica || (REG.planet[cfg.planeta] || {}).musica || 'partida');
     regra.setup(M); Object.assign(MV, tableView(T)); M.art = K.tableArt(T, MV.s * 2); M.br = {}; M.bh = {}; M.rp = PL.R * MV.s; M.roll = {};
     for (let i = 0; i <= 15; i++) { M.br[i] = K.ballArt(i, M.rp * 2, K.v.HK / 2); M.bh[i] = K.ballArt(i, 3.6); }
-    M.ang = Math.atan2(T.foot.y - T.head.y, T.foot.x - T.head.x);
+    M.ang = Math.atan2(T.foot.y - T.head.y, T.foot.x - T.head.x); M.guia = K.guia(M);
     M.tempoMax = Math.round((25 + 6 * (up.tempo || 0)) * (cfg.planeta ? K.dif().tempo : 1)); M.clock = M.tempoMax; M.vez = cfg.comeca === 1 ? 1 : 0;
-    K.music(T.musica || (REG.planet[cfg.planeta] || {}).musica || 'partida');
     if (M.vez === 1) this.cpuStart(M);
     this.say(M, 'inicio');
     // botões de toque (só aparecem no toque) — à direita, longe das bordas (regra 22) e sem sobrepor (regra 24)
-    const tch = () => K.input.last !== 'touch' || M.fase === 'fim' || M.vez === 1 && !M.bot;
+    const tch = () => K.input.last !== 'touch' || M.fase === 'fim' || M.pausa || M.vez === 1 && !M.bot;
     UI.button({ id: 'efeito', x: K.v.W - 34, y: K.v.H - 70, w: 30, h: 24, label: 'EF', nonav: true, hidden: tch, on: () => { M.spinOpen = !M.spinOpen; } });
-    UI.button({ id: 'pausa', x: K.v.W / 2 + 40, y: 1, w: 26, h: 18, label: 'II', nonav: true, hidden: () => K.input.last !== 'touch', on: () => this.pause(M) });
+    UI.button({ id: 'pausa', x: K.v.W / 2 + 40, y: 1, w: 26, h: 18, label: 'II', nonav: true, hidden: () => K.input.last !== 'touch' || M.pausa, on: () => this.pause(M) });
     UI.button({ id: 'respiro', x: K.v.W - 34, y: K.v.H - 42, w: 30, h: 24, label: 'Q', nonav: true, hidden: tch, on: () => {} });
   },
   free() { const M = M0(); return !M.pausa; },
+  /* fala do rival: SÓ TEXTO na faixa de baixo (0.3.0, pedido do Pedro: o bip de voz durante a partida irritava) */
   say(M, k) { const l = (M.rival.falas || {})[k]; if (!l || !l.length) return; M.fala = l[(M.rng() * l.length) | 0]; M.falaT = 3.2; M.falaN = 0; },
-  pause(M) { if (M.fase === 'fim' || M.pausa) return; M.pausa = true; K.sfx('ui');
-    const x = K.v.W / 2 - 60; UI.btns = UI.btns.filter(b => !b.pz);
-    UI.button({ pz: 1, x, y: 80, w: 120, h: 18, label: 'CONTINUAR', on: () => this.unpause(M) });
-    UI.button({ pz: 1, x, y: 104, w: 120, h: 18, label: 'DESISTIR', on: () => { this.unpause(M); this.end(M, 1, 'VOCÊ DESISTIU'); } });
+  /* ---- PAUSA padrão JGK (0.3.0): CONTINUAR · OPÇÕES (volumes, sensibilidade, linha, tela cheia) · REINICIAR · SAIR PARA O MENU (sem tela de derrota) ---- */
+  pause(M) { if (M.fase === 'fim' || M.pausa) return; M.pausa = true; K.sfx('ui'); this.cancel(); this.pauseMenu(M); },
+  pzClear() { UI.btns = UI.btns.filter(b => !b.pz); UI.modal = null; },
+  pauseMenu(M) { this.pzClear(); M.pzTela = 'menu'; const x = K.v.W / 2 - 70, w = 140; let y = 70; const b = (label, on, o) => { UI.button(Object.assign({ pz: 1, x, y, w, h: 18, label, on }, o || {})); y += 23; };
+    b('CONTINUAR', () => this.unpause(M)); b('OPÇÕES', () => this.pauseOpts(M));
+    b('REINICIAR PARTIDA', () => UI.confirm({ titulo: 'REINICIAR?', texto: 'A partida volta do começo, com a mesa arrumada de novo.', ok: 'REINICIAR', on: () => { this.unpause(M); K.partida(M.cfg); } }));
+    b('SAIR PARA O MENU', () => UI.confirm({ titulo: 'SAIR DA PARTIDA?', texto: 'Você volta para o menu. A partida não conta como derrota.', ok: 'SAIR', on: () => { this.unpause(M); M.fase = 'fim'; M.saiu = true; K.go('titulo'); } }), { c: P.pink });
     UI.focus = UI.list().findIndex(b => b.pz); },
-  unpause(M) { M.pausa = false; UI.btns = UI.btns.filter(b => !b.pz); UI.focus = -1; },
-  back() { const M = M0(); if (M.pausa) this.unpause(M); else this.pause(M); },
+  pauseOpts(M) { this.pzClear(); M.pzTela = 'opcoes'; const o = SAVE.opt, x1 = 24, x2 = 200, w = 160; let y = 52;
+    UI.slider({ pz: 1, x: x1, y, w, label: 'MÚSICA', get: () => o.mv, set: v => K.setVol('mv', v) }); UI.slider({ pz: 1, x: x2, y, w, label: 'EFEITOS', get: () => o.sv, set: v => { K.setVol('sv', v); K.sfx('bola'); } }); y += 26;
+    UI.slider({ pz: 1, x: x1, y, w, label: 'SENSIBILIDADE', min: 1, max: 10, step: 1, get: () => o.sens, set: v => { o.sens = v; K.persist(); } });
+    UI.button({ pz: 1, x: x2, y, w, h: 18, label: '', lbl: () => 'LINHA DE MIRA: ' + (o.guia ? 'SIM' : 'NÃO'), on: () => { o.guia = o.guia ? 0 : 1; K.persist(); } }); y += 26;
+    UI.button({ pz: 1, x: x1, y, w, h: 18, label: '', lbl: () => 'GRÁFICOS: ' + K.qLabel(), on: () => K.qCycle() });
+    UI.button({ pz: 1, x: x2, y, w, h: 18, label: '', lbl: () => K.isFull() ? 'SAIR DA TELA CHEIA' : 'TELA CHEIA', on: () => K.toggleFull() }); y += 34;
+    UI.button({ pz: 1, x: K.v.W / 2 - 60, y, w: 120, h: 18, label: '← VOLTAR', snd: 'ui_volta', on: () => this.pauseMenu(M) });
+    for (const b of UI.btns) if (b.pz && b.lbl) Object.defineProperty(b, 'label', { get: b.lbl, configurable: true });   // rótulo lê o valor AO DESENHAR (lição 19)
+    UI.focus = UI.list().findIndex(b => b.pz); },
+  unpause(M) { M.pausa = false; M.pzTela = null; this.pzClear(); UI.focus = -1; },
+  back() { const M = M0(); if (M.pausa) { if (M.pzTela === 'opcoes') this.pauseMenu(M); else this.unpause(M); } else this.pause(M); },
   key(k) {
     const M = M0(); if (k === 'pause' || k === 'esc' || k === 'back') return this.back();
     if (M.pausa || M.fase === 'fim') return;
@@ -937,13 +1088,12 @@ K.defScene('partida', {
     if (M.spinOpen) { this.spinAt(M, p); M.spinDrag = true; return; }
     if (M.fase === 'mao') { M.handDrag = p.id; if (p.type === 'touch') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return;
-    /* TOQUE: o 1º dedo, em qualquer lado, é a MIRA. Arrastar de lado gira; arrastar PARA TRÁS do taco carrega a força; soltar tacada.
-     * Com 2 dedos: um mira e o outro (barra F ou qualquer ponto da tela) vai e volta para dar a força; soltar esse dedo dá a tacada. */
+    if (inZ(ZF, p) && !M.barDrag) { M.barDrag = { id: p.id, y0: p.y }; return; }                    // barra F (dedo ou mouse): puxar para baixo
     if (p.type === 'touch') {
-      if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y }; return; }
-      if (p.x < 26 && !M.rot) { M.barDrag = { id: p.id, y0: p.y }; return; }
+      if (inZ(ZA(), p) && !M.fine) { M.fine = { id: p.id, y: p.y }; return; }                        // faixa de ajuste fino
+      if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y, livre: true }; return; }   // 2º dedo na mesa: força (vai e volta)
       if (M.rot) return;
-      M.rot = { id: p.id, x: p.x, y: p.y, x0: p.x, y0: p.y, t0: K.time, moved: 0, mode: null, a0: M.ang }; return; }
+      const c = this.cueS(M); M.rot = { id: p.id, a: Math.atan2(p.y - c.y, p.x - c.x), x0: p.x, y0: p.y, t0: K.time, moved: 0 }; return; }
     { const c = this.cueS(M); M.powDrag = { x0: p.x, y0: p.y, a: Math.atan2(p.y - c.y, p.x - c.x) }; }   // mouse: puxar para trás (e girar devagar, 0.2.1)
   },
   move(p) {
@@ -951,57 +1101,57 @@ K.defScene('partida', {
     if (M.spinOpen && M.spinDrag) return this.spinAt(M, p);
     if (M.fase === 'mao') { if (M.handDrag === p.id || p.type === 'mouse') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return; const c = this.cueS(M);
-    if (M.barDrag && M.barDrag.id === p.id) { M.pow = clamp((p.y - M.barDrag.y0) / 60, 0, 1); return; }
-    if (M.rot && M.rot.id === p.id && M.rot.mode === 'forca') { const R = M.rot; M.pow = clamp(-((p.x - R.x0) * Math.cos(R.a0) + (p.y - R.y0) * Math.sin(R.a0)) / 60, 0, 1); return; }   // puxar para trás do taco
-    if (M.rot && M.rot.id === p.id && !M.rot.mode) { const R = M.rot, dx = p.x - R.x0, dy = p.y - R.y0;                  // decide: para trás = força · lateral = mira
-      if (Math.hypot(dx, dy) > 7) { const back = -(dx * Math.cos(M.ang) + dy * Math.sin(M.ang)), lat = Math.abs(-dx * Math.sin(M.ang) + dy * Math.cos(M.ang)); R.mode = back > lat * 1.1 && !M.barDrag ? 'forca' : 'mira'; R.a0 = M.ang; if (R.mode === 'forca') { M.pow = clamp(back / 60, 0, 1); return; } R.x = R.x0; R.y = R.y0; } else return; }
-    if (M.rot && M.rot.id === p.id) { const ax = M.rot.x - c.x, ay = M.rot.y - c.y, bx = p.x - c.x, by = p.y - c.y, d2 = Math.max(400, ax * ax + ay * ay); M.ang += (ax * by - ay * bx) / d2 * .45 * K.sens(); M.rot.moved += Math.hypot(p.x - M.rot.x, p.y - M.rot.y); M.rot.x = p.x; M.rot.y = p.y; return; }
+    if (M.barDrag && M.barDrag.id === p.id) { M.pow = clamp((p.y - M.barDrag.y0) / (M.barDrag.livre ? 70 : 90), 0, 1); return; }
+    if (M.fine && M.fine.id === p.id) { M.ang += (p.y - M.fine.y) * .0022 * K.sens(); M.fine.y = p.y; return; }
+    if (M.rot && M.rot.id === p.id) {   // GIRO 1:1: o taco acompanha o ângulo do dedo em volta da bola (perto = rápido, longe = fino)
+      const R = M.rot, d = Math.hypot(p.x - c.x, p.y - c.y), a = Math.atan2(p.y - c.y, p.x - c.x); R.moved += Math.hypot(p.x - R.x0, p.y - R.y0) > 4 ? 1 : 0;
+      if (d > 6) { M.ang += angDiff(R.a, a) * K.sens() * Math.min(1, d / 14); R.a = a; } return; }
     if (M.powDrag) {   /* segurando o clique: o movimento lateral gira a mira em volta da bola, mais devagar (×0,35); puxar para trás dá força (pedido do Pedro, 0.2.1) */
       const a = Math.atan2(p.y - c.y, p.x - c.x); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang += angDiff(M.powDrag.a, a) * (K.input.down('fine') ? .1 : .35); M.powDrag.a = a;
       const back = -((p.x - M.powDrag.x0) * Math.cos(M.ang) + (p.y - M.powDrag.y0) * Math.sin(M.ang)); M.pow = clamp(back / 70, 0, 1); return; }
-    if (p.type === 'mouse') { const a = Math.atan2(p.y - c.y, p.x - c.x); M.ang = K.input.down('fine') ? M.ang + angDiff(M.ang, a) * .08 : a; }
+    if (p.type === 'mouse' && !M.barDrag) { const a = Math.atan2(p.y - c.y, p.x - c.x); M.ang = K.input.down('fine') ? M.ang + angDiff(M.ang, a) * .08 : a; }
   },
   release(p) {
     const M = M0(); if (!M) return; M.spinDrag = false;
     if (M.fase === 'mao' && M.handDrag !== undefined && this.human(M)) { M.handDrag = undefined; this.placeCue(M); return; }   // soltar o dedo (ou o clique) confirma a bola na mão
     if (M.barDrag && M.barDrag.id === p.id) { M.barDrag = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; return; }
-    if (M.rot && M.rot.id === p.id && M.rot.mode === 'forca') { M.rot = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; return; }
-    if (M.rot && M.rot.id === p.id) { if (M.rot.moved < 5 && K.time - M.rot.t0 < .35) { const c = this.cueS(M); M.ang = Math.atan2(p.y - c.y, p.x - c.x); } M.rot = null; return; }
+    if (M.fine && M.fine.id === p.id) { M.fine = null; return; }
+    if (M.rot && M.rot.id === p.id) { if (!M.rot.moved && K.time - M.rot.t0 < .35) { const c = this.cueS(M); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang = Math.atan2(p.y - c.y, p.x - c.x); } M.rot = null; return; }
     if (M.powDrag) { M.powDrag = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; }
   },
-  /* solta tudo (toque cancelado, janela sem foco): nenhum arrasto fica preso */
-  cancel() { const M = M0(); if (!M) return; M.rot = M.barDrag = M.powDrag = null; M.handDrag = undefined; M.spinDrag = false; if (M.fase === 'mira') M.pow = 0; },
+  /* solta tudo (toque cancelado, janela sem foco, pausa): nenhum arrasto fica preso */
+  cancel() { const M = M0(); if (!M) return; M.rot = M.barDrag = M.powDrag = M.fine = null; M.handDrag = undefined; M.spinDrag = false; if (M.fase === 'mira') M.pow = 0; },
   handTo(M, p) { const t = toT(p.x, p.y); if (PL.freeSpot(M.S, M.T, t.x, t.y)) { const c = M.S.balls[0]; c.x = t.x; c.y = t.y; c.in = false; } },
-  wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M)) M.ang += dy * .004; },
+  wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M) && !M.pausa) M.ang += dy * .004; },
   spinAt(M, p) { const cx = K.v.W / 2, cy = K.v.H / 2; M.fx.s = clamp((p.x - cx) / 26, -1, 1); M.fx.f = clamp(-(p.y - cy) / 26, -1, 1); if (Math.hypot(M.fx.s, M.fx.f) > 1) { const k = Math.hypot(M.fx.s, M.fx.f); M.fx.s /= k; M.fx.f /= k; } },
   placeCue(M) { const c = M.S.balls[0]; if (!PL.freeSpot(M.S, M.T, c.x, c.y)) { K.sfx('erro'); return; } c.in = false; M.fase = 'mira'; M.clock = M.tempoMax; K.sfx('ui_ok'); },
-  wobble(M) { const calma = (M.up.calma || 0), amp = (1.3 - calma * .25) * (M.holding ? .22 : 1) * Math.PI / 180; return amp * (Math.sin(K.time * 1.7) * .6 + Math.sin(K.time * 3.1 + 1) * .4); },
+  /* respiro: a mira balança sozinha (mecânica do jogo); CALMA e a linha de mira acima do nível 2 firmam a mão */
+  wobble(M) { const calma = (M.up.calma || 0), firme = Math.max(.55, 1 - .12 * Math.max(0, M.guia - 2)), amp = (1.3 - calma * .25) * firme * (M.holding ? .22 : 1) * Math.PI / 180; return amp * (Math.sin(K.time * 1.7) * .6 + Math.sin(K.time * 3.1 + 1) * .4); },
   shootNow(M) {
     if (M.fase !== 'mira' || M.S.moving) return; const ang = M.ang + (M.vez === 0 && !M.bot ? this.wobble(M) : 0), pow = clamp(M.pow, .02, 1) * (M.taco.forca || 1);
+    M.pre = M.regra.antes ? M.regra.antes(M, M.vez) : null;   // FOTO de antes da tacada: é com ela que a regra julga (0.3.0)
     PL.shoot(M.S, ang, Math.min(1, pow), { f: M.fx.f * (M.taco.efeito || 1), s: M.fx.s * (M.taco.efeito || 1) }); M.fase = 'rolando'; M.seen = 0; M.tacadas++; M.lastPow = M.pow;
-    K.sfx('tacada', .4 + M.pow * .6); K.emit('shot', { M, ang, pow }); M.pow = 0; M.spinOpen = false; M.carga = 0;
+    K.sfx('tacada', .4 + M.pow * .6); K.emit('shot', { M, ang, pow }); M.pow = 0; M.spinOpen = false; M.carga = 0; M.rot = M.barDrag = M.powDrag = M.fine = null;
   },
-  cpuStart(M) { M.fase = M.S.balls[0].in ? 'mao' : 'pensa'; M.aimT = 0; M.plan = null; },
+  cpuStart(M) { if (M.fase !== 'mao') M.fase = 'pensa'; M.aimT = 0; M.plan = null; M.gen = null; },
   turnEnd(M) {
-    const r = M.regra.avaliar(M, M.S); if (M.T.ganchos && M.T.ganchos.avaliar) M.T.ganchos.avaliar(M, r); K.emit('turn', { M, r });
+    const r = M.regra.avaliar(M, M.S, M.pre); if (M.T.ganchos && M.T.ganchos.avaliar) M.T.ganchos.avaliar(M, r); K.emit('turn', { M, r });
     if (r.msg) this.msg(M, r.msg, P.gold);
     if (r.vence !== null && r.vence !== undefined) return this.end(M, r.vence, r.msg);
-    if (r.falta) { M.faltas[M.vez]++; this.msg(M, 'FALTA: ' + r.falta, P.pink); K.sfx('falta'); this.say(M, M.vez === 0 ? 'falta' : 'erro'); }
-    else if (r.segue) this.say(M, M.vez === 0 ? 'acerto_seu' : 'acerto');
-    else if (M.vez === 1) this.say(M, 'erro');
-    if (!r.segue) M.vez = 1 - M.vez;
-    const c = M.S.balls[0]; if (c.in || r.naMao) { c.in = true; c.vx = c.vy = 0; const sp = this.spotNear(M, M.T.head.x, M.T.head.y); c.x = sp.x; c.y = sp.y; c.in = false; M.fase = 'mao'; c.in = false; }
-    else M.fase = 'mira';
+    const quem = M.vez;
+    if (r.falta) { M.faltas[quem]++; this.msg(M, (quem === 0 ? 'FALTA: ' : 'FALTA DO RIVAL: ') + r.falta, P.pink, 3.2); K.sfx('falta'); this.say(M, quem === 0 ? 'falta' : 'erro'); }
+    else if (r.segue) this.say(M, quem === 0 ? 'acerto_seu' : 'acerto');
+    else if (quem === 1) this.say(M, 'erro');
+    M.fase = K.turno(M, r); M.pre = null;
     M.fx = { f: 0, s: 0 }; M.clock = M.tempoMax; if (M.vez === 1 || M.bot) this.cpuStart(M);
   },
-  spotNear(M, x, y) { for (let r = 0; r < 120; r += 3) for (let a = 0; a < TAU; a += .5) { const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r; if (PL.freeSpot(M.S, M.T, px, py)) return { x: px, y: py }; } return { x, y }; },
-  msg(M, s, c) { M.msg = s; M.msgC = c || P.white; M.msgT = 2.2; },
+  msg(M, s, c, t) { M.msg = s; M.msgC = c || P.white; M.msgT = t || 2.4; },
   end(M, vence, motivo) { if (M.fase === 'fim') return; M.fase = 'fim'; M.venceu = vence === 0; M.fimT = 0; M.fimMsg = motivo || '';
     this.say(M, M.venceu ? 'derrota' : 'vitoria'); K.sfx(M.venceu ? 'vitoria' : 'derrota'); K.music(M.venceu ? 'vitoria' : 'derrota');
     SAVE.meta.partidas++; if (M.venceu) SAVE.meta.vitorias++; K.persist(); K.debug.won = M.venceu; K.debug.done = true; K.emit(M.venceu ? 'win' : 'lose', { M }); },
   update(dt) {
     const M = M0(); if (!M || M.pausa) return;
-    if (M.msgT > 0) M.msgT -= dt; if (M.falaT > 0) { M.falaT -= dt; const n0 = M.falaN | 0; M.falaN = (M.falaN || 0) + dt * 90; if ((M.falaN | 0) > n0 && (M.falaN | 0) % 2 === 0) K.blip(M.rival.voz); }
+    if (M.msgT > 0) M.msgT -= dt; if (M.falaT > 0) { M.falaT -= dt; M.falaN = (M.falaN || 0) + dt * 90; }   // sem bip de voz na partida (0.3.0)
     if (M.fase === 'fim') { M.fimT += dt; if (M.fimT > 2.6 && !M.saiu) { M.saiu = true; const res = { venceu: M.venceu, mesa: M.T.id, rival: M.rival.id, tacadas: M.tacadas, faltas: M.faltas[0], cfg: M.cfg }; if (M.cfg.depois) M.cfg.depois(res); else K.go('resultado', res); } return; }
     const hum = this.human(M);
     if (M.fase === 'rolando') {
@@ -1011,7 +1161,8 @@ K.defScene('partida', {
       if (!M.S.moving) this.turnEnd(M);
       return;
     }
-    if (M.fase === 'mira' || M.fase === 'mao') { M.clock -= dt; if (M.clock <= 0 && hum) { this.msg(M, 'TEMPO ESGOTADO', P.pink); M.faltas[0]++; M.vez = 1; this.cpuStart(M); return; } }
+    if (M.fase === 'mira' || M.fase === 'mao') { M.clock -= dt; if (M.clock <= 0 && hum) {   // tempo esgotado = falta: o rival joga com bola na mão
+      M.faltas[0]++; this.msg(M, 'FALTA: TEMPO ESGOTADO', P.pink, 3); K.sfx('falta'); this.cancel(); M.fase = K.turno(M, { segue: false, naMao: true, respot: [] }); M.clock = M.tempoMax; this.cpuStart(M); return; } }
     M.holding = hum && (K.input.down('calm') || this.touchHold(M)) && M.breath > 0; M.breath = clamp(M.breath + (M.holding ? -.45 : .22) * dt * (M.holding ? 1 / (1 + (M.up.calma || 0) * .3) : 1), 0, 1);
     if (hum && M.fase === 'mira') {
       const sp = (K.input.down('fine') ? 6 : 50) * Math.PI / 180 * K.sens() * dt;
@@ -1021,9 +1172,14 @@ K.defScene('partida', {
     }
     if (hum && M.fase === 'mao') { const c = M.S.balls[0], v = 70 * dt; let nx = c.x, ny = c.y; if (K.input.down('left')) nx -= v; if (K.input.down('right')) nx += v; if (K.input.down('up')) ny -= v; if (K.input.down('down')) ny += v; if ((nx !== c.x || ny !== c.y) && PL.freeSpot(M.S, M.T, nx, ny)) { c.x = nx; c.y = ny; } }
     if (!hum) {                                                                                            // CPU (ou bot de teste nos dois lados)
-      if (M.fase === 'mao') { const sp = K.ai.place(M, M.vez); const c = M.S.balls[0]; if (sp) { c.x = sp.x; c.y = sp.y; } c.in = false; M.fase = 'pensa'; M.aimT = 0; }
+      const lv = M.vez === 1 ? K.rivalNivel(M.rival, M.cfg) : (K.debug.botNivel || { erro: .3, pensa: 6, posicao: .5 });
+      if (M.fase === 'mao') { const sp = K.ai.place(M, M.vez); const c = M.S.balls[0]; if (sp) { c.x = sp.x; c.y = sp.y; } c.in = false; M.fase = 'pensa'; M.aimT = 0; M.plan = null; M.gen = null; }
       if (M.fase === 'mira') M.fase = 'pensa';
-      if (M.fase === 'pensa') { M.aimT += dt; if (!M.plan) { M.plan = K.ai.plan(M, M.vez === 1 ? K.rivalNivel(M.rival, M.cfg) : (K.debug.botNivel || { erro: 1.2, pensa: 6 })); M.fx = M.plan.fx; }
+      if (M.fase === 'pensa') { M.aimT += dt;
+        if (!M.plan) {   /* a IA pensa EM PEDAÇOS: ~6 ms por quadro (o jogo não engasga, nem a música), tudo de uma vez nos testes rápidos */
+          if (!M.gen) M.gen = K.ai.planner(M, lv); const t0 = performance.now(), lim = K.debug.fastCpu ? 1e9 : 6; let it;
+          do it = M.gen.next(); while (!it.done && performance.now() - t0 < lim);
+          if (it.done) { M.plan = K.ai.mao(M, it.value, lv); M.fx = M.plan.fx; M.gen = null; M.aimT = Math.min(M.aimT, .6); } else { M.ang += Math.sin(K.time * 1.3) * .002; return; } }
         M.ang += angDiff(M.ang, M.plan.ang) * Math.min(1, dt * 5); M.pow = Math.min(M.plan.pow, M.aimT > .5 ? (M.aimT - .5) * 1.6 : 0);
         if (M.aimT > (K.debug.fastCpu ? .1 : 1.1) && M.pow >= M.plan.pow - 1e-6) { M.ang = M.plan.ang; M.fase = 'mira'; M.pow = M.plan.pow; const save = M.bot; this.shootNow(M); M.bot = save; } }
     }
@@ -1046,7 +1202,7 @@ K.defScene('partida', {
         if (c > -.05) { const ox = Math.cos(ro.dir) * sn * rr * .55, oy = Math.sin(ro.dir) * sn * rr * .55, rd = rr * .46 * (.55 + c * .45);
           h.fillStyle = '#F7F9FF'; h.beginPath(); h.arc(X + ox, Y + oy, rd, 0, TAU); h.fill();
           if (c > .45) { h.fillStyle = '#11131F'; h.font = 'bold ' + (rd * 1.45).toFixed(2) + 'px Arial, sans-serif'; h.textAlign = 'center'; h.textBaseline = 'middle'; h.fillText(String(b.id), X + ox, Y + oy + rd * .08); } } } }
-    const aimVis = (M.fase === 'mira' || M.fase === 'pensa') && !M.S.moving;
+    const aimVis = (M.fase === 'mira' || (M.fase === 'pensa' && M.plan)) && !M.S.moving;
     if (aimVis) this.drawAim(h, M, k);
     if (M.fase === 'mao') { const c = this.cueS(M), ok = PL.freeSpot(M.S, T, M.S.balls[0].x, M.S.balls[0].y); h.strokeStyle = ok ? P.lime : P.pink; h.lineWidth = 2; h.beginPath(); h.arc(c.x * k, c.y * k, M.rp * k + 5 + (K.time * 4 | 0) % 2, 0, TAU); h.stroke(); }
   },
@@ -1054,39 +1210,58 @@ K.defScene('partida', {
   drawOver(g) {
     const M = M0(); this.drawHud(g, M);
     if (M.spinOpen) this.drawSpin(g, M);
-    if (M.msgT > 0) { const a = Math.min(1, M.msgT * 3), s2 = false;  /* aviso na faixa do topo, nunca por cima da mesa (ART_BIBLE) */ g.globalAlpha = a; const w = K.tw(M.msg, s2 ? 2 : 1) + 16; K.panel(g, (K.v.W - w) / 2, 1, w, 22, { line: M.msgC }); K.txt(g, M.msg, K.v.W / 2, 8, { al: 'c', c: M.msgC, s: 1 }); g.globalAlpha = 1; }
+    if (M.msgT > 0) { const a = Math.min(1, M.msgT * 3); /* aviso na faixa do topo, nunca por cima da mesa (ART_BIBLE) */ g.globalAlpha = a; const w = Math.min(K.v.W - 4, K.tw(M.msg) + 16); K.panel(g, (K.v.W - w) / 2, 1, w, 22, { line: M.msgC }); K.txt(g, M.msg, K.v.W / 2, 8, { al: 'c', c: M.msgC, s: 1 }); g.globalAlpha = 1; }
     if (M.fase === 'fim') { const t = Math.min(1, M.fimT * 2); g.globalAlpha = t * .6; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; K.txt(g, M.venceu ? 'VITÓRIA!' : 'DERROTA', K.v.W / 2, 84, { al: 'c', c: M.venceu ? P.lime : P.pink, s: 3 }); K.txt(g, M.fimMsg, K.v.W / 2, 120, { al: 'c', c: P.white }); }
-    if (M.pausa) { g.globalAlpha = .6; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; K.txt(g, 'PAUSA', K.v.W / 2, 56, { al: 'c', c: P.gold, s: 2 }); }
+    if (M.pausa) { g.globalAlpha = .72; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; K.txt(g, M.pzTela === 'opcoes' ? 'OPÇÕES' : 'PAUSA', K.v.W / 2, M.pzTela === 'opcoes' ? 22 : 40, { al: 'c', c: P.gold, s: 2 }); }
   },
-  /* mira e taco na camada 2× (traço suave: linha tracejada fina, bola-fantasma, taco afinando até a ponta) */
+  /* LINHA DE MIRA por nível (K.guia): 0 = curta e tracejada · 1 = + caminho curto da bola alvo · 2 = completa (até a bola, caminho da bola alvo
+   * proporcional à força que ela recebe e desvio da branca) · 3+ = linhas mais longas e o caminho da bola alvo mostra a 1ª tabela */
   drawAim(h, M, k) {
-    const c = M.S.balls[0], cs = toS(c.x, c.y), a = M.ang + (this.human(M) ? this.wobble(M) : 0), mira = (M.up.mira || 0) + (M.taco.mira || 0), lim = (60 + mira * 40), dx = Math.cos(a), dy = Math.sin(a), X = cs.x * k, Y = cs.y * k, rp = M.rp * k;
+    const c = M.S.balls[0], cs = toS(c.x, c.y), a = M.ang + (this.human(M) ? this.wobble(M) : 0), G = M.guia, dx = Math.cos(a), dy = Math.sin(a), X = cs.x * k, Y = cs.y * k, rp = M.rp * k;
+    const S2 = p => { const q = toS(p[0], p[1]); return [q.x * k, q.y * k]; };
+    const seg = (p0, p1, cor, lw, dash) => { const A = S2(p0), B = S2(p1); h.strokeStyle = cor; h.lineWidth = lw; h.setLineDash(dash || []); h.beginPath(); h.moveTo(A[0], A[1]); h.lineTo(B[0], B[1]); h.stroke(); h.setLineDash([]); };
+    /* caminho de uma bola a partir de (x,y) na direção ang, por 'len' u, com até 'bate' tabelas (e parando em outra bola) */
+    const path = (x, y, ang, len, bate, cor, lw, ign) => { for (let n = 0; n <= bate && len > .5; n++) { const w = PL.rayWallN(M.T, x, y, ang), hb = PL.ray(M.S, x, y, ang, ign), lim = Math.min(len, w.t, hb ? hb.t : 1e9);
+        const ex = x + Math.cos(ang) * lim, ey = y + Math.sin(ang) * lim; seg([x, y], [ex, ey], cor, lw); if (hb && hb.t <= Math.min(len, w.t)) { const g2 = S2([ex, ey]); h.lineWidth = 1; h.beginPath(); h.arc(g2[0], g2[1], rp, 0, TAU); h.stroke(); return; }
+        if (lim >= len || w.t > 1e8) return; len -= lim; const vx = Math.cos(ang), vy = Math.sin(ang), d = vx * w.nx + vy * w.ny; ang = Math.atan2(vy - 2 * d * w.ny, vx - 2 * d * w.nx); x = ex; y = ey; } };
     h.lineCap = 'round';
-    if (SAVE.opt.guia || mira > 0) {
-      const hit = PL.ray(M.S, c.x, c.y, a, 0), wall = PL.rayWall(M.T, c.x, c.y, a), L = Math.min(lim, hit ? hit.t : wall), e = toS(c.x + dx * L, c.y + dy * L);
-      h.strokeStyle = 'rgba(244,248,255,.85)'; h.lineWidth = 1.5; h.setLineDash([5, 4]); h.beginPath(); h.moveTo(X + dx * (rp + 2), Y + dy * (rp + 2)); h.lineTo(e.x * k, e.y * k); h.stroke(); h.setLineDash([]);
-      if (hit && hit.t <= lim) { const gx = c.x + dx * hit.t, gy = c.y + dy * hit.t, gs = toS(gx, gy); h.lineWidth = 1.5; h.beginPath(); h.arc(gs.x * k, gs.y * k, rp, 0, TAU); h.stroke();
-        if (mira >= 1) { const b = hit.b, na = Math.atan2(b.y - gy, b.x - gx), bs = toS(b.x, b.y), len = (10 + mira * 4) * k; h.strokeStyle = P.lime; h.lineWidth = 2; h.beginPath(); h.moveTo(bs.x * k, bs.y * k); h.lineTo(bs.x * k + Math.cos(na) * len, bs.y * k + Math.sin(na) * len); h.stroke(); }
-        if (mira >= 2) { const na = Math.atan2(hit.b.y - gy, hit.b.x - gx), ta = na + (angDiff(na, a) > 0 ? Math.PI / 2 : -Math.PI / 2), len = 10 * k; h.strokeStyle = P.line; h.lineWidth = 1.5; h.setLineDash([3, 3]); h.beginPath(); h.moveTo(gs.x * k, gs.y * k); h.lineTo(gs.x * k + Math.cos(ta) * len, gs.y * k + Math.sin(ta) * len); h.stroke(); h.setLineDash([]); } }
+    if (SAVE.opt.guia) {
+      const hit = PL.ray(M.S, c.x, c.y, a, 0), wall = PL.rayWallN(M.T, c.x, c.y, a), hitOk = hit && hit.t < wall.t, lim = G >= 2 ? 1e9 : 60 + G * 40, L = Math.min(lim, hitOk ? hit.t : wall.t);
+      const e = [c.x + dx * L, c.y + dy * L]; h.strokeStyle = 'rgba(244,248,255,.9)'; h.lineWidth = G >= 2 ? 1.4 : 1.5; h.setLineDash(G >= 2 ? [] : [5, 4]); h.beginPath(); h.moveTo(X + dx * (rp + 2), Y + dy * (rp + 2)); const E = S2(e); h.lineTo(E[0], E[1]); h.stroke(); h.setLineDash([]);
+      if (hitOk && hit.t <= lim) { const gx = c.x + dx * hit.t, gy = c.y + dy * hit.t, gs = S2([gx, gy]); h.strokeStyle = 'rgba(244,248,255,.95)'; h.lineWidth = 1.5; h.beginPath(); h.arc(gs[0], gs[1], rp, 0, TAU); h.stroke();   // bola-fantasma
+        const b = hit.b, na = Math.atan2(b.y - gy, b.x - gx), cut = angDiff(na, a), fr = Math.cos(cut), mais = Math.max(0, G - 2);
+        const legal = M.regra.legal ? M.regra.legal(M, M.vez) : null, certa = !legal || legal.includes(b.id);
+        if (G >= 1) { const len = G >= 2 ? (18 + 62 * fr) * (1 + .3 * mais) : 12 + G * 4; path(b.x, b.y, na, len, G >= 3 ? 1 : 0, certa ? P.lime : P.pink, 2, b.id); }   // caminho da bola alvo (vermelho = bola que não pode)
+        if (G >= 2) { const ta = na + (cut > 0 ? -Math.PI / 2 : Math.PI / 2), len = (6 + 40 * Math.abs(Math.sin(cut))) * (1 + .3 * mais); path(gx, gy, ta, len, mais ? 1 : 0, 'rgba(244,248,255,.6)', 1.2, 0); }   // desvio da branca
+        if (!certa) { h.strokeStyle = P.pink; h.lineWidth = 1.5; const bs = S2([b.x, b.y]); h.beginPath(); h.moveTo(bs[0] - rp * .7, bs[1] - rp * .7); h.lineTo(bs[0] + rp * .7, bs[1] + rp * .7); h.moveTo(bs[0] + rp * .7, bs[1] - rp * .7); h.lineTo(bs[0] - rp * .7, bs[1] + rp * .7); h.stroke(); } }
+      else if (!hitOk && G >= 2 && wall.t < 1e8) { const vx = dx, vy = dy, d = vx * wall.nx + vy * wall.ny, ra = Math.atan2(vy - 2 * d * wall.ny, vx - 2 * d * wall.nx); path(e[0], e[1], ra, 22 * (1 + .3 * Math.max(0, G - 2)), 0, 'rgba(244,248,255,.6)', 1.2, 0); }   // branca na tabela: mostra a volta
     }
     const back = rp + 4 + M.pow * 44;
     K.drawCue(h, X - dx * back, Y - dy * back, -dx, -dy, 175, M.taco, 1);
   },
   drawHud(g, M) {
-    const W = K.v.W, H = K.v.H; K.rect(g, 0, 0, W, 20, P.ink); K.rect(g, 0, 20, W, 1, P.line2);
+    const W = K.v.W, H = K.v.H, touch = K.input.last === 'touch'; K.rect(g, 0, 0, W, 20, P.ink); K.rect(g, 0, 20, W, 1, P.line2);
     const gr = j => M.grupos[j] ? M.S.balls.filter(b => !b.in && K.grupo(b.id) === M.grupos[j]).map(b => b.id) : null;
     [0, 1].forEach(j => { const left = j === 0, x = left ? 4 : W - 4, act = M.vez === j && M.fase !== 'fim';
       K.txt(g, M.quem[j], x, 1, { al: left ? 'l' : 'r', c: act ? P.lime : P.grey });
-      const bs = gr(j); if (bs) bs.forEach((id, i) => { const cv = M.bh[id], bx = left ? x + 3 + i * 9 : x - 3 - i * 9; g.drawImage(cv, Math.round(bx - cv.width / 2), Math.round(15 - cv.height / 2)); });
+      const bs = gr(j); if (bs) { if (bs.length) bs.forEach((id, i) => { const cv = M.bh[id], bx = left ? x + 3 + i * 9 : x - 3 - i * 9; g.drawImage(cv, Math.round(bx - cv.width / 2), Math.round(15 - cv.height / 2)); }); else { const cv = M.bh[8]; g.drawImage(cv, Math.round((left ? x + 3 : x - 3) - cv.width / 2), Math.round(15 - cv.height / 2)); } }
       else K.txt(g, M.aberta ? 'mesa aberta' : '', x, 10, { al: left ? 'l' : 'r', c: P.dim }); });
     const t = clamp(M.clock / M.tempoMax, 0, 1); K.rect(g, W / 2 - 30, 4, 60, 3, P.dim); K.rect(g, W / 2 - 30, 4, Math.round(60 * t), 3, t < .25 ? P.pink : P.line);
-    if (!(M.msgT > 0)) K.txt(g, M.vez === 0 ? 'SUA VEZ' : 'VEZ DO RIVAL', W / 2, 9, { al: 'c', c: M.vez === 0 ? P.lime : P.gold });
-    K.panel(g, 4, 38, 14, 126, { grad: false }); K.rect(g, 7, 41, 8, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, 8, 160 - i, 6, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', 11, 166, { al: 'c', c: P.grey });
-    K.panel(g, W - 18, 38, 14, 70, { grad: false }); const bh = Math.round(62 * M.breath); for (let i = 0; i < bh; i += 2) K.rect(g, W - 15, 104 - i, 8, 1, M.holding ? P.line : P.line2); K.txt(g, 'Q', W - 11, 110, { al: 'c', c: P.grey });
-    g.drawImage(M.bh[0], W - 11 - M.bh[0].width / 2 | 0, 126 - M.bh[0].height / 2 | 0); K.rect(g, Math.round(W - 11 + M.fx.s * 2), Math.round(126 - M.fx.f * 2), 1, 1, P.pink); K.txt(g, 'E', W - 11, 132, { al: 'c', c: P.grey });
+    if (!(M.msgT > 0)) K.txt(g, M.vez === 0 ? (M.fase === 'mao' ? 'SUA VEZ · BOLA NA MÃO' : 'SUA VEZ') : M.fase === 'pensa' && !M.plan ? 'RIVAL PENSANDO...' : 'VEZ DO RIVAL', W / 2, 9, { al: 'c', c: M.vez === 0 ? P.lime : P.gold });
+    // barra F (força): no toque é a zona de puxar para baixo
+    K.panel(g, 4, 38, 14, 126, { grad: false, line: M.barDrag ? P.lime : undefined }); K.rect(g, 7, 41, 8, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, 8, 41 + i, 6, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', 11, 166, { al: 'c', c: P.grey });
+    if (touch && this.human(M) && M.fase === 'mira' && !M.barDrag) K.txt(g, '↓', 11, 28, { al: 'c', c: (K.time * 2 | 0) % 2 ? P.lime : P.dim });
+    if (touch) {   // faixa de ajuste fino (direita) com ranhuras que andam com a mira; o respiro vira o preenchimento do botão Q
+      const z = ZA(), x = W - 20; K.panel(g, x - 4, z.y + 2, 18, z.h - 4, { grad: false, line: M.fine ? P.lime : undefined }); const off = ((M.ang * 180 / Math.PI * 2) % 6 + 6) % 6;
+      for (let y = z.y + 5 + off; y < z.y + z.h - 5; y += 6) K.rect(g, x - 1, Math.round(y), 12, 1, M.fine ? P.line : P.line2);
+      const b = UI.btns.find(q => q.id === 'respiro'); if (b && !(b.hidden && b.hidden())) { const bh = Math.round((b.h - 4) * M.breath); K.rect(g, b.x + 2, b.y + b.h - 2 - bh, 3, bh, M.holding ? P.line : P.line2); }
+    } else {
+      K.panel(g, W - 18, 38, 14, 70, { grad: false }); const bh = Math.round(62 * M.breath); for (let i = 0; i < bh; i += 2) K.rect(g, W - 15, 104 - i, 8, 1, M.holding ? P.line : P.line2); K.txt(g, 'Q', W - 11, 110, { al: 'c', c: P.grey });
+      g.drawImage(M.bh[0], W - 11 - M.bh[0].width / 2 | 0, 126 - M.bh[0].height / 2 | 0); K.rect(g, Math.round(W - 11 + M.fx.s * 2), Math.round(126 - M.fx.f * 2), 1, 1, P.pink); K.txt(g, 'E', W - 11, 132, { al: 'c', c: P.grey }); }
     K.rect(g, 0, H - 14, W, 14, P.ink); K.rect(g, 0, H - 14, W, 1, P.line2);
     if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 0, 10, 48, 18, 4, H - 13, 24, 9); K.txt(g, M.rival.nome + ':', 32, H - 12, { c: P.gold }); K.txt(g, M.fala, 38 + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
-    else if (this.human(M) && M.fase === 'mira') K.txt(g, K.input.last === 'touch' ? 'arraste para mirar · puxe p/ trás = força · 2º dedo = força' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
+    else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'arraste na mesa = mira · F: puxe p/ baixo · faixa direita = ajuste fino' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
+    else if (this.human(M) && M.fase === 'mao') K.txt(g, touch ? 'bola na mão: arraste a branca e solte' : 'bola na mão: mova a branca e clique (ou Enter)', W / 2, H - 12, { al: 'c', c: P.lime });
   },
   drawSpin(g, M) { const cx = K.v.W / 2, cy = K.v.H / 2; g.globalAlpha = .7; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; if (!M.spinArt) M.spinArt = K.ballArt(0, 26); g.drawImage(M.spinArt, cx - M.spinArt.width / 2 | 0, cy - M.spinArt.height / 2 | 0);
     K.disc(g, cx + M.fx.s * 20, cy - M.fx.f * 20, 3, P.pink); K.txt(g, 'EFEITO', cx, cy - 44, { al: 'c', c: P.gold }); K.txt(g, 'cima = siga · baixo = puxe · lados = efeito na tabela', cx, cy + 34, { al: 'c', c: P.grey }); },
@@ -1220,11 +1395,12 @@ K.tableArt = (T, s) => {
  * Planeta (K.defPlanet): { nome, ordem, emBreve? (aparece trancado com 'EM BREVE'), mapa: {x, y, cor}, regra?, musica?, fundo(g,t)?, historia: {chegada, saida}, partidas: [{ id, mesa, rival, premio }] } */
 /* Dificuldade da campanha (pedido do Pedro, 2026-11-21): escolhida no início de cada campanha e guardada no save. Só vale nas partidas da campanha (cfg.planeta).
  * erro/pensa multiplicam o nível do rival (menos erro = mira melhor; mais candidatos = escolhe melhor) · tempo multiplica o relógio · premio multiplica os créditos. */
-K.DIFS = { normal: { nome: 'NORMAL', desc: 'Rivais no ritmo do programa. Para conhecer as mesas.', erro: 1, pensa: 1, tempo: 1, premio: 1 },
-  dificil: { nome: 'DIFÍCIL', desc: 'Rivais miram melhor e escolhem a tacada certa. Prêmios 30% maiores.', erro: .65, pensa: 1.5, tempo: 1, premio: 1.3 },
-  desafio: { nome: 'DESAFIO INTERGALÁCTICO', desc: 'Rivais quase perfeitos e relógio mais curto. Prêmios 70% maiores. Boa sorte, humano.', erro: .4, pensa: 2, tempo: .75, premio: 1.7 } };
+/* 0.3.0: todo nível joga sério (a IA pensa igual); a dificuldade muda a MÃO dos rivais e a LINHA DE MIRA do jogador (guia: ver K.guia em 09-match). */
+K.DIFS = { normal: { nome: 'NORMAL', desc: 'Linha de mira completa. Rivais espertos e sérios.', erro: 1, pensa: 1, tempo: 1, premio: 1, guia: 2 },
+  dificil: { nome: 'DIFÍCIL', desc: 'Linha completa. Rivais de mão firme. Prêmios 30% maiores.', erro: .72, pensa: 1.3, tempo: 1, premio: 1.3, guia: 2 },
+  desafio: { nome: 'DESAFIO INTERGALÁCTICO', desc: 'Linha curta: o caminho das bolas se compra. Rivais quase perfeitos. Prêmios +70%.', erro: .5, pensa: 1.6, tempo: .75, premio: 1.7, guia: 0 } };
 K.dif = () => K.DIFS[(SAVE.game && SAVE.game.dif) || 'normal'] || K.DIFS.normal;
-K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: 3, pensa: 5 }; if (!cfg || !cfg.planeta) return n; const d = K.dif(); return Object.assign({}, n, { erro: n.erro * d.erro, pensa: Math.max(1, Math.round(n.pensa * d.pensa)) }); };
+K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: .4, pensa: 5 }; if (!cfg || !cfg.planeta) return n; const d = K.dif(); return Object.assign({}, n, { erro: n.erro * d.erro, pensa: Math.max(1, Math.round(n.pensa * d.pensa)) }); };
 K.newGame = (dif) => { SAVE.game = { dif: K.DIFS[dif] ? dif : 'normal', creditos: 0, vencidas: {}, up: { mira: 0, tempo: 0, calma: 0 }, tacos: { padrao: 1 }, taco: 'padrao', planeta: null }; K.persist(); };
 K.planets = () => Object.values(REG.planet).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
 K.planetOpen = pl => { if (pl.emBreve) return false; const L = K.planets(), i = L.indexOf(pl); return i <= 0 || L[i - 1].partidas.every(p => SAVE.game && SAVE.game.vencidas[p.id]); };
@@ -1612,7 +1788,7 @@ K.defTable('cratera', K.tableRect({ nome: 'Cratera Lunar', feltro: '#3E6FD8', bo
 /*==CONTENT:campanha==  DONO: gerente. Planeta 1 (TERRA, 5 partidas do MVP 0.2.0 — docs/PLANO-MVP.md §3), planetas 2+ como 'em breve', treinos e tacos. Rivais: 21-rivais.js (roteirista).
  * K.defPlanet(id, { nome, ordem, desc, mapa: {x, y, cor}, regra?, musica?, fundo(g,t)?, historia: { chegada, saida }, partidas: [{ id, mesa, rival, premio }] })
  * K.defRival(id, { nome, face (retrato), nivel: { erro: graus, pensa: candidatos }, voz: { inst, nota, var }, falas: { inicio, acerto, acerto_seu, erro, falta, vitoria, derrota } })
- * K.defUpgrade(id, { nome, desc, precos: [nível 1, 2, 3] })  — ids que o MOTOR lê: mira (linha maior, bola fantasma, desvio) · tempo (+6 s/nível) · calma (menos tremida, respiro rende mais)
+ * K.defUpgrade(id, { nome, desc, precos: [nível 1, 2, 3] })  — ids que o MOTOR lê: mira (+1 nível de linha: K.guia em 09-match) · tempo (+6 s/nível) · calma (menos tremida, respiro rende mais)
  * K.defCue(id, { nome, desc, preco, forca (×), mira (+níveis), efeito (×), cor, ponta }) */
 K.defPlanet('terra', { nome: 'TERRA', ordem: 1, desc: 'Seletiva do reality GALÁXIA DE TACO, gravada no Acre. Cinco partidas, cinco câmeras, nenhuma piedade.', mapa: { x: 70, y: 120, cor: '#4C7BFF' },
   historia: { chegada: 'terra_chegada', saida: 'terra_saida' },
@@ -1621,7 +1797,7 @@ K.defPlanet('terra', { nome: 'TERRA', ordem: 1, desc: 'Seletiva do reality GALÁ
     { id: 'terra5', mesa: 'disco', rival: 'apresentadora', premio: 200 }] });
 K.defPlanet('lua', { nome: 'LUA', ordem: 2, emBreve: true, desc: 'Próxima temporada.', mapa: { x: 190, y: 80, cor: '#8D93B8' }, partidas: [{ id: 'lua1', mesa: 'cratera', rival: 'zyx', premio: 150 }] });
 K.defPlanet('ana', { nome: 'ESTRELA ANÃ', ordem: 3, emBreve: true, desc: 'Próxima temporada.', mapa: { x: 310, y: 130, cor: '#FF3E9A' }, partidas: [{ id: 'ana1', mesa: 'estrela', rival: 'zyx', premio: 260 }] });
-K.defUpgrade('mira', { nome: 'MIRA', desc: 'Linha de mira maior; no nível 1 mostra para onde a bola vai, no 2 o desvio da branca.', precos: [80, 180, 360] });
+K.defUpgrade('mira', { nome: 'MIRA', desc: 'Linhas mais longas e mão mais firme. No Desafio libera o caminho da bola (nível 1) e a linha completa (nível 2).', precos: [80, 180, 360] });
 K.defUpgrade('tempo', { nome: 'TEMPO', desc: 'Mais 6 segundos por tacada.', precos: [60, 140, 280] });
 K.defUpgrade('calma', { nome: 'CALMA', desc: 'A mão treme menos e o respiro (Q) dura mais.', precos: [70, 160, 320] });
 K.defCue('padrao', { nome: 'TACO DE BAR', desc: 'Empenado, mas é seu.', preco: 0, forca: 1, mira: 0, efeito: 1, cor: '#C8D3E6', ponta: '#3BE8FF' });
@@ -1631,11 +1807,11 @@ K.defCue('quasar', { nome: 'QUASAR', desc: 'Efeito forte e um nível extra de mi
 }
 {
 /*==CONTENT:rivais==  DONO: roteirista. Os 5 participantes do reality na Terra (MVP 0.2.0). Ids fixos (contrato): zyx glub orion patroc apresentadora.
- * K.defRival(id, { nome, face (id do retrato em 31-retratos.js = mesmo id), nivel: { erro: graus, pensa: candidatos } (NÃO mude: o gerente calibra), voz: { inst, nota, var },
+ * K.defRival(id, { nome, face (id do retrato em 31-retratos.js = mesmo id), nivel: { erro: σ da mira em graus, pensa: candidatos, posicao: 0..1 } (NÃO mude: o gerente calibra com `npm run qa:ia`; 0.3.0 recalibrou: o erro antigo era em outra escala), voz: { inst, nota, var },
  *   falas: { inicio, acerto, acerto_seu, erro, falta, vitoria, derrota } — listas de frases curtas (≤ 48 caracteres, cabem na faixa da partida). */
 const R_ = (id, nome, nivel, voz, falas) => K.defRival(id, { nome, face: id, nivel, voz, falas });
 // ZYX: influencer marciana. Tudo é conteúdo, tudo é ao vivo.
-R_('zyx', 'ZYX', { erro: 6, pensa: 3 }, { inst: 'piano_el', nota: 'e4', var: 2, vol: .2 }   /* 0.2.1: vibrafone agudo irritava o Pedro */, {
+R_('zyx', 'ZYX', { erro: .45, pensa: 5, posicao: .35 }, { inst: 'piano_el', nota: 'e4', var: 2, vol: .2 }   /* 0.2.1: vibrafone agudo irritava o Pedro */, {
   inicio: ['Oi, seguidores! Hoje: humano.', 'Gravando! Faz cara de medo.', 'Ring light ligada. Bora.'],
   acerto: ['Isso vai viralizar.', 'Salva esse clipe!', 'Fiz de primeira, gente.'],
   acerto_seu: ['Ok, sorte de principiante.', 'Hm, boa. Posto depois.', 'Tá, esse eu corto.'],
@@ -1644,7 +1820,7 @@ R_('zyx', 'ZYX', { erro: 6, pensa: 3 }, { inst: 'piano_el', nota: 'e4', var: 2, 
   vitoria: ['Like, compartilha e some.', 'Mais um troféu pro perfil.'],
   derrota: ['Isso não vai ao ar.', 'Perdi seguidores, valeu.'] });
 // GLUB: alien do interior, anfíbio, bonachão, fala "uai"/"sô".
-R_('glub', 'GLUB', { erro: 4.5, pensa: 4 }, { inst: 'baixo_dedo', nota: 'c3', var: 3 }, {
+R_('glub', 'GLUB', { erro: .38, pensa: 5, posicao: .45 }, { inst: 'baixo_dedo', nota: 'c3', var: 3 }, {
   inicio: ['Lá na minha lagoa é assim, sô.', 'Bão demais! Vamo jogá.', 'Calma que eu tô no meu tempo.'],
   acerto: ['Hehe, caiu, uai.', 'Aprendi com os sapos.'],
   acerto_seu: ['Bonito, uai!', 'Eita, o bichinho joga.', 'Essa foi bem dada, sô.'],
@@ -1653,7 +1829,7 @@ R_('glub', 'GLUB', { erro: 4.5, pensa: 4 }, { inst: 'baixo_dedo', nota: 'c3', va
   vitoria: ['Volta pra lagoa comigo?', 'Ganhei! Vou contar pros sapos.'],
   derrota: ['Glub. Perdi pra gente da cidade.', 'Bão, tava bom demais.'] });
 // VELHO ORION: ex-campeão decadente, saudosista, reclama das costas.
-R_('orion', 'VELHO ORION', { erro: 3.2, pensa: 6 }, { inst: 'lead_grave', nota: 'g3', var: 2 }, {
+R_('orion', 'VELHO ORION', { erro: .32, pensa: 6, posicao: .6 }, { inst: 'lead_grave', nota: 'g3', var: 2 }, {
   inicio: ['Fui campeão antes de você nascer.', 'Eu inventei essa tacada.', 'Já joguei com lenda. Eu era a lenda.'],
   acerto: ['Ainda tenho, garoto.', 'Isso é experiência.'],
   acerto_seu: ['Hum. Razoável.', 'Sorte. Eu tinha mais estilo.'],
@@ -1662,7 +1838,7 @@ R_('orion', 'VELHO ORION', { erro: 3.2, pensa: 6 }, { inst: 'lead_grave', nota: 
   vitoria: ['Respeite os mais velhos.', 'Anota aí: ainda sou o cara.'],
   derrota: ['Eu deixei.', 'Eu me aposento. De novo.'] });
 // PATROC-1: IA do patrocinador, tudo vira anúncio.
-R_('patroc', 'PATROC-1', { erro: 2.2, pensa: 8 }, { inst: 'quadrada', nota: 'c5', var: 1 }, {
+R_('patroc', 'PATROC-1', { erro: .26, pensa: 7, posicao: .75 }, { inst: 'quadrada', nota: 'c5', var: 1 }, {
   inicio: ['Esta partida tem patrocínio.', 'Carregando simpatia... falhou.', 'Intervalo comercial em 3 tacadas.'],
   acerto: ['Tacada calculada. Oferta válida.', 'Eficiência de 99,9 por cento.'],
   acerto_seu: ['Improvável. Cobrarei a anomalia.', 'Seu desempenho foi registrado.'],
@@ -1671,7 +1847,7 @@ R_('patroc', 'PATROC-1', { erro: 2.2, pensa: 8 }, { inst: 'quadrada', nota: 'c5'
   vitoria: ['Obrigado por assistir.', 'Vença mais com o plano ouro.'],
   derrota: ['Reiniciando...', 'Cancele sua assinatura de mim.'] });
 // APRESENTADORA: diva do programa, chefe da final, drama e plateia.
-R_('apresentadora', 'APRESENTADORA', { erro: 1.5, pensa: 10 }, { inst: 'metais_syn', nota: 'a4', var: 2 }, {
+R_('apresentadora', 'APRESENTADORA', { erro: .2, pensa: 8, posicao: .85 }, { inst: 'metais_syn', nota: 'a4', var: 2 }, {
   inicio: ['Final ao vivo! Sorria, humano.', 'Silêncio no estúdio. Quer dizer, grite.', 'Câmera 2! Meu lado bom.'],
   acerto: ['Isso é televisão.', 'Palmas pra mim, por favor.'],
   acerto_seu: ['Que drama! Adorei.', 'Ai, o público gostou de você.'],
@@ -2217,7 +2393,7 @@ K.defScene('planeta', {
 
 /* ====================================================================== LOJA */
 const ZLJ = { y: 38, p: 48, ph: 46, pw: 110, bw: 56 };
-const ZFX = { mira: 'MIRA MAIOR E DESVIO DA BRANCA', tempo: '+6 SEGUNDOS EM CADA TACADA', calma: 'MÃO MAIS FIRME E RESPIRO LONGO' };
+const ZFX = { mira: 'LINHA MAIS LONGA E MÃO FIRME', tempo: '+6 SEGUNDOS EM CADA TACADA', calma: 'MÃO MAIS FIRME E RESPIRO LONGO' };
 function Zicon(g, id, x, y, c) {   // ícones 16×16 dos treinos, desenhados com primitivas
   K.disc(g, x + 8, y + 8, 8, P.ink); K.disc(g, x + 8, y + 8, 7, P.night);
   if (id === 'mira') { K.ring(g, x + 8, y + 8, 5, c); K.rect(g, x + 7, y + 1, 2, 4, c); K.rect(g, x + 7, y + 11, 2, 4, c); K.rect(g, x + 1, y + 7, 4, 2, c); K.rect(g, x + 11, y + 7, 4, 2, c); K.rect(g, x + 7, y + 7, 2, 2, P.pink); }
@@ -2522,6 +2698,12 @@ S('comprar', G(1.8, (t, n, s) => { s('sinos', 'e6', .3, .45); t('square', 1319, 
 S('vitoria', G(1.2, (t, n, s) => { n(.7, .1, 1500, 0, null, 0, .7); s('sinos', 'c6', .6, .4); s('orq_hit', 'c4', .5, .45); }));                      // palmas da plateia + brilho + golpe, na tonalidade da fanfarra (Dó)
 S('derrota', G(1.2, (t, n, s) => { s('timpano', 'g2', .8, .7); n(.6, .1, 480, 0, null, 0, .7); }));                                                  // "aaah" da plateia + tímpano, na tonalidade da derrota (Sol menor)
 S('dialogo_passa', G(8, t => t('triangle', 1100, 800, .035, .05)));
+
+}
+{
+/*==CONTENT:volume-musicas==  DONO: gerente. GERADO por `node tools/volume-musicas.js --gravar` (não edite à mão).
+ * Ganho por música para todas tocarem no mesmo volume eficaz da trilha da partida (0.3.0). Compositor: mudou uma música? rode de novo. */
+K.ganhoMusica = {"abertura":0.802,"mapa":1.176,"partida":1,"final":0.8,"loja":1.033,"vitoria":0.846,"derrota":1.238,"creditos":0.915};
 
 }
 {
