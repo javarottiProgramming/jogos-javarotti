@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.3.3</title>
+<title>Sinuca Intergaláctica · v0.3.4</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.3.3', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.3.4', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -914,10 +914,12 @@ K.turno = (M, r) => {
  * 0.3.3 (pedido do Pedro: "o bot no normal tá muito difícil: encaçapou 4, 5 seguidas; tem que ser gradual"): o NORMAL ficou bem mais brando e a dificuldade sobe aos poucos
  *   de rival em rival. Erro de mão no Normal = erro-base do rival × 6,5: ZYX 2,9° · GLUB 2,5° · ORION 2,1° · PATROC-1 1,7° · APRESENTADORA 1,3° (antes 0,45 a 0,2°), pensando em
  *   menos jogadas (×0,8) e com confia 0,6: o rival tenta tacadas que a própria mão não sustenta, então erra como gente (sem sequências de 4 bolas na ZYX; um jogador médio,
- *   σ 1,5°, vence a ZYX ~9 vezes em 10). Difícil e Desafio ficam como estavam (rivais de mão firme, confia 1). `npm run qa:ia` trava essa escada. */
+ *   σ 1,5°, vence a ZYX ~9 vezes em 10). `npm run qa:ia` trava essa escada.
+ * 0.3.4 (pedido do Pedro: "o Difícil também tem que subir aos poucos"): Difícil = erro de mão ×3,1 (ZYX 1,4° · GLUB 1,2° · ORION 1,0° · PATROC-1 0,8° · APRESENTADORA 0,6°, antes 0,32 a 0,14°), ×1,2 jogadas e confia 0,8: fica no meio da escada
+ *   (jogador médio, σ 1,5°, vence a ZYX ~8 em 10 no Normal, ~5 em 10 no Difícil e quase nunca no Desafio; medido em 30 partidas). O Desafio segue como estava (erro ×0,5, confia 1: rivais quase perfeitos). */
 K.TEMPO_BASE = 32;   // 0.3.3: relógio POR TACADA (não há limite de partida). Base 25 → 32 s (+28%); o treino TEMPO soma 6 s por nível e cada dificuldade multiplica (Normal 32 s · Difícil 32 s · Desafio 24 s; antes 25 · 25 · 19)
 K.DIFS = { normal: { nome: 'NORMAL', desc: 'Linha de mira completa. Rivais mais calmos: erram mais no começo e apertam aos poucos.', erro: 6.5, pensa: .8, confia: .6, tempo: 1, premio: 1, guia: 2, respiro: .3 },
-  dificil: { nome: 'DIFÍCIL', desc: 'Linha completa. Rivais de mão firme. Prêmios 30% maiores.', erro: .72, pensa: 1.3, confia: 1, tempo: 1, premio: 1.3, guia: 2, respiro: .5 },
+  dificil: { nome: 'DIFÍCIL', desc: 'Linha completa. Rivais de mão firme, que apertam rival a rival. Prêmios 30% maiores.', erro: 3.1, pensa: 1.2, confia: .8, tempo: 1, premio: 1.3, guia: 2, respiro: .5 },
   desafio: { nome: 'DESAFIO INTERGALÁCTICO', desc: 'Linha curta: o caminho das bolas se compra. Rivais quase perfeitos. Prêmios +70%.', erro: .5, pensa: 1.6, confia: 1, tempo: .75, premio: 1.7, guia: 0, respiro: .8 } };
 K.dif = () => K.DIFS[(SAVE.game && SAVE.game.dif) || 'normal'] || K.DIFS.normal;
 K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: .4, pensa: 5 }; if (!cfg || !cfg.planeta) return n; const d = K.dif();
