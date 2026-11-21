@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.3.2</title>
+<title>Sinuca Intergaláctica · v0.3.3</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.3.2', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.3.3', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -820,7 +820,7 @@ K.defRules('8bolas', {
  * quando nada é bom. O nível muda a MÃO (erro em graus, σ) e quanto pensa na posição. Nada aqui olha como o humano está jogando.
  * nível: { erro: σ da mira em graus, forca: σ relativo da força, pensa: candidatos simulados, posicao: 0..1 peso da próxima tacada, seguro: 0..1 } */
 const AI = K.ai = {};
-AI.base = { erro: 1, forca: .04, pensa: 6, posicao: .6, seguro: .7 };
+AI.base = { erro: 1, forca: .04, pensa: 6, posicao: .6, seguro: .7, confia: 1 };   // confia (0.3.3): quanto o rival acredita na própria mão ao ESCOLHER (1 = sabe o que a mão faz; < 1 = arrisca tacadas além da mão e erra mais, como iniciante)
 const erf = x => { const t = 1 / (1 + .3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
 /* chance de encaçapar: erro de mira σ (rad) vira desvio lateral na boca da caçapa */
 AI.chance = (d1, L, cut, w, sig) => { const sl = (L * d1 / (2 * PL.R * Math.max(.18, Math.cos(cut))) + d1) * sig + .15; return erf(w / (Math.SQRT2 * sl)); };
@@ -850,15 +850,15 @@ AI.melhor = (Mc, k, sig, naMao) => { if (naMao) return .85; const L = Mc.regra.l
 AI.valor = (M, j, lv, s) => { const { r, Mc } = s;
   if (r.vence === j) return 50; if (r.vence === 1 - j) return -50;
   if (r.falta) return -1 - AI.melhor(Mc, 1 - j, 1.2, true);
-  if (r.segue) { const prox = Mc.regra.legal(Mc, j), so8 = prox.length === 1 && prox[0] === 8; return 1 + (so8 ? .3 : 0) + lv.posicao * AI.melhor(Mc, j, lv.erro, false) * (so8 ? 1.4 : 1); }
+  if (r.segue) { const prox = Mc.regra.legal(Mc, j), so8 = prox.length === 1 && prox[0] === 8; return 1 + (so8 ? .3 : 0) + lv.posicao * AI.melhor(Mc, j, lv.plan === undefined ? lv.erro : lv.plan, false) * (so8 ? 1.4 : 1); }
   return -.25 - AI.melhor(Mc, 1 - j, 1.2, false);
 };
 /* planejador em pedaços (gerador): cada yield = ~1 simulação. Termina devolvendo { ang, pow, fx, tipo } (sem o erro da mão). */
 AI.planner = function* (M, lv) {
-  lv = Object.assign({}, AI.base, lv || {}); lv.pensa = Math.max(3, lv.pensa | 0); const j = M.vez, c = M.S.balls[0], T = M.T, pre = M.regra.antes(M, j);
+  lv = Object.assign({}, AI.base, lv || {}); lv.pensa = Math.max(3, lv.pensa | 0); lv.plan = lv.erro * lv.confia; const j = M.vez, c = M.S.balls[0], T = M.T, pre = M.regra.antes(M, j);
   if (M.quebra) { const f = T.foot; return { ang: Math.atan2(f.y - c.y, f.x - c.x) + (M.rng() - .5) * .012, pow: .96, fx: { f: .2, s: 0 }, tipo: 'quebra' }; }
   let best = null; const consider = (o) => { if (!best || o.v > best.v) best = o; };
-  const cs = AI.cands(M, j, pre.legal, lv.erro).slice(0, lv.pensa); yield;
+  const cs = AI.cands(M, j, pre.legal, lv.plan).slice(0, lv.pensa); yield;
   /* 1) tacadas de encaçapar: força e efeito simulados; valor esperado = chance × (resultado simulado) + (1 − chance) × (erro: o rival joga) */
   for (const cd of cs) {
     const need = clamp(.16 + (cd.d1 + cd.L * 1.6 / Math.max(.25, Math.cos(cd.cut))) / 520, .18, .8);
@@ -905,6 +905,23 @@ K.turno = (M, r) => {
   const c = M.S.balls[0]; if (c.in || r.naMao) { c.vx = c.vy = 0; const sp = PL.spotNear(M.S, M.T, M.T.head.x, M.T.head.y); c.x = sp.x; c.y = sp.y; c.in = false; c.out = false; return 'mao'; }
   return 'mira';
 };
+
+/*==ENGINE:dificuldade==  Dificuldade da campanha (pedido do Pedro, 2026-11-21): escolhida no início de cada campanha e guardada no save. Só vale nas partidas da campanha (cfg.planeta).
+ * erro/pensa/confia multiplicam o nível do rival (menos erro = mira melhor; mais candidatos = escolhe melhor; confia < 1 = arrisca tacadas além da própria mão e erra mais)
+ * · tempo multiplica o relógio · premio multiplica os créditos. Fica separado das cenas para o teste de IA (tools/ia-check.js) rodar no Node.
+ * 0.3.1: respiro = amplitude (graus) da respiração da mira: leve no Normal, mais presente no Difícil e no Desafio.
+ * 0.3.0: todo nível joga sério (a IA pensa igual); a dificuldade muda a MÃO dos rivais e a LINHA DE MIRA do jogador (guia: ver K.guia em 09-match).
+ * 0.3.3 (pedido do Pedro: "o bot no normal tá muito difícil: encaçapou 4, 5 seguidas; tem que ser gradual"): o NORMAL ficou bem mais brando e a dificuldade sobe aos poucos
+ *   de rival em rival. Erro de mão no Normal = erro-base do rival × 6,5: ZYX 2,9° · GLUB 2,5° · ORION 2,1° · PATROC-1 1,7° · APRESENTADORA 1,3° (antes 0,45 a 0,2°), pensando em
+ *   menos jogadas (×0,8) e com confia 0,6: o rival tenta tacadas que a própria mão não sustenta, então erra como gente (sem sequências de 4 bolas na ZYX; um jogador médio,
+ *   σ 1,5°, vence a ZYX ~9 vezes em 10). Difícil e Desafio ficam como estavam (rivais de mão firme, confia 1). `npm run qa:ia` trava essa escada. */
+K.TEMPO_BASE = 32;   // 0.3.3: relógio POR TACADA (não há limite de partida). Base 25 → 32 s (+28%); o treino TEMPO soma 6 s por nível e cada dificuldade multiplica (Normal 32 s · Difícil 32 s · Desafio 24 s; antes 25 · 25 · 19)
+K.DIFS = { normal: { nome: 'NORMAL', desc: 'Linha de mira completa. Rivais mais calmos: erram mais no começo e apertam aos poucos.', erro: 6.5, pensa: .8, confia: .6, tempo: 1, premio: 1, guia: 2, respiro: .3 },
+  dificil: { nome: 'DIFÍCIL', desc: 'Linha completa. Rivais de mão firme. Prêmios 30% maiores.', erro: .72, pensa: 1.3, confia: 1, tempo: 1, premio: 1.3, guia: 2, respiro: .5 },
+  desafio: { nome: 'DESAFIO INTERGALÁCTICO', desc: 'Linha curta: o caminho das bolas se compra. Rivais quase perfeitos. Prêmios +70%.', erro: .5, pensa: 1.6, confia: 1, tempo: .75, premio: 1.7, guia: 0, respiro: .8 } };
+K.dif = () => K.DIFS[(SAVE.game && SAVE.game.dif) || 'normal'] || K.DIFS.normal;
+K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: .4, pensa: 5 }; if (!cfg || !cfg.planeta) return n; const d = K.dif();
+  return Object.assign({}, n, { erro: n.erro * d.erro, pensa: Math.max(1, Math.round(n.pensa * d.pensa)), confia: (n.confia === undefined ? 1 : n.confia) * (d.confia === undefined ? 1 : d.confia) }); };
 
 /*==ENGINE:ui==  interface em canvas (tudo no framebuffer, nada de DOM por cima): botões com foco por teclado/gamepad (regra 32), controle deslizante próprio
  * (lição 18: nada de <input type=range>), janela de confirmação para gastar recurso (lição 24), avisos, ícone de tela cheia (regra 33)
@@ -1059,7 +1076,7 @@ K.defScene('partida', {
     regra.setup(M); Object.assign(MV, tableView(T)); M.art = K.tableArt(T, MV.s * 2); M.br = {}; M.bh = {}; M.rp = PL.R * MV.s; M.roll = {};
     for (let i = 0; i <= 15; i++) { M.br[i] = K.ballArt(i, M.rp * 2, K.v.HK / 2); M.bh[i] = K.ballArt(i, HUDR * 2, K.v.HK / 2); }   // bolas do HUD: mesma arte lisa da mesa (0.3.1), desenhadas na camada hi-res
     M.ang = Math.atan2(T.foot.y - T.head.y, T.foot.x - T.head.x); M.guia = K.guia(M); M.tacoRival = K.cueDoRival(rival.id);
-    M.tempoMax = Math.round((25 + 6 * (up.tempo || 0)) * (cfg.planeta ? K.dif().tempo : 1)); M.clock = M.tempoMax; M.vez = cfg.comeca === 1 ? 1 : 0;
+    M.tempoMax = Math.round((K.TEMPO_BASE + 6 * (up.tempo || 0)) * (cfg.planeta ? K.dif().tempo : 1)); M.clock = M.tempoMax; M.vez = cfg.comeca === 1 ? 1 : 0;
     if (M.vez === 1) this.cpuStart(M);
     this.say(M, 'inicio');
     // botões de toque (só aparecem no toque) — à direita, longe das bordas (regra 22) e sem sobrepor (regra 24)
@@ -1499,15 +1516,7 @@ K.drawCue = (h, x0, y0, dx, dy, len, taco, sc) => {
 /*==ENGINE:scenes==  cenas padrão (o time sobrescreve com K.defScene do mesmo nome): titulo · menu · mapa · planeta · historia · loja · opcoes · creditos · som · resultado.
  * Campanha: SAVE.game = { creditos, vencidas: {partidaId: 1}, up: {mira, tempo, calma}, tacos: {id: 1}, taco, planeta }. Tacos dos rivais: 09b-tacos.js (liberados ao vencer o rival).
  * Planeta (K.defPlanet): { nome, ordem, emBreve? (aparece trancado com 'EM BREVE'), mapa: {x, y, cor}, regra?, musica?, fundo(g,t)?, historia: {chegada, saida}, partidas: [{ id, mesa, rival, premio }] } */
-/* Dificuldade da campanha (pedido do Pedro, 2026-11-21): escolhida no início de cada campanha e guardada no save. Só vale nas partidas da campanha (cfg.planeta).
- * erro/pensa multiplicam o nível do rival (menos erro = mira melhor; mais candidatos = escolhe melhor) · tempo multiplica o relógio · premio multiplica os créditos. */
-/* 0.3.1: respiro = amplitude (graus) da respiração da mira: leve no Normal, mais presente no Difícil e no Desafio. */
-/* 0.3.0: todo nível joga sério (a IA pensa igual); a dificuldade muda a MÃO dos rivais e a LINHA DE MIRA do jogador (guia: ver K.guia em 09-match). */
-K.DIFS = { normal: { nome: 'NORMAL', desc: 'Linha de mira completa. Rivais espertos e sérios.', erro: 1, pensa: 1, tempo: 1, premio: 1, guia: 2, respiro: .3 },
-  dificil: { nome: 'DIFÍCIL', desc: 'Linha completa. Rivais de mão firme. Prêmios 30% maiores.', erro: .72, pensa: 1.3, tempo: 1, premio: 1.3, guia: 2, respiro: .5 },
-  desafio: { nome: 'DESAFIO INTERGALÁCTICO', desc: 'Linha curta: o caminho das bolas se compra. Rivais quase perfeitos. Prêmios +70%.', erro: .5, pensa: 1.6, tempo: .75, premio: 1.7, guia: 0, respiro: .8 } };
-K.dif = () => K.DIFS[(SAVE.game && SAVE.game.dif) || 'normal'] || K.DIFS.normal;
-K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: .4, pensa: 5 }; if (!cfg || !cfg.planeta) return n; const d = K.dif(); return Object.assign({}, n, { erro: n.erro * d.erro, pensa: Math.max(1, Math.round(n.pensa * d.pensa)) }); };
+/* Dificuldade (K.DIFS, K.dif, K.rivalNivel, K.TEMPO_BASE): src/engine/07b-dificuldade.js (separado para o teste de IA rodar no Node). */
 K.newGame = (dif) => { SAVE.game = { dif: K.DIFS[dif] ? dif : 'normal', creditos: 0, vencidas: {}, up: { mira: 0, tempo: 0, calma: 0 }, tacos: { padrao: 1 }, taco: 'padrao', planeta: null }; K.persist(); };
 K.planets = () => Object.values(REG.planet).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
 K.planetOpen = pl => { if (pl.emBreve) return false; const L = K.planets(), i = L.indexOf(pl); return i <= 0 || L[i - 1].partidas.every(p => SAVE.game && SAVE.game.vencidas[p.id]); };
@@ -2048,8 +2057,11 @@ K.defStory('intro', { musica: 'abertura', pages: [
 K.defStory('terra_chegada', { pages: [
   { face: 'narrador', who: 'NARRADOR', text: 'Rio Branco, Acre, planeta Terra! Sim, o Acre existe. A nave da produção pousou do lado da rodoviária. Ninguém reclamou. Ainda.' },
   { face: 'zyx', who: 'NARRADOR', text: 'Conheça a concorrência. *ZYX*, influencer marciana: 40 milhões de seguidores e zero noção de espaço pessoal.' },
-  { face: 'glub', who: 'NARRADOR', text: '*GLUB*, o alien do interior: anfíbio, gente boa e perigoso na lagoa. E *VELHO ORION*, ex-campeão. Ele conta a história toda vez.' },
-  { face: 'patroc', who: 'NARRADOR', text: '*PATROC-1*, a IA do patrocinador, cobra por tacada. E no fim a *APRESENTADORA*: sorri pra câmera e te derruba por dentro.' },
+  { face: 'glub', who: 'NARRADOR', text: '*GLUB*, o alien do interior: anfíbio, gente boa e perigoso na lagoa. Ele diz que joga de ouvido. É sorte de sapo.' },
+  { face: 'orion', who: 'NARRADOR', text: '*VELHO ORION*, ex-campeão decadente. Ele conta a história do título toda vez. Todinha. Com as costas doendo.' },
+  { face: 'patroc', who: 'NARRADOR', text: '*PATROC-1*, a IA do patrocinador. Cobra por tacada e transforma até o seu erro em anúncio.' },
+  { face: 'apresentadora', who: 'NARRADOR', text: 'E na final, a *APRESENTADORA*: a diva do programa. Sorri pra câmera, domina o estúdio e te derruba por dentro.' },
+  { face: 'apresentadora', who: 'APRESENTADORA', text: 'Nos vemos na final, humano. Capriche no sorriso, a câmera 2 pega o seu lado ruim.' },
   { face: 'heroi', who: 'VOCÊ', text: 'Cinco adversários e nenhum é humano. Perfeito. Tudo normal por aqui.' },
 ] });
 K.defStory('terra_saida', { pages: [
@@ -2305,7 +2317,7 @@ const Zlock = () => Zget('lock', () => Zoutline(Zbm(['..ccccc..', '.cc...cc.', '
 const Zstar = () => Zget('star', () => Zoutline(Zbm(['....y....', '...yyy...', '...yyy...', 'yyyyyyyyy', '.yyyyyyy.', '..yyyyy..', '..yyyyy..', '.yyy.yyy.', '.yy...yy.'], { y: '#FFC83D' }), '#080B1C'));
 
 /* ====================================================================== LOGO */
-const ZLH = 40, ZT = 8, ZLW = 28, ZGAP = 4, ZPAD = 8;
+const ZLH = 40, ZT = 8, ZLW = 28, ZGAP = 4, ZPAD = 8, ZSUB = 28;   // ZSUB = altura do box do subtítulo
 const ZLET = {
   S: { w: ZLW, r: [[0, 0, ZLW, ZT], [0, 0, ZT, 24], [0, 16, ZLW, ZT], [ZLW - ZT, 16, ZT, 24], [0, ZLH - ZT, ZLW, ZT], [ZLW - ZT, 0, ZT, 12], [0, 28, ZT, 12]], cut: { tl: 5, tr: 5, bl: 5, br: 5 } },
   I: { w: 16, r: [[0, 0, 16, ZT], [4, 0, 8, ZLH], [0, ZLH - ZT, 16, ZT]], cut: {} },
@@ -2392,7 +2404,7 @@ K.defScene('titulo', {
   enter() { this.on = false; K.music('abertura'); UI.fsIcon(); },
   start() { if (this.on) return; this.on = true; K.sfx('ui_ok'); this.menu(); },
   menu() {
-    const W = Zw(), bw = 160, x = (W - bw) / 2; let y = 92;
+    const W = Zw(), bw = 160, x = (W - bw) / 2; let y = 96;
     const b = (label, on, c) => { UI.button({ x, y, w: bw, h: 18, label, on, c }); y += 22; };
     if (SAVE.game) b('CONTINUAR', () => K.go('mapa'), P.lime);
     b(SAVE.game ? 'NOVO JOGO' : 'COMEÇAR', () => { if (SAVE.game) UI.confirm({ titulo: 'NOVO JOGO?', texto: 'O progresso da campanha atual será apagado. As opções ficam.', ok: 'COMEÇAR', on: () => { K.newGame(); K.go('dificuldade'); } }); else K.go('dificuldade'); }, SAVE.game ? null : P.lime);
@@ -2412,9 +2424,9 @@ K.defScene('titulo', {
     const wx = Math.round((W - (L.tw + 8 + 58)) / 2) - ZPAD, wy = 6;   // palavra + planeta centralizados juntos
     ZdrawLogo(g, wx, wy, t);
     ZdrawBallPlanet(g, wx + ZPAD + L.tw + 8 + 29, wy + ZPAD + ZLH / 2 + 1, t);
-    const rw = L.tw + 4, rx = wx + ZPAD - 2, ry = wy + ZPAD + ZLH + 10;   // faixa do subtítulo
-    K.panel(g, rx, ry, rw, 20, { line: P.line, line2: P.line2, bg: P.night, a: 1 });
-    K.txt(g, 'INTERGALÁCTICA', rx + rw / 2, ry + 3, { al: 'c', c: '#F4F8FF', s: 2, o: '#1C8FB8' });
+    const rw = L.tw + 4, rx = wx + ZPAD - 2, ry = wy + ZPAD + ZLH + 8;   // faixa do subtítulo
+    K.panel(g, rx, ry, rw, ZSUB, { line: P.line, line2: P.line2, bg: P.night, a: 1 });   // 0.3.3: box mais alto: o acento do Á e as letras ficam DENTRO, centrados
+    K.txt(g, 'INTERGALÁCTICA', rx + rw / 2, ry + 4, { al: 'c', c: '#F4F8FF', s: 2, o: '#1C8FB8' });
     if (!this.on) {
       K.txt(g, '★ GALÁXIA DE TACO · TEMPORADA 1 ★', W / 2, 124, { al: 'c', c: P.gold });
       if ((t * 2 | 0) % 2) { K.panel(g, W / 2 - 66, 140, 132, 16, { line: P.lime, line2: P.lime2, a: 1 }); K.txt(g, K.input.last === 'touch' || navigator.maxTouchPoints > 0 ? 'TOQUE PARA COMEÇAR' : 'APERTE ENTER', W / 2, 144, { al: 'c', c: P.white }); }
