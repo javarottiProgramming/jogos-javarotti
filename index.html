@@ -316,7 +316,7 @@
       <article class="game sinuca">
         <button class="poster" type="button" data-play="sinuca" aria-label="Jogar Sinuca Intergaláctica">
           <img src="assets/sinuca.jpg" width="960" height="540" alt="Tela inicial da Sinuca Intergaláctica: logo cromado e dourado com uma bola 8 em órbita, sobre um chão de pano de sinuca em perspectiva no espaço">
-          <span class="ver" aria-hidden="true">v0.4.0</span>
+          <span class="ver" aria-hidden="true">v0.4.1</span>
         </button>
         <h2>Sinuca Intergaláctica</h2>
         <p>Sinuca de 16 bits com cara de Super Nintendo. Você é o "humano exótico" de um reality show galáctico: 5 partidas na Terra em mesas malucas (hangar, mesa empenada, mapa do Brasil, controle de videogame e disco voador), 5 rivais, três níveis de dificuldade e um taco colecionável para cada rival, que vai para a loja quando você o vence. A loja tem abas (treino e tacos, com as coleções padrão e campeões). Versão MVP: os outros planetas vêm depois.</p>
@@ -461,7 +461,7 @@ const GAMES = {
   nacar:   { title: 'Nácar',                   path: 'jogos/nacar/', v: '9.2.72' },
   'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/', v: '1.3.5' },
   pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/', v: '1.1.7' },
-  sinuca:  { title: 'Sinuca Intergaláctica',   path: 'jogos/sinuca/', v: '0.4.0' },
+  sinuca:  { title: 'Sinuca Intergaláctica',   path: 'jogos/sinuca/', v: '0.4.1' },
   kuku:    { title: 'Kuku e a Semente do Sol', path: 'jogos/kuku/', v: '2.9' },
   'javas-brick':  { title: "Java's Brick",      path: 'jogos/javas-brick/', v: '1.0.21' }
 };
@@ -484,6 +484,7 @@ const HIST = {
     ['6.5', '2026-10-19', 'O jogo chega ao repositório: Nácar em nanquim, esqueleto articulado, os 2 primeiros capítulos e os primeiros chefes.']
   ],
   sinuca: [
+    ['0.4.1', '2026-11-22T18:40', 'O jogo agora ocupa a tela inteira do celular em tela cheia, sem faixas pretas: a largura acompanha a tela. Tocar fora da área do jogo não faz mais nada (o canto do dedo não gira mais o taco ao carregar a força), e a barra de força e os botões da direita ficam centrados em volta da mesa; tocar na folga de fora deles faz a mesma função (força à esquerda, ajuste fino à direita).'],
     ['0.4.0', '2026-11-22T02:46', 'Loja nova, com abas: TREINO e TACOS. Dentro de TACOS ficam as coleções, PADRÃO (taco de bar, Cometa e Quasar) e CAMPEÕES (o taco de cada personagem da Terra; cada planeta novo terá a sua coleção). As abas e os cartões são fáceis de tocar no celular, Q e E trocam de aba no teclado e o botão VER NA LOJA, depois de vencer um rival, abre direto no taco novo. Corrigido: o taco de bar não pede mais compra ao voltar para ele. O seu progresso salvo continua igual.'],
     ['0.3.6', '2026-11-22T02:24', 'Toque no celular refeito: a barra F ganhou uma zona de toque bem maior (de cima a baixo da calha) e prioridade sobre o taco, então deslizar nela não gira mais a mira. Dá para tocar no próprio taco e puxar para trás para carregar a força, e com a força carregada a mira só afina e um toque rápido não reaponta o taco.'],
     ['0.3.5', '2026-11-22T01:52', 'A mesa empenada da 2ª partida virou um pano em ondas: as bolas não escorrem mais para o canto direito. Telas e textos revisados (loja, HUD, pausa, créditos) e a trilha da derrota não toca mais por cima da música seguinte.'],
