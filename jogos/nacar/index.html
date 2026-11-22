@@ -177,7 +177,7 @@ function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function rnd(a,b){ return a + Math.random()*(b-a); }
 function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function sgn(v){ return v<0?-1:1; }
-const BUILD = '9.2.71';
+const BUILD = '9.2.72';
 const BUILD_LOG = [
   ['1 e 2',  'Nácar em formas geométricas — rejeitado'],
   ['3 (1ª)', 'marionete recortada do desenho original'],
@@ -323,6 +323,7 @@ const BUILD_LOG = [
   ['9.2.33', 'URGENTE: tela preta no ECO (QUAL 2–3, desde 9.2.29): a camada #hc do HUD herdava o fundo escuro do canvas e cobria o jogo inteiro — agora é transparente'],
   ['9.2.34', 'VOLTAR do menu GOLPES voltou a funcionar (o item ▶ VER escondido espremia o espaçamento da lista e a área de toque ficava com altura 0); HISTÓRICO atualizado até a 9.2.34 e de volta a 3 páginas (30 versões, uma linha cada); medidor de FPS aparece em todas as telas, menus inclusive; tools/voltar_check.mjs confere o VOLTAR de todas as telas com toque de verdade'],
   ['9.2.35', 'prévia dos golpes, bloco 2 (ar): CORTE AÉREO e CORTE REVERSO no Olho Pendente, MERGULHO na Boca-de-Chão (brota com aviso, bote e mordida) e QUEDA GIRATÓRIA no Fôlego, com salto, ar e pouso pelas regras do 08_hero.js (gravidades, câmera lenta, tremor e hitstop do pouso); rubrica R17 (altura e pouso); golpes_check cobre as 10 prévias'],
+  ['9.2.72', 'DESTRAVAR TUDO segue o modo DEV: o botão do mapa só aparece/recebe toque com settings.dev; libera também a transformação (progress.trans) e guarda o save de verdade em progress.real; desligar o DEV (5 toques nos créditos) ou abrir o jogo com ele desligado chama devRestaurar() e o mapa volta à fase, ao treino e à transformação do save (sem transformação na história, volta sem ela); HIST_JOGO 9.2.72'],
   ['9.2.71', 'TELA CHEIA sem chuvisco: em tela cheia o canvas é recriado sem desynchronized (o atributo piscava pontos no Chrome do Android, já visto na 9.2.1) e volta a ele ao sair, com os ouvintes religados (cvOn/cvContexto); dentro de um quadro (portfólio) fica sempre sem o atributo; HISTÓRICO mede o texto no tamanho em que desenha (15 px; media em 14 e desenhava em 16, a 9.2.70 invadia a versão de baixo); menu DEV escondido: o ícone </> só aparece depois de 5 toques seguidos em Pedro Javarotti nos créditos (salvo em settings.dev; mais 5 escondem); tools/tela_check.mjs'],
   ['9.2.70', 'etapa 0 do fechamento (conformidade com o JGK): o build acusa nome de topo repetido (aWisp do arremedo.js estava declarado 2×; a 1ª, morta, saiu); o som para também no alt-tab/troca de app/página guardada (blur, pagehide) e volta com o foco; a música olha 0,45 s à frente, pula as notas perdidas depois de quadro travado (sem rajada) e cada música toca num ganho próprio que some em 0,1 s na troca; canvas perdido (contextlost) ou página devolvida do cache recarrega o jogo'],
   ['9.2.69', 'limpeza L6: menu separado em dado, layout, desenho e toque; flags soltas viraram kind; jogo igual (entrada que faltava no registro)'],
@@ -15762,6 +15763,15 @@ const FD = 'Anton, Impact, "Arial Narrow", sans-serif';
 const FU = '"Barlow Condensed", "Arial Narrow", sans-serif';
 const progress = Object.assign({ stage:0, best:0, trained:false, ranks:[], bicho:{}, surv:{ round:0, score:0 } }, store.get('nacar3.progress', {}));
 function saveProgress(){ store.set('nacar3.progress', progress); }
+/* DESTRAVAR TUDO (TEMP-TESTE, 9.2.72) só existe com o modo DEV ligado e NÃO apaga o save: antes de liberar guarda o progresso de verdade em progress.real.
+   Desligar o DEV (ou abrir o jogo com ele desligado) devolve fase, treino e transformação do jogador como estavam: sem passar pela transformação na história, volta sem ela. */
+function devRestaurar(){
+  const r = progress.real; if (!r) return false;
+  progress.stage = r.stage; progress.trained = r.trained;
+  if (r.trans) progress.trans = true; else delete progress.trans;
+  delete progress.real; saveProgress(); return true;
+}
+if (!settings.dev) devRestaurar();
 const isTouch = ('ontouchstart' in window) || (window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 
 /* texto com espaçamento entre letras.
@@ -17124,9 +17134,12 @@ function chapLast(c){ return (CHAPTERS[c + 1] ? Math.min(STAGES.length, CHAPTERS
 function rankCor(r){ return r === 'S' ? BLOOD : (r === 'A' ? BONE : (r === 'B' ? '#C9C2B5' : '#8C877F')); }
 function stageBoss(i){ return CHAPTERS[chapOf(i)].boss === i; }
 /* TEMP-TESTE (remover antes de publicar): botão "DESTRAVAR TUDO" na tela do mapa.
-   Três pontos: esta função, o item em openSelect (tempUnlock) e o botão no fim de drawSelect. Não mexe em progress.trans. */
+   Três pontos: esta função, o item em openSelect (tempUnlock) e o botão no fim de drawSelect. Só com o modo DEV ligado (settings.dev);
+   libera todas as fases, o treino e a transformação (progress.trans), guardando o save de verdade em progress.real (devRestaurar, hud_e_toque.js). */
 function tempUnlockAll(){
-  progress.stage = Math.max(progress.stage, STAGES.length - 1); progress.trained = true; saveProgress();
+  if (!settings.dev) return;
+  if (!progress.real) progress.real = { stage:progress.stage, trained:!!progress.trained, trans:!!progress.trans };
+  progress.stage = Math.max(progress.stage, STAGES.length - 1); progress.trained = true; progress.trans = true; saveProgress();
   G.tempUnlockT = 1.8; G.selStage = Math.min(G.selStage || 0, STAGES.length - 1);
 }
 /* nome da parada: quebra em duas linhas quando não cabe entre a vizinha da esquerda e a da direita */
@@ -17156,7 +17169,7 @@ function openSelect(){
     else { AU.play('ui'); G.lockNote = 1.2; }
   } });
   items.push({ label:'VOLTAR', act:()=>toMenu('title') });
-  items.push({ tempUnlock:true, act:tempUnlockAll });   // TEMP-TESTE: remover junto com tempUnlockAll e o botão em drawSelect
+  items.push({ tempUnlock:true, get nav(){ return !!settings.dev; }, act:tempUnlockAll });   // TEMP-TESTE: remover junto com tempUnlockAll e o botão em drawSelect
   for (let c=0;c<CHAPTERS.length;c++){
     if (CHAPTERS[c].from >= STAGES.length) break;
     items.push({ chap:c, act:()=>{                       // aba do capítulo: vai para a fase mais avançada liberada dele
@@ -17275,9 +17288,10 @@ function drawSelect(g, dt){
   g.restore();
   menu.rects.push({ x:56, y:VH - 62, w:130, h:42 });
   if (G.lockNote > 0) T(g, 'AINDA TRANCADA', bx + bw/2, by - 14, { size:13, w:'700', sp:3, align:'center', col:BLOOD });
-  // TEMP-TESTE: botão de destravar tudo (remover depois)
+  // TEMP-TESTE: botão de destravar tudo (remover depois); só aparece com o modo DEV ligado, senão mantém o índice do menu.rects sem receber toque
   G.tempUnlockT = Math.max(0, (G.tempUnlockT||0) - dt);
-  { const ux = 660, uy = 36, uw = 254, uh = 34, selU = menu.sel === STAGES.length + 2, ok = G.tempUnlockT > 0;
+  if (!settings.dev) menu.rects.push(menuOffRect());
+  else { const ux = 660, uy = 36, uw = 254, uh = 34, selU = menu.sel === STAGES.length + 2, ok = G.tempUnlockT > 0;
     g.save(); g.globalAlpha = clamp(menu.t*4, 0, 1)*(selU ? 1 : 0.8);
     g.setLineDash([6, 5]); g.strokeStyle = selU || ok ? BONE : '#8C877F'; g.lineWidth = 2; para(g, ux, uy, uw, uh, 10, ok ? 'rgba(231,225,214,0.16)' : 'rgba(12,11,15,0.5)', true); g.setLineDash([]);
     T(g, 'TESTE', ux + 24, uy + 21, { size:9, w:'700', sp:1, align:'center', col:BLOOD });
@@ -17309,6 +17323,7 @@ function creditsSecret(dt){
     G.devTaps = now - (G.devTapT || -9) < 1.2 ? (G.devTaps || 0) + 1 : 1; G.devTapT = now;
     if (G.devTaps >= 5){
       G.devTaps = 0; settings.dev = !settings.dev; saveSettings(); AU.play(settings.dev ? 'uiOk' : 'ui');
+      if (!settings.dev) devRestaurar();                  /* DEV desligado: o mapa volta ao save de verdade (fase, treino e transformação) */
       G.devMsg = { t:2.6, txt: settings.dev ? 'MODO DEV DESBLOQUEADO' : 'MODO DEV ESCONDIDO' };
     }
   }
@@ -17323,6 +17338,7 @@ function openCredits(){
 /* histórico para o jogador: uma linha por versão, 10 por página (3 páginas), sem jargão (o BUILD_LOG técnico continua em nucleo.js).
    A cada rodada entregue: acrescentar a versão nova NO TOPO (regra no CLAUDE.md). */
 const HIST_JOGO = [
+  ['9.2.72', 'o atalho DESTRAVAR TUDO do mapa só aparece com o modo DEV ligado, libera também a transformação e, ao desligar o DEV, o mapa volta ao seu save'],
   ['9.2.71', 'tela cheia sem o chuvisco piscando; histórico sem texto encavalado'],
   ['9.2.70', 'o som para quando você sai do jogo e a música não engasga nem atropela na troca de tela; tela perdida em segundo plano recarrega'],
   ['9.2.69', 'limpeza interna: menus separados por partes; jogo igual'],
