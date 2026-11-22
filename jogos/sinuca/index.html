@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.3.6</title>
+<title>Sinuca Intergaláctica · v0.4.0</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.3.6', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.4.0', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -931,7 +931,7 @@ K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: .4, pensa: 5 }; if (
 const UI = K.ui = { btns: [], focus: -1, toasts: [], modal: null, st: null, hot: null, drag: null };
 UI.init = () => {};
 UI.clear = () => { UI.btns = []; UI.focus = -1; UI.modal = null; UI.hot = null; UI.drag = null; };
-/* K.ui.button({ x, y, w, h, label, on(), dis: 'motivo' | fn → motivo, hidden: fn, small, c, id }) — fica até a cena trocar */
+/* K.ui.button({ x, y, w, h, label, on(), dis: 'motivo' | fn → motivo, hidden: fn, small, c, id, hit: {x,y,w,h} (zona de toque maior que o desenho), noTip (não escreve o motivo embaixo do botão trancado: botão colado na borda de baixo) }) — fica até a cena trocar */
 UI.button = o => { const b = Object.assign({ w: 120, h: 18, kind: 'btn' }, o); UI.btns.push(b); return b; };
 /* K.ui.slider({ x, y, w, label, get(), set(v), min, max, step, fmt(v) }) — arrastar com mouse/toque (captura do ponteiro) ou ←/→ com foco */
 UI.slider = o => UI.button(Object.assign({ kind: 'slider', h: 18, min: 0, max: 100, step: 10 }, o));
@@ -939,7 +939,8 @@ UI.slider = o => UI.button(Object.assign({ kind: 'slider', h: 18, min: 0, max: 1
 UI.fsIcon = () => UI.button({ kind: 'fs', x: K.v.W - 20, y: 4, w: 16, h: 14, hidden: () => K.isFull(), on: () => K.toggleFull(), nonav: true });
 const vis = b => !(b.hidden && b.hidden());
 const disOf = b => typeof b.dis === 'function' ? b.dis() : b.dis;
-const inside = (b, p) => p.x >= b.x && p.y >= b.y && p.x < b.x + b.w && p.y < b.y + b.h;
+/* `hit` (opcional, 0.4.0): zona de toque maior que o desenho (lição 82); no desenho e no foco vale sempre x/y/w/h */
+const inside = (b, p) => { const r = b.hit || b; return p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h; };
 UI.list = () => UI.modal ? UI.modal.btns : UI.btns.filter(b => vis(b) && !b.nonav);
 function act(b) { if (!b) return; const d = disOf(b); if (d) { K.sfx('erro'); UI.toast(d, P.pink, 1.6); return; } if (b.kind === 'slider') return; K.sfx(b.snd || 'ui_ok'); try { b.on && b.on(); } catch (e) { console.error(e); K._err = K._err || e; } }
 /* foco pela POSIÇÃO na tela: procura o botão mais próximo na direção */
@@ -1022,7 +1023,7 @@ function drawBtn(g, b, foc) {
   K.panel(g, b.x, b.y + (pr ? 1 : 0), b.w, b.h, { bg: foc ? P.panel2 : P.panel, line: d ? P.dim : foc ? P.lime : P.line, line2: d ? P.ink : foc ? P.lime2 : P.line2 });
   K.txt(g, b.label, b.x + b.w / 2, b.y + (b.h - 10) / 2 + (pr ? 1 : 0) + 1, { al: 'c', c: d ? P.dim : foc ? P.white : (b.c || P.chrome), s: b.s || 1 });
   if (foc && !UI.modal) { const a = (K.time * 4 | 0) % 2; if (!b.noArrow) K.txt(g, '→', Math.max(1, b.x - 8 - a), b.y + (b.h - 10) / 2 + 1, { c: P.lime });   // 0.3.5: a seta nunca sai da tela (botão encostado na borda)
-    if (d) { const w = K.tw(d), cx = clamp(b.x + b.w / 2, w / 2 + 3, K.v.W - w / 2 - 3); K.txt(g, d, cx, b.y + b.h + 2, { al: 'c', c: P.pink }); } }   // e o motivo do botão trancado também não (ex.: "Última página" no canto direito)
+    if (d && !b.noTip) { const w = K.tw(d), cx = clamp(b.x + b.w / 2, w / 2 + 3, K.v.W - w / 2 - 3); K.txt(g, d, cx, b.y + b.h + 2, { al: 'c', c: P.pink }); } }   // e o motivo do botão trancado também não (ex.: "Última página" no canto direito)
 }
 UI.draw = g => {
   const L = UI.list(); for (const b of UI.btns) if (vis(b)) drawBtn(g, b, !UI.modal && L[UI.focus] === b);
@@ -1478,9 +1479,20 @@ K.cuesPrep = () => {
 };
 K.cueDoRival = id => { K.cuesPrep(); return Object.values(REG.cue).find(c => c.rival === id && c.libera !== undefined) || K.CUE_RIVAL_PADRAO; };
 K.cueLiberado = c => c.libera === undefined || !!(SAVE.game && (SAVE.game.vencidas[c.libera] || (SAVE.game.tacos && SAVE.game.tacos[c.id])));
-/* ordem da loja: o taco de bar, a coleção dos rivais (do planeta 1 em diante) e depois os tacos de loja */
+/* todos os tacos (o taco de bar, a coleção dos campeões do planeta 1 em diante e os tacos de loja): usado pelo resultado e pelos testes */
 K.cuesLista = () => { K.cuesPrep(); const L = Object.values(REG.cue), col = L.filter(c => c.libera !== undefined).sort((a, b) => a.nivel - b.nivel), r = L.filter(c => c.libera === undefined);
   return [...r.filter(c => !c.preco), ...col, ...r.filter(c => c.preco)]; };
+/* COLEÇÕES DA LOJA (0.4.0, pedido do Pedro): a loja tem abas; dentro de TACOS cada coleção é uma sub-aba.
+ *  · PADRÃO: o taco de bar e os tacos de compra livre (os que o conteúdo registra com `preco`, sem `rival`/liberação);
+ *  · uma coleção de CAMPEÕES por planeta aberto (não `emBreve`): o taco de cada personagem da campanha, na ordem das partidas.
+ * Planeta novo = coleção nova, sozinha: basta o planeta existir (K.defPlanet) e os tacos dos rivais dele (K.defCue com `rival`).
+ * { id: 'padrao' | 'campeoes:<planeta>', nome (rótulo da sub-aba), longo (título da lista), planeta?, itens: [taco…] } */
+K.cueColecoes = () => { K.cuesPrep(); const L = Object.values(REG.cue), r = L.filter(c => c.libera === undefined);
+  const out = [{ id: 'padrao', nome: 'PADRÃO', longo: 'TACOS DE COMPRA LIVRE', itens: [...r.filter(c => !c.preco), ...r.filter(c => c.preco)] }];
+  K.planets().filter(pl => !pl.emBreve).forEach(pl => out.push({ id: 'campeoes:' + pl.id, planeta: pl.id, nome: pl.nome, longo: 'CAMPEÕES · ' + pl.nome, itens: L.filter(c => c.libera !== undefined && c.planeta === pl.id).sort((a, b) => a.nivel - b.nivel) }));
+  return out; };
+/* o taco novo da vez: o 1º campeão já liberado (rival vencido) que o jogador ainda não tem (a loja abre direto nele) */
+K.cueNovo = () => { const G = SAVE.game; return G ? K.cuesLista().find(c => c.libera !== undefined && K.cueLiberado(c) && !G.tacos[c.id]) || null : null; };
 
 /* ------------------------------------------------------------------ desenho
  * Motivos: K.cueMotivo('viral', { fundo(c), corpo(c), frente(c), faisca: 'estrela' | 'quadrado' }) — o conteúdo desenha os detalhes de cada rival.
@@ -1613,7 +1625,7 @@ K.defScene('resultado', {
     const pl = REG.planet[cfg.planeta], fim = pl && K.planetDone(pl) && r.venceu && pl.historia && pl.historia.saida && !SAVE.meta.visto[pl.historia.saida];
     UI.button({ x: W_() / 2 - 60, y: 150, w: 120, h: 18, label: r.venceu ? 'CONTINUAR' : 'MENU', on: () => !r.venceu ? K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) : fim ? K.go('historia', { id: pl.historia.saida, depois: 'mapa' }) : K.go(pl ? 'planeta' : 'titulo', pl ? { id: pl.id } : {}) });
     if (!r.venceu) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'REVANCHE', on: () => K.partida(cfg) });
-    if (this.novo) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'VER NA LOJA', c: P.gold, on: () => K.go('loja') });
+    if (this.novo) UI.button({ x: W_() / 2 - 60, y: 172, w: 120, h: 18, label: 'VER NA LOJA', c: P.gold, on: () => K.go('loja', { taco: this.novo.id }) });
     UI.focus = 0; },
   draw(g) { K.drawSpace(g, K.time); const r = this.r, W = W_(), o = this.novo ? -24 : 0; K.txt(g, r.venceu ? 'VITÓRIA' : 'DERROTA', W / 2, 40 + o, { al: 'c', c: r.venceu ? P.lime : P.pink, s: 3 });
     K.txt(g, 'tacadas: ' + r.tacadas + ' · faltas: ' + r.faltas, W / 2, 90 + o, { al: 'c', c: P.white }); if (this.ganho) K.txt(g, '+' + this.ganho + ' ' + K.game.moeda, W / 2, 106 + o, { al: 'c', c: P.gold, s: 2 });
@@ -2606,8 +2618,16 @@ K.defScene('planeta', {
   },
 });
 
-/* ====================================================================== LOJA */
-const ZLJ = { y: 37, p: 51, ph: 50, pw: 110, bw: 56, pag: 3 };   // pag = tacos por página (0.3.2: a coleção dos rivais ocupa 2 páginas)
+/* ====================================================================== LOJA
+ * 0.4.0 (pedido do Pedro): a loja tem ABAS. 1º nível: TREINO e TACOS. Dentro de TACOS, as COLEÇÕES (sub-abas): PADRÃO e uma de CAMPEÕES por planeta (K.cueColecoes, src/engine/09b-tacos.js).
+ * Cada item é uma linha larga (368 px) com 3 por página; a zona de toque da linha e das abas é maior que o desenho (hit, lição 82) e nenhuma zona toca outra.
+ * Teclado/gamepad: ← → ↑ ↓ andam pelo foco (abas incluídas), Q/E (ou X/Y do controle) trocam de aba, VOLTAR sai. O estado é só da cena (o save não muda). */
+const ZLJ = { x: 8, w: 368, bw: 66, bh: 28, pag: 3,
+  tx: 58, ty: 4, th: 14, tw: 66,                // abas de 1º nível (TREINO, TACOS): na faixa do título, ao lado do LOJA
+  sy: 26, sh: 14,                               // sub-abas (coleções), só em TACOS
+  cy: 45,                                       // título da coleção + contador
+  ty0: 28, tp: 52, th_: 48,                     // linhas do TREINO: início, passo, altura
+  ry: 57, rp: 42, rh: 41 };                     // linhas de TACOS
 const ZFX = { mira: 'LINHA MAIS LONGA E MÃO FIRME', tempo: '+6 SEGUNDOS EM CADA TACADA', calma: 'MÃO MAIS FIRME E RESPIRO LONGO' };
 function Zicon(g, id, x, y, c) {   // ícones 16×16 dos treinos, desenhados com primitivas
   K.disc(g, x + 8, y + 8, 8, P.ink); K.disc(g, x + 8, y + 8, 7, P.night);
@@ -2624,52 +2644,76 @@ function Zfx(c) {   // uma linha por atributo (cabe nas 3 linhas do cartão)
 const Zsil = c => Object.assign({}, c, { sil: true, cor: '#27315F', ponta: '#3A4780', cor2: '#27315F', cabo: undefined });   // taco trancado: só a silhueta escura (o tamanho já mostra o quanto ele é especial)
 const Zrival = c => REG.rival[c.rival] || { nome: c.rival };
 const Zmotivo = c => { const pl = REG.planet[c.planeta], k = c.tier, p = pl && pl.partidas[k]; return 'Vença ' + Zrival(c).nome + (p ? ' (' + pl.nome + ', partida ' + (k + 1) + ')' : '') + ' para liberar'; };
+/* zona de toque da aba: o desenho mais uma folga de 2 px em cima e 3 embaixo (sem encostar na aba vizinha nem na linha de baixo) */
+const Zaba = (key, x, y, w, h, label, on, ativa, hit) => UI.button({ key, x, y, w, h, label, c: ativa ? P.gold : P.grey, noArrow: true, hit, on });
 K.defScene('loja', {
-  enter(a) { if (!SAVE.game) K.newGame(); K.music('loja'); const C = K.cuesLista(), G = SAVE.game; a = a || {};
-    const novo = C.findIndex(c => c.libera !== undefined && K.cueLiberado(c) && !G.tacos[c.id]);   // chegou com taco novo liberado: já abre na página dele
-    this.pg = novo >= 0 ? Math.floor(novo / ZLJ.pag) : 0; this.build(); },
+  /* a: { taco: id } (VER NA LOJA do resultado) · { aba: 'treino' | 'tacos', col: id da coleção } · sem nada: abre no taco novo liberado, se houver, senão em TREINO */
+  enter(a) { if (!SAVE.game) K.newGame(); K.music('loja'); a = a || {}; this.aba = 'treino'; this.ci = 0; this.pg = 0;
+    const cs = K.cueColecoes(), alvo = a.taco ? K.cuesLista().find(c => c.id === a.taco) : (a.aba ? null : K.cueNovo());
+    if (alvo) { const i = cs.findIndex(c => c.itens.includes(alvo)); if (i >= 0) { this.aba = 'tacos'; this.ci = i; this.pg = Math.floor(cs[i].itens.indexOf(alvo) / ZLJ.pag); this.foco = 'c:' + alvo.id; } }
+    else if (a.aba === 'tacos') { this.aba = 'tacos'; const i = cs.findIndex(c => c.id === a.col); this.ci = Math.max(0, i); }
+    this.build(this.foco); this.foco = null; },
+  /* abas "planas" para Q/E: TREINO, depois cada coleção de TACOS */
+  abas() { return [{ aba: 'treino' }, ...K.cueColecoes().map((c, i) => ({ aba: 'tacos', ci: i }))]; },
+  vai(aba, ci, keep) { this.aba = aba; if (aba === 'tacos') { this.ci = ci === undefined ? this.ci : ci; } this.pg = 0; K.sfx('ui'); this.build(keep); },
+  key(k) { if (k !== 'calm' && k !== 'spin' || K.ui.modal) return; const L = this.abas(), cur = this.aba === 'treino' ? 0 : 1 + this.ci, n = (cur + (k === 'spin' ? 1 : L.length - 1)) % L.length, t = L[n];
+    this.vai(t.aba, t.ci, t.aba === 'treino' ? 'aba:treino' : L.length > 2 ? 'col:' + K.cueColecoes()[t.ci].id : 'aba:tacos'); },
   build(keep) {
-    UI.clear(); const G = SAVE.game, C = K.cuesLista(), np = Math.ceil(C.length / ZLJ.pag); this.pg = clamp(this.pg | 0, 0, np - 1); this.bt = [];
-    this.rows = C.slice(this.pg * ZLJ.pag, this.pg * ZLJ.pag + ZLJ.pag); this.vis = this.rows.map(c => K.cueLiberado(c) ? c : Zsil(c));
-    const rebuild = k => this.build(k);
-    Object.values(REG.upgrade).forEach((u, i) => { const lv = G.up[u.id] || 0, max = u.precos.length, preco = u.precos[lv], y = ZLJ.y + i * ZLJ.p;
-      this.bt.push(UI.button({ key: 'u:' + u.id, x: 10 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: lv >= max ? 'MÁXIMO' : '◆ ' + preco, c: lv >= max ? P.gold : G.creditos >= preco ? P.lime : P.chrome, dis: () => lv >= max ? 'NÍVEL MÁXIMO' : null,
+    UI.clear(); const G = SAVE.game, cs = K.cueColecoes(), tac = this.aba === 'tacos', rebuild = k => this.build(k), novo = K.cueNovo(), novoCi = novo ? cs.findIndex(c => c.itens.includes(novo)) : -1;
+    this.ci = clamp(this.ci | 0, 0, cs.length - 1); const col = cs[this.ci], itens = tac ? col.itens : [], np = Math.max(1, Math.ceil(itens.length / ZLJ.pag)); this.pg = clamp(this.pg | 0, 0, np - 1); this.np = np; this.col = col;
+    this.rows = tac ? itens.slice(this.pg * ZLJ.pag, this.pg * ZLJ.pag + ZLJ.pag) : []; this.vis = this.rows.map(c => K.cueLiberado(c) ? c : Zsil(c)); this.bt = [];
+    /* ---- abas de 1º nível ---- */
+    const piscar = () => (K.time * 2 | 0) % 2 ? '!' : '·', pisca = (b, fn) => { Object.defineProperty(b, 'label', { get: fn }); return b; };
+    const hitT = (x, w) => ({ x: x - 2, y: 0, w: w + 4, h: ZLJ.sy - 2 });
+    Zaba('aba:treino', ZLJ.tx, ZLJ.ty, ZLJ.tw, ZLJ.th, 'TREINO', () => this.vai('treino', 0, 'aba:treino'), !tac, hitT(ZLJ.tx, ZLJ.tw));
+    pisca(Zaba('aba:tacos', ZLJ.tx + ZLJ.tw + 4, ZLJ.ty, ZLJ.tw, ZLJ.th, '', () => this.vai('tacos', this.ci, 'aba:tacos'), tac, hitT(ZLJ.tx + ZLJ.tw + 4, ZLJ.tw)), () => 'TACOS' + (novo && !tac ? ' ' + piscar() : ''));
+    /* ---- sub-abas: as coleções ---- */
+    if (tac) { const n = cs.length, w = Math.min(88, Math.floor((ZLJ.w - 4 * (n - 1)) / n)), um = cs.filter(c => c.planeta).length === 1;
+      cs.forEach((c, i) => { const x = ZLJ.x + i * (w + 4), rot = c.planeta && um ? 'CAMPEÕES' : c.nome;
+        pisca(Zaba('col:' + c.id, x, ZLJ.sy, w, ZLJ.sh, '', () => this.vai('tacos', i, 'col:' + c.id), i === this.ci, { x: x - 2, y: ZLJ.sy - 2, w: w + 4, h: ZLJ.sh + 6 }), () => rot + (i === novoCi && i !== this.ci ? ' ' + piscar() : '')); }); }
+    /* ---- TREINO: um cartão largo por treino ---- */
+    if (!tac) Object.values(REG.upgrade).forEach((u, i) => { const lv = G.up[u.id] || 0, max = u.precos.length, preco = u.precos[lv], y = ZLJ.ty0 + i * ZLJ.tp, bx = ZLJ.x + ZLJ.w - ZLJ.bw - 6;
+      this.bt.push(UI.button({ key: 'u:' + u.id, x: bx, y: y + (ZLJ.th_ - ZLJ.bh) / 2, w: ZLJ.bw, h: ZLJ.bh, hit: { x: ZLJ.x, y, w: ZLJ.w, h: ZLJ.th_ }, noArrow: true, label: lv >= max ? 'MÁXIMO' : '◆ ' + preco, c: lv >= max ? P.gold : G.creditos >= preco ? P.lime : P.chrome, dis: () => lv >= max ? 'NÍVEL MÁXIMO' : null,
         on: () => UI.confirm({ titulo: u.nome + ' NÍVEL ' + (lv + 1), texto: u.desc + ' Custa ' + preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < preco ? 'Faltam ' + (preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= preco; G.up[u.id] = lv + 1; K.persist(); K.sfx('comprar'); rebuild('u:' + u.id); } }) })); });
-    this.rows.forEach((c, i) => { const lib = K.cueLiberado(c), tem = G.tacos[c.id], eq = G.taco === c.id, y = ZLJ.y + i * ZLJ.p;
-      this.bt.push(UI.button({ key: 'c:' + c.id, x: 198 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: !lib ? 'TRANCADO' : eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: !lib ? P.dim : eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome, dis: !lib ? Zmotivo(c) : null,
+    /* ---- TACOS: uma linha por taco da coleção, 3 por página ---- */
+    this.rows.forEach((c, i) => { const lib = K.cueLiberado(c), tem = G.tacos[c.id] || c.preco === 0, eq = G.taco === c.id, y = ZLJ.ry + i * ZLJ.rp, bx = ZLJ.x + ZLJ.w - ZLJ.bw - 6;   // taco de preço 0 (o de bar) já é seu: trocar para ele não pede compra
+      this.bt.push(UI.button({ key: 'c:' + c.id, x: bx, y: y + (ZLJ.rh - ZLJ.bh) / 2, w: ZLJ.bw, h: ZLJ.bh, hit: { x: ZLJ.x, y, w: ZLJ.w, h: ZLJ.rh }, noArrow: true, label: !lib ? 'TRANCADO' : eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: !lib ? P.dim : eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome, dis: !lib ? Zmotivo(c) : null,
         on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), rebuild('c:' + c.id)) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + (c.preco ? ' ' + Zfx(c).join(', ') + '.' : '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); rebuild('c:' + c.id); } }) })); });
-    if (np > 1) { UI.button({ key: 'pg-', x: 336, y: 21, w: 18, h: 13, label: '←', noArrow: true, dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
-      UI.button({ key: 'pg+', x: 356, y: 21, w: 18, h: 13, label: '→', noArrow: true, dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
-    Zback('mapa'); UI.fsIcon(); const L = UI.list(), k = L.findIndex(b => b.key === keep); UI.focus = k >= 0 ? k : 0;
+    /* ---- páginas (só se a coleção tem mais de 3): embaixo à direita, ao lado do VOLTAR ---- */
+    if (np > 1) { const y = Zh() - 24;
+      UI.button({ key: 'pg-', x: 300, y, w: 22, h: 18, label: '←', noArrow: true, noTip: true, hit: { x: 288, y: y - 4, w: 36, h: 26 }, dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
+      UI.button({ key: 'pg+', x: 354, y, w: 22, h: 18, label: '→', noArrow: true, noTip: true, hit: { x: 338, y: y - 4, w: 38, h: 26 }, dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
+    Zback('mapa'); UI.fsIcon(); const L = UI.list(), k = L.findIndex(b => b.key === keep), p = L.indexOf(this.bt[0]); UI.focus = k >= 0 ? k : p >= 0 ? p : 0;   // sem foco guardado: no 1º item da lista (↑ sobe para as abas)
   },
   back() { K.go('mapa'); },
   draw(g) {
-    const t = K.time, W = Zw(), G = SAVE.game, cur = UI.list()[UI.focus]; Zsky(g, t);
+    const t = K.time, W = Zw(), G = SAVE.game, cur = UI.list()[UI.focus], tac = this.aba === 'tacos'; Zsky(g, t);
     K.txt(g, 'LOJA', 8, 6, { c: P.gold, s: 2 }); const cr = 'CRÉDITOS ◆ ' + G.creditos, w1 = K.tw(cr) + 12; Zchip(g, W - 24 - w1, 4, w1, cr, P.lime);
-    K.txt(g, 'TREINO', 10, 24, { c: P.line }); K.rect(g, 10, 35, 176, 1, P.line2); K.txt(g, 'TACOS', 198, 24, { c: P.line }); K.rect(g, 198, 35, 176, 1, P.line2);
-    const col = K.cuesLista().filter(c => c.libera !== undefined), tem = col.filter(c => G.tacos[c.id]).length, np = Math.ceil(K.cuesLista().length / ZLJ.pag);
-    if (col.length) K.txt(g, 'COLEÇÃO ' + tem + '/' + col.length, 198 + K.tw('TACOS') + 10, 24, { c: tem === col.length ? P.gold : P.grey });
-    if (np > 1) K.txt(g, (this.pg + 1) + '/' + np, 332, 24, { al: 'r', c: P.grey });
-    const U = Object.values(REG.upgrade);
-    U.forEach((u, i) => {
-      const x = 10, y = ZLJ.y + i * ZLJ.p, lv = G.up[u.id] || 0, max = u.precos.length, hot = cur === this.bt[i];
-      K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : P.line, line2: hot ? P.lime2 : P.line2, a: 1 }); Zicon(g, u.id, x + 5, y + 5, P.line);
-      K.txt(g, u.nome, x + 26, y + 2, { c: P.gold }); for (let k = 0; k < max; k++) Zdiamond(g, x + 26 + k * 10, y + 13, k < lv);
-      K.wrap(ZFX[u.id] || (u.desc || '').split('.')[0], ZLJ.pw - 10).slice(0, 2).forEach((l, j) => K.txt(g, l, x + 5, y + 23 + j * 9, { c: P.white }));
-    });
+    /* linha sob as abas, com um trecho dourado sob a aba aberta; a sub-aba aberta ganha o mesmo trecho em verde */
+    K.rect(g, ZLJ.tx - 2, ZLJ.ty + ZLJ.th + 1, ZLJ.w - ZLJ.tx + ZLJ.x + 2, 1, P.line2); K.rect(g, ZLJ.tx + (tac ? ZLJ.tw + 4 : 0), ZLJ.ty + ZLJ.th + 1, ZLJ.tw, 2, P.gold);
+    if (!tac) {
+      Object.values(REG.upgrade).forEach((u, i) => {
+        const x = ZLJ.x, y = ZLJ.ty0 + i * ZLJ.tp, lv = G.up[u.id] || 0, max = u.precos.length, hot = cur === this.bt[i];
+        K.panel(g, x, y, ZLJ.w, ZLJ.th_, { line: hot ? P.lime : P.line, line2: hot ? P.lime2 : P.line2, a: 1 }); Zicon(g, u.id, x + 8, y + 6, P.line);
+        K.txt(g, u.nome, x + 32, y + 6, { c: P.gold }); for (let k = 0; k < max; k++) Zdiamond(g, x + 32 + k * 10, y + 20, k < lv);
+        K.wrap(ZFX[u.id] || (u.desc || '').split('.')[0], 150).slice(0, 2).forEach((l, j) => K.txt(g, l, x + 120, y + 14 + j * 9, { c: P.white }));
+      }); return; }
+    const col = this.col, cs = K.cueColecoes(), tem = col.itens.filter(c => G.tacos[c.id] || c.preco === 0).length;
+    K.txt(g, col.longo, ZLJ.x, ZLJ.cy, { c: P.grey }); if (col.itens.length) K.txt(g, 'COLEÇÃO ' + tem + '/' + col.itens.length, ZLJ.x + ZLJ.w, ZLJ.cy, { al: 'r', c: tem === col.itens.length ? P.gold : P.grey });
+    if (cs.length > 1) { const w = Math.min(88, Math.floor((ZLJ.w - 4 * (cs.length - 1)) / cs.length)); K.rect(g, ZLJ.x + this.ci * (w + 4), ZLJ.sy + ZLJ.sh + 1, w, 2, P.lime); }
+    if (!this.rows.length) { K.txt(g, 'NENHUM TACO AQUI AINDA', W / 2, 100, { al: 'c', c: P.grey }); K.txt(g, 'VENÇA OS CAMPEÕES DESTE PLANETA', W / 2, 114, { al: 'c', c: P.dim }); }
+    if (this.np > 1) K.txt(g, (this.pg + 1) + '/' + this.np, 338, Zh() - 19, { al: 'c', c: P.grey });
     this.rows.forEach((c, i) => {
-      const x = 198, y = ZLJ.y + i * ZLJ.p, hot = cur === this.bt[U.length + i], eq = G.taco === c.id, lib = K.cueLiberado(c);
-      K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : eq ? P.lime2 : lib ? P.line : P.dim, line2: hot ? P.lime2 : P.line2, a: 1 });
-      K.txt(g, lib ? c.nome : '? ? ?', x + 6, y + 2, { c: lib ? P.gold : P.dim }); if (eq) K.txt(g, '●', x + ZLJ.pw - 8, y + 2, { al: 'r', c: P.lime });
-      const L = lib ? Zfx(c) : K.wrap('VENÇA ' + Zrival(c).nome + ' PARA LIBERAR', ZLJ.pw - 12);
-      /* 0.3.5 (Pedro: "o nome do taco encosta no desenho"): cartão de 50 px — nome (linhas y+4..10) · desenho do taco (centro em y+16, de y+12 a y+20) · atributos a partir de y+21,
-       * 9 px entre linhas (3 linhas terminam em y+47). Nada encosta em nada, nem a cedilha de FORÇA na linha de baixo. */
-      const AL = (lib && c.preco === 0 ? K.wrap(L[0], ZLJ.pw - 10) : L).slice(0, 3);
-      AL.forEach((l, j) => K.txt(g, l, x + 6, y + 21 + j * 9, { c: lib ? P.white : P.grey }));
+      const x = ZLJ.x, y = ZLJ.ry + i * ZLJ.rp, hot = cur === this.bt[i], eq = G.taco === c.id, lib = K.cueLiberado(c);
+      K.panel(g, x, y, ZLJ.w, ZLJ.rh, { line: hot ? P.lime : eq ? P.lime2 : lib ? P.line : P.dim, line2: hot ? P.lime2 : P.line2, a: 1 });
+      K.txt(g, lib ? c.nome : '? ? ?', x + 8, y + 3, { c: lib ? P.gold : P.dim }); if (eq) K.txt(g, '●', x + 8 + K.tw(c.nome) + 6, y + 3, { c: P.lime });
+      /* nome (y+3..11) · desenho do taco (centro em y+24) · atributos à direita do desenho, 9 px entre linhas: nada encosta em nada */
+      const L = lib ? (c.preco === 0 ? K.wrap(Zfx(c)[0], 140) : Zfx(c)) : K.wrap('VENÇA ' + Zrival(c).nome + ' PARA LIBERAR', 140);
+      L.slice(0, 3).forEach((l, j) => K.txt(g, l, x + 158, y + 9 + j * 9, { c: lib ? P.white : P.grey }));
     });
   },
   /* tacos LISOS na camada 2× com a mesma função da partida (K.drawCue, pedido do Pedro 2026-11-21): ponta à esquerda, cabo à direita. Trancado = silhueta escura */
-  drawHi(h) { this.rows.forEach((c, i) => { const A = K.cueArte(c); K.drawCue(h, (198 + 8) * 2, (ZLJ.y + i * ZLJ.p + 16) * 2, 1, 0, 150, this.vis[i], Math.min(1.1, 188 / (150 * A.comp))); }); },
+  drawHi(h) { this.rows.forEach((c, i) => { const A = K.cueArte(c); K.drawCue(h, (ZLJ.x + 8) * 2, (ZLJ.ry + i * ZLJ.rp + 25) * 2, 1, 0, 150, this.vis[i], Math.min(1.6, 280 / (150 * A.comp))); }); },
 });
 
 }
