@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.4.0</title>
+<title>Sinuca Intergaláctica · v0.4.1</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.4.0', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.4.1', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -81,7 +81,7 @@ K.go = (name, args, o) => {
 };
 function switchScene() {
   if (K.scene && K.scene.exit) { try { K.scene.exit(); } catch (e) { console.error(e); K._err = K._err || e; } }
-  K.ui.clear(); K.scene = SCENES[TR.next]; K.sceneName = TR.next; K.sceneT = 0;
+  K.ui.clear(); K.scene = SCENES[TR.next]; K.sceneName = TR.next; K.sceneArgs = TR.args; K.sceneT = 0; K.v.syncW(true);   // 0.4.1: a largura do jogo se ajusta à tela aqui, antes da cena montar seus botões
   try { K.scene.enter && K.scene.enter(TR.args || {}); } catch (e) { console.error(e); K._err = K._err || e; }
   K.emit('scene', { name: TR.next }); TR.ph = 1; TR.t = 0;
 }
@@ -140,12 +140,25 @@ V.layout = () => {
   if (W < 40 || H < 40) { setTimeout(V.layout, 200); return; }   // 0.3.1: janela ainda sem tamanho (aba restaurada, iframe escondido): espera em vez de montar um palco quebrado
   K.rot = r;
   if (r) { st.style.width = H + 'px'; st.style.height = W + 'px'; st.style.transform = 'translateX(' + W + 'px) rotate(90deg)'; } else { st.style.width = st.style.height = '100%'; st.style.transform = ''; }
-  const dpr = Math.min(window.devicePixelRatio || 1, 3), vw = K.vw(), vh = K.vh();
+  V.dpr = Math.min(window.devicePixelRatio || 1, 3); const vw = K.vw(), vh = K.vh(), dpr = V.dpr;
   V.cv.width = Math.round(vw * dpr); V.cv.height = Math.round(vh * dpr); V.cv.style.width = vw + 'px'; V.cv.style.height = vh + 'px';
+  V.syncW(false);
+};
+/* 0.4.1 (pedido do Pedro: "redesenhar tudo em wide"): a LARGURA do jogo acompanha a tela. A altura é sempre 216; a largura vai de 384 (16:9) até 512 (≈ 2,4:1),
+ * então em celular comprido (20:9) o jogo ocupa a tela inteira, sem faixas pretas. As cenas leem K.v.W; a largura só muda entre cenas (e na tela de título),
+ * nunca no meio de uma partida: o botão de calha e a mesa já foram posicionados. */
+V.wantW = () => { const a = K.vw() / K.vh(); return clamp(Math.round(V.H * a / 2) * 2, 384, 512); };
+V.fit = () => {
   const fit = Math.min(V.cv.width / V.W, V.cv.height / V.H), ints = Math.floor(fit);
   V.sc = ints >= 2 && ints / fit > .86 ? ints : fit;                         // escala inteira quando sobra pouca faixa; senão preenche (vizinho mais próximo)
-  V.dw = Math.round(V.W * V.sc); V.dh = Math.round(V.H * V.sc); V.ox = (V.cv.width - V.dw) >> 1; V.oy = (V.cv.height - V.dh) >> 1; V.dpr = dpr;
-  V._scan = null;
+  V.dw = Math.round(V.W * V.sc); V.dh = Math.round(V.H * V.sc); V.ox = (V.cv.width - V.dw) >> 1; V.oy = (V.cv.height - V.dh) >> 1; V._scan = null;
+};
+V.setW = w => { V.W = w; V.fb.width = w; V.hi.width = w * V.HK; V.ov.width = w; for (const q of [V.g, V.hg, V.og]) q.imageSmoothingEnabled = false; };
+/* agora = true: troca já (entre cenas); false: só se a cena atual aguenta (título) ou se ainda não há cena */
+V.syncW = agora => {
+  const w = V.wantW();
+  if (w !== V.W && (agora || !K.scene || K.sceneName === 'titulo')) { V.setW(w); if (K.scene && K.scene.enter && !agora) { K.ui.clear(); try { K.scene.enter(K.sceneArgs || {}); } catch (e) { console.error(e); } } }
+  V.fit();
 };
 V.init = () => {
   V.cv = document.getElementById('c'); V.cx = V.cv.getContext('2d');
@@ -338,7 +351,7 @@ K.hasGlyph = ch => ch === ' ' || ch === '*' || ch === '\n' || !!GL[ch] || !!ACC[
 /*==ENGINE:input==  entrada: teclado, mouse, toque (multitoque) e gamepad, tudo em coordenadas do framebuffer.
  * Os eventos do DOM entram numa FILA e são entregues no passo da simulação (determinístico). Testes disparam EVENTOS REAIS no canvas (regra 31).
  * Rota de uma tecla: F → tela cheia (sempre) · cena com free() true → cena.key(k) · senão o foco dos menus (setas/WASD, Enter/Espaço, Backspace → cena.back()). */
-const IN = K.input = { keys: {}, prs: {}, rel: {}, q: [], ptr: {}, p: { x: -99, y: -99, down: false, id: null, type: 'mouse' }, last: 'key', pad: null, padPrev: {} };
+const IN = K.input = { keys: {}, prs: {}, rel: {}, q: [], ptr: {}, ign: {}, p: { x: -99, y: -99, down: false, id: null, type: 'mouse' }, last: 'key', pad: null, padPrev: {} };
 const KMAP = { w: 'up', W: 'up', ArrowUp: 'up', s: 'down', S: 'down', ArrowDown: 'down', a: 'left', A: 'left', ArrowLeft: 'left', d: 'right', D: 'right', ArrowRight: 'right', ' ': 'ok', Enter: 'ok', Backspace: 'back', Escape: 'esc', p: 'pause', P: 'pause', Shift: 'fine', f: 'full', F: 'full', e: 'spin', E: 'spin', q: 'calm', Q: 'calm' };
 IN.map = e => KMAP[e.key] || e.key;
 IN.init = () => {
@@ -353,10 +366,12 @@ IN.init = () => {
   cv.addEventListener('wheel', e => { e.preventDefault(); IN.q.push(['wh', { dy: sign(e.deltaY) }]); }, { passive: false });
   cv.addEventListener('contextmenu', e => e.preventDefault());
   /* perder o foco descarta teclas e dedos (regra 22): ninguém fica "segurando" um botão fantasma */
-  const drop = () => { IN.keys = {}; IN.ptr = {}; IN.p.down = false; IN.p.id = null; const s = sc(); s.cancel && s.cancel(); };
+  const drop = () => { IN.keys = {}; IN.ptr = {}; IN.ign = {}; IN.p.down = false; IN.p.id = null; const s = sc(); s.cancel && s.cancel(); };
   addEventListener('blur', drop); document.addEventListener('visibilitychange', () => { if (document.hidden) drop(); });
 };
 const sc = () => K.scene || {};
+const fora = d => d.type !== 'mouse' && (d.x < 0 || d.x >= K.v.W || d.y < 0 || d.y >= K.v.H);   // só dedo: o mouse no navegador não tem o problema do canto do dedo
+
 function keyDown(k) {
   IN.keys[k] = true; IN.prs[k] = true;
   if (k === 'full') { K.toggleFull(); return; }
@@ -372,7 +387,9 @@ IN.poll = () => {
   for (const [t, d] of IN.q.splice(0)) {
     if (t === 'kd') keyDown(d);
     else if (t === 'ku') { IN.keys[d] = false; IN.rel[d] = true; }
-    else if (t === 'pd') { IN.ptr[d.id] = Object.assign({ x0: d.x, y0: d.y, t0: K.time }, d); if (IN.p.id === null || !IN.p.down) { Object.assign(IN.p, d, { down: true, x0: d.x, y0: d.y, t0: K.time }); }
+    else if (t === 'pd' && fora(d)) IN.ign[d.id] = true;           // 0.4.1: toque nas faixas pretas (fora dos 384×216) não faz nada, nem deslizando para dentro depois
+    else if ((t === 'pm' || t === 'pu' || t === 'pc') && IN.ign[d.id]) { if (t !== 'pm') delete IN.ign[d.id]; }
+    else if (t === 'pd') { delete IN.ign[d.id]; IN.ptr[d.id] = Object.assign({ x0: d.x, y0: d.y, t0: K.time }, d); if (IN.p.id === null || !IN.p.down) { Object.assign(IN.p, d, { down: true, x0: d.x, y0: d.y, t0: K.time }); }
       if (!K.ui.press(d)) { const s = sc(); s.press && s.press(d); } }
     else if (t === 'pm') { if (IN.ptr[d.id]) Object.assign(IN.ptr[d.id], { x: d.x, y: d.y }); if (IN.p.id === d.id || !IN.p.down) { IN.p.x = d.x; IN.p.y = d.y; IN.p.type = d.type; } K.ui.move(d); const s = sc(); s.move && s.move(d, IN.ptr[d.id]); }
     else if (t === 'pu' || t === 'pc') {
@@ -1059,15 +1076,21 @@ const MV = { };   // visão da mesa: escala e deslocamento
 /* LAYOUT DO HUD (0.3.1, pedido do Pedro): a mesa ocupa o miolo; TUDO que é botão ou medidor fica FORA dela: faixa de cima (nomes, bolas que faltam, relógio, avisos),
  * calha da esquerda (barra F) e calha da direita (pausa, ajuste fino, efeito, respiro). Nenhum botão encosta no trilho nem nas caçapas. */
 const BAR = 26, GUT = 30, HUDR = 6.4, CW = 14;   // CW = largura de TODOS os controles das calhas (barra F, pausa, ajuste fino, EF, Q, medidor): a mesma da barra F
-const RX = () => K.v.W - 5 - CW;   // calha da direita: mesma folga da esquerda (5 px da borda)   // HUDR = raio (px de 1×) das bolas que faltam, no topo
-function tableView(T) { const W = K.v.W, H = K.v.H, top = BAR + 2, bot = 15, side = GUT, rl = T.trilho || 9; const s = Math.min((W - side * 2) / (T.w + rl * 2), (H - top - bot) / (T.h + rl * 2)); return { s, ox: Math.round((W - T.w * s) / 2), oy: Math.round(top + (H - top - bot - T.h * s) / 2) }; }   // o trilho INTEIRO cabe entre as calhas
+/* 0.4.1 (tela larga): os controles ficam centrados no quadro de 384 px (DX = folga de cada lado); o toque na folga de fora vale como o controle mais perto (barra F à esquerda, ajuste fino à direita) */
+const DX = () => Math.max(0, K.v.W - 384) >> 1;
+/* as calhas ficam CENTRADAS na folga entre a borda da tela e o trilho da mesa (0.4.1): igual espaço de cada lado, nunca encostadas na mesa */
+const caixaX = () => { const M = K.G, T = M && M.T; if (!T || !MV.s) return { x0: DX() + GUT, x1: K.v.W - DX() - GUT }; const r = (T.trilho || 9) * MV.s; return { x0: MV.ox - r, x1: MV.ox + T.w * MV.s + r }; };
+const BXD = () => Math.max(2, Math.round((caixaX().x0 - BW) / 2));
+const RX = () => Math.min(K.v.W - 3 - CW, Math.round((caixaX().x1 + K.v.W - CW) / 2));   // calha da direita: mesma folga da esquerda (5 px da borda)   // HUDR = raio (px de 1×) das bolas que faltam, no topo
+function tableView(T) { const W = K.v.W, H = K.v.H, top = BAR + 2, bot = 15, side = GUT, rl = T.trilho || 9; const s = Math.min((Math.min(W, 384) - side * 2) / (T.w + rl * 2), (H - top - bot) / (T.h + rl * 2)); return { s, ox: Math.round((W - T.w * s) / 2), oy: Math.round(top + (H - top - bot - T.h * s) / 2) }; }   // o trilho INTEIRO cabe entre as calhas
 const toS = (x, y) => ({ x: MV.ox + x * MV.s, y: MV.oy + y * MV.s });
 const toT = (x, y) => ({ x: (x - MV.ox) / MV.s, y: (y - MV.oy) / MV.s });
 /* zonas de toque (framebuffer 384×216) */
 /* 0.3.6 (pedido do Pedro: "deslizo o dedo na barra F e o taco gira"): a zona da barra F tem 46 px de largura (a barra desenhada 20, e a mesa só começa em 30) e
  * ocupa a calha inteira, da faixa de cima à de baixo; a barra tem prioridade sobre tudo (inclusive o taco que passa por baixo dela quando a branca está à esquerda). */
-const BW = 20, BX = 4;   // barra F desenhada: largura e x
-const ZF = () => ({ x: 0, w: GUT + 16, y: BAR + 2, h: K.v.H - 14 - BAR - 2 }), ZA = () => ({ x: K.v.W - GUT, w: GUT, y: 56, h: 78 });
+const BW = 20;   // barra F desenhada: largura
+const ZF = () => ({ x: 0, w: DX() + GUT + 16, y: BAR + 2, h: K.v.H - 14 - BAR - 2 }), ZA = () => ({ x: Math.min(DX() + 384 - GUT, RX() - 6), w: K.v.W - Math.min(DX() + 384 - GUT, RX() - 6), y: 56, h: 78 }),
+  ZM = () => ({ x: DX() + 384, w: DX(), y: BAR + 2, h: K.v.H - 14 - BAR - 2 });   // ZM: folga à direita, de cima a baixo = ajuste fino (como a barra F na esquerda)
 const live = o => o && K.input.ptr[o.id] ? o : null;   // dedo que já saiu (pointerup perdido) não segura nada: nada fica preso
 const PUXA = 70, GRAB = 9;   // px de arrasto para a força cheia · folga (px) ao lado do taco para agarrá-lo
 const CUEL = 87;   // comprimento do taco desenhado em px 1× (175 na camada 2×)
@@ -1110,7 +1133,7 @@ K.defScene('partida', {
     b('REINICIAR PARTIDA', () => UI.confirm({ titulo: 'REINICIAR?', texto: 'A partida volta do começo, com a mesa arrumada de novo.', ok: 'REINICIAR', on: () => { this.unpause(M); K.partida(M.cfg); } }));
     b('SAIR PARA O MENU', () => UI.confirm({ titulo: 'SAIR DA PARTIDA?', texto: 'Você volta para o menu. A partida não conta como derrota.', ok: 'SAIR', on: () => { this.unpause(M); M.fase = 'fim'; M.saiu = true; K.go('titulo'); } }), { c: P.pink });
     UI.focus = UI.list().findIndex(b => b.pz); },
-  pauseOpts(M) { this.pzClear(); M.pzTela = 'opcoes'; const o = SAVE.opt, x1 = 24, x2 = 200, w = 160; let y = 52;
+  pauseOpts(M) { this.pzClear(); M.pzTela = 'opcoes'; const o = SAVE.opt, dx = Math.max(0, K.v.W - 384) >> 1, x1 = 24 + dx, x2 = 200 + dx, w = 160; let y = 52;
     UI.slider({ pz: 1, x: x1, y, w, label: 'MÚSICA', get: () => o.mv, set: v => K.setVol('mv', v) }); UI.slider({ pz: 1, x: x2, y, w, label: 'EFEITOS', get: () => o.sv, set: v => { K.setVol('sv', v); K.sfx('bola'); } }); y += 26;
     UI.slider({ pz: 1, x: x1, y, w, label: 'SENSIBILIDADE', min: 1, max: 10, step: 1, get: () => o.sens, set: v => { o.sens = v; K.persist(); } });
     UI.button({ pz: 1, x: x2, y, w, h: 18, label: '', lbl: () => 'LINHA DE MIRA: ' + (o.guia ? 'SIM' : 'NÃO'), on: () => { o.guia = o.guia ? 0 : 1; K.persist(); } }); y += 26;
@@ -1138,7 +1161,7 @@ K.defScene('partida', {
     M.barDrag = live(M.barDrag); M.fine = live(M.fine); M.rot = live(M.rot); M.grab = live(M.grab);
     if (inZ(ZF(), p)) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y }; return; }               // barra F (dedo ou mouse): puxar para baixo; prioridade sobre o taco e a mesa
     if (p.type === 'touch') {
-      if (inZ(ZA(), p)) { if (!M.fine) M.fine = { id: p.id, y: p.y }; return; }                      // faixa de ajuste fino
+      if (inZ(ZA(), p) || inZ(ZM(), p)) { if (!M.fine) M.fine = { id: p.id, y: p.y }; return; }                      // faixa de ajuste fino
       if (!M.rot && !M.grab && this.noTaco(M, p)) { const c = this.cueS(M); M.grab = { id: p.id, x0: p.x, y0: p.y, a: M.ang, c, dec: 0 }; return; }   // agarrou o taco: puxar para trás = força
       if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y, livre: true }; return; }   // 2º dedo na mesa: força (vai e volta)
       if (M.rot) return;
@@ -1307,7 +1330,7 @@ K.defScene('partida', {
   /* bolas que FALTAM de cada jogador (ids), na ordem do HUD; 8 sozinha quando acabou o grupo; null enquanto a mesa está aberta */
   faltam(M, j) { if (!M.grupos[j]) return null; const L = M.S.balls.filter(b => !b.in && K.grupo(b.id) === M.grupos[j]).map(b => b.id); return L.length ? L : [8]; },
   /* posição (px 1×) da bola i do HUD do jogador j: centro da linha das bolas, logo abaixo do nome */
-  hudBola(j, i) { const W = K.v.W, st = HUDR * 2 + 1.6; return { x: j === 0 ? 4 + HUDR + i * st : W - 4 - HUDR - i * st, y: BAR - 3 - HUDR }; },
+  hudBola(j, i) { const W = K.v.W, st = HUDR * 2 + 1.6; return { x: j === 0 ? 4 + DX() + HUDR + i * st : W - 4 - DX() - HUDR - i * st, y: BAR - 3 - HUDR }; },
   /* HUD das bolas na camada HI-RES, com o mesmo polimento da mesa: bola lisa 4× e número num círculo branco bem legível (0.3.1) */
   drawHudBolas(h, M) { const k = 2, rr = HUDR * k;
     [0, 1].forEach(j => { const L = this.faltam(M, j); if (!L) return; L.forEach((id, i) => { const p = this.hudBola(j, i), X = p.x * k, Y = p.y * k, cv = M.bh[id], w = cv.width / (cv.q || 1);
@@ -1323,13 +1346,13 @@ K.defScene('partida', {
   drawBarra(g) { K.rect(g, 0, 0, K.v.W, BAR, P.ink); K.rect(g, 0, BAR - 1, K.v.W, 1, P.line2); },
   drawHud(g, M) {
     const W = K.v.W, H = K.v.H, touch = K.input.last === 'touch';
-    [0, 1].forEach(j => { const left = j === 0, x = left ? 4 : W - 4, act = M.vez === j && M.fase !== 'fim';
+    [0, 1].forEach(j => { const left = j === 0, x = left ? 4 + DX() : W - 4 - DX(), act = M.vez === j && M.fase !== 'fim';
       K.txt(g, M.quem[j], x, 0, { al: left ? 'l' : 'r', c: act ? P.lime : P.grey });   // 0.3.5: 1 px acima, para a bola de baixo não encostar no nome
       if (!M.grupos[j]) K.txt(g, M.aberta ? 'mesa aberta' : '', x, BAR - 12, { al: left ? 'l' : 'r', c: P.dim }); });   // as bolas em si vão na camada hi-res (drawHudBolas)
     const t = clamp(M.clock / M.tempoMax, 0, 1); K.rect(g, W / 2 - 30, 4, 60, 3, P.dim); K.rect(g, W / 2 - 30, 4, Math.round(60 * t), 3, t < .25 ? P.pink : P.line);
     if (!(M.msgT > 0) && !M.pausa) K.txt(g, M.vez === 0 ? (M.fase === 'mao' ? 'SUA VEZ · BOLA NA MÃO' : 'SUA VEZ') : M.fase === 'pensa' && !M.plan ? 'RIVAL PENSANDO...' : 'VEZ DO RIVAL', W / 2, 12, { al: 'c', c: M.vez === 0 ? P.lime : P.gold });
     // calha da esquerda: barra F (força); no toque é a zona de puxar para baixo
-    const fx = BX + BW / 2; K.panel(g, BX, BAR + 6, BW, 126, { grad: false, line: M.barDrag || M.grab ? P.lime : undefined }); K.rect(g, BX + 3, BAR + 9, BW - 6, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, BX + 4, BAR + 9 + i, BW - 8, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', fx, BAR + 134, { al: 'c', c: P.grey });
+    const BXD_ = BXD(), fx = BXD_ + BW / 2; K.panel(g, BXD_, BAR + 6, BW, 126, { grad: false, line: M.barDrag || M.grab ? P.lime : undefined }); K.rect(g, BXD_ + 3, BAR + 9, BW - 6, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, BXD_ + 4, BAR + 9 + i, BW - 8, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', fx, BAR + 134, { al: 'c', c: P.grey });
     if (touch && this.human(M) && M.fase === 'mira' && !M.barDrag && !M.grab) K.txt(g, '↓', fx, BAR + 148, { al: 'c', c: (K.time * 2 | 0) % 2 ? P.lime : P.dim });
     // calha da direita (de cima para baixo): pausa · ajuste fino / medidor Q · efeito · respiro — tudo fora do trilho
     if (touch) {   // faixa de ajuste fino com ranhuras que andam com a mira; o respiro vira o preenchimento do botão Q
@@ -1340,8 +1363,8 @@ K.defScene('partida', {
       K.panel(g, RX(), 58, CW, 74, { grad: false }); const bh = Math.round(66 * M.breath); for (let i = 0; i < bh; i += 2) K.rect(g, RX() + 3, 128 - i, CW - 6, 1, M.holding ? P.line : P.line2); K.txt(g, 'Q', RX() + CW / 2, 138, { al: 'c', c: P.grey });
       K.txt(g, 'E', RX() + CW / 2, 172, { al: 'c', c: P.grey }); }
     K.rect(g, 0, H - 14, W, 14, P.ink); K.rect(g, 0, H - 14, W, 1, P.line2);
-    if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.imageSmoothingEnabled = true; g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 2, 2, 44, 44, 4, H - 13, 12, 12); g.imageSmoothingEnabled = false;   // 0.3.5: rosto inteiro (antes era uma tira cortada ao meio)
-      K.txt(g, M.rival.nome + ':', 20, H - 12, { c: P.gold }); K.txt(g, M.fala, 26 + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
+    if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.imageSmoothingEnabled = true; g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 2, 2, 44, 44, 4 + DX(), H - 13, 12, 12); g.imageSmoothingEnabled = false;   // 0.3.5: rosto inteiro (antes era uma tira cortada ao meio)
+      K.txt(g, M.rival.nome + ':', 20 + DX(), H - 12, { c: P.gold }); K.txt(g, M.fala, 26 + DX() + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
     else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'mesa: gira a mira · puxe o taco ou a barra F = força · direita: fino' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
     else if (this.human(M) && M.fase === 'mao') K.txt(g, touch ? 'bola na mão: arraste a branca e solte' : 'bola na mão: mova a branca e clique (ou Enter)', W / 2, H - 12, { al: 'c', c: P.lime });
   },
@@ -1648,7 +1671,7 @@ K.defScene('loja', {
   draw(g) { K.drawSpace(g, K.time); K.txt(g, 'LOJA', 8, 6, { c: P.gold, s: 2 }); K.txt(g, 'créditos: ' + SAVE.game.creditos, W_() - 26, 8, { al: 'r', c: P.lime }); K.txt(g, 'TREINO', 20, 24, { c: P.grey }); K.txt(g, 'TACOS', 200, 24, { c: P.grey }); },
 });
 K.defScene('opcoes', {
-  enter(a) { this.volta = (a && a.volta) || 'titulo'; const o = SAVE.opt, x1 = 24, x2 = 200, w = 160; let y = 34;
+  enter(a) { this.volta = (a && a.volta) || 'titulo'; const o = SAVE.opt, dx = Math.max(0, W_() - 384) >> 1, x1 = 24 + dx, x2 = 200 + dx, w = 160; let y = 34;
     UI.slider({ x: x1, y, w, label: 'MÚSICA', get: () => o.mv, set: v => K.setVol('mv', v) }); UI.slider({ x: x2, y, w, label: 'EFEITOS', get: () => o.sv, set: v => { K.setVol('sv', v); K.sfx('bola'); } }); y += 24;
     UI.slider({ x: x1, y, w, label: 'SENSIBILIDADE', min: 1, max: 10, step: 1, get: () => o.sens, set: v => { o.sens = v; K.persist(); } });
     UI.button({ x: x2, y, w, h: 18, label: '', on: () => K.qCycle() }).fmt = 1; y += 24;
@@ -2330,6 +2353,9 @@ K.defStory('terra_saida', { pages: [
  * Sobrescreve com K.defScene do mesmo nome as cenas do motor (src/engine/10-scenes.js), mantendo botões, ações, confirmações, foco por teclado, backBtn e UI.fsIcon.
  * Regra 16: nada é desenhado atrás de botão; os cartões são painéis ao lado/acima dos botões. Paleta: K.pal (docs/ART_BIBLE.md). */
 const Zw = () => K.v.W, Zh = () => K.v.H;
+const Zdx = () => Math.max(0, Zw() - 384) >> 1;   // 0.4.1 (tela larga): telas de 384 px de conteúdo (loja, programa) ficam centradas; o fundo ocupa a largura toda
+const Zmx = x => Math.round(x * Zw() / 384);       // mapa: os planetas se espalham pela largura toda
+
 const Zback = (cena, args) => UI.button({ x: 8, y: Zh() - 24, w: 70, h: 18, label: '← VOLTAR', snd: 'ui_volta', on: () => K.go(cena, args) });
 const Zcv = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const q = c.getContext('2d'); q.imageSmoothingEnabled = false; return [c, q]; };
 const Ztint = (src, col) => { const [c, q] = Zcv(src.width, src.height); q.drawImage(src, 0, 0); q.globalCompositeOperation = 'source-in'; q.fillStyle = col; q.fillRect(0, 0, c.width, c.height); return c; };
@@ -2340,10 +2366,10 @@ const Zcache = {};
 const Zget = (k, f) => Zcache[k] || (Zcache[k] = f());
 
 /* céu azul-noite em faixas (sem o roxo do motor) + estrelas que piscam devagar */
-const ZSTARS = (() => { const r = rng(311), L = []; for (let i = 0; i < 90; i++) L.push([r() * 384 | 0, r() * 216 | 0, r()]); return L; })();
+const ZSTARS = (() => { const r = rng(311), L = []; for (let i = 0; i < 90; i++) L.push([r() * 384 | 0, r() * 216 | 0, r()]); for (let i = 0; i < 40; i++) L.push([384 + (r() * 128 | 0), r() * 216 | 0, r()]); return L; })();   // as 40 últimas só aparecem em tela larga (0.4.1)
 function Zsky(g, t, bot) {
   K.bands(g, 0, 0, Zw(), Zh(), '#05071A', bot || '#0C1D4A', 12);
-  ZSTARS.forEach(([x, y, z], i) => { const lit = K.q() > 0 && Math.sin(t * (.8 + z * 2) + i * 1.7) > .85; K.rect(g, x, y, 1, 1, lit ? '#FFFFFF' : z > .75 ? '#9FB4FF' : '#33407A'); });
+  ZSTARS.forEach(([x, y, z], i) => { if (x >= Zw()) return; const lit = K.q() > 0 && Math.sin(t * (.8 + z * 2) + i * 1.7) > .85; K.rect(g, x, y, 1, 1, lit ? '#FFFFFF' : z > .75 ? '#9FB4FF' : '#33407A'); });
 }
 /* chips e rótulos */
 const Zchip = (g, x, y, w, txt, c, line) => { K.panel(g, x, y, w, 13, { line: line || P.line2, line2: P.ink, a: 1 }); K.txt(g, txt, x + w / 2, y + 2, { al: 'c', c: c || P.white }); };
@@ -2555,7 +2581,7 @@ K.defScene('mapa', {
   enter() {
     if (!SAVE.game) K.newGame(); K.music('mapa'); const L = K.planets(); this.pb = [];
     L.forEach(pl => { const m = pl.mapa || { x: 60, y: 100 }, open = K.planetOpen(pl), r = Zrad(pl);
-      this.pb.push(UI.button({ x: m.x - 36, y: m.y + r + 7, w: 72, h: 20, label: pl.nome, dis: open ? null : pl.emBreve ? 'Chega na próxima temporada' : 'Vença o planeta anterior', on: () => K.go('planeta', { id: pl.id }) })); });
+      this.pb.push(UI.button({ x: Zmx(m.x) - 36, y: m.y + r + 7, w: 72, h: 20, label: pl.nome, dis: open ? null : pl.emBreve ? 'Chega na próxima temporada' : 'Vença o planeta anterior', on: () => K.go('planeta', { id: pl.id }) })); });
     UI.button({ x: Zw() - 84, y: Zh() - 24, w: 76, h: 18, label: 'LOJA', on: () => K.go('loja') });
     UI.button({ x: Zw() - 164, y: Zh() - 24, w: 76, h: 18, label: 'OPÇÕES', on: () => K.go('opcoes', { volta: 'mapa' }) });
     Zback('titulo'); UI.fsIcon(); UI.focus = Math.max(0, L.findIndex(pl => K.planetOpen(pl) && !K.planetDone(pl)));
@@ -2566,10 +2592,10 @@ K.defScene('mapa', {
     K.txt(g, 'MAPA DA GALÁXIA', 8, 6, { c: P.gold, s: 2 });
     const cr = 'CRÉDITOS ◆ ' + (SAVE.game ? SAVE.game.creditos : 0), dn = K.dif().nome, w1 = K.tw(cr) + 12, w2 = K.tw(dn) + 12, hard = K.dif() === K.DIFS.desafio;
     Zchip(g, W - 24 - w1, 4, w1, cr, P.lime); Zchip(g, W - 24 - w2, 19, w2, dn, hard ? P.pink : P.gold, hard ? P.pink : P.line2);
-    const pos = L.map(pl => { const m = pl.mapa || { x: 60, y: 100 }; return { x: m.x, y: m.y, r: Zrad(pl) }; });
+    const pos = L.map(pl => { const m = pl.mapa || { x: 60, y: 100 }; return { x: Zmx(m.x), y: m.y, r: Zrad(pl) }; });
     for (let i = 1; i < L.length; i++) Zroute(g, pos[i - 1], pos[i], K.planetOpen(L[i]) ? P.line : P.dim, K.planetOpen(L[i]), t);
     L.forEach((pl, i) => {
-      const m = pl.mapa || { x: 60, y: 100 }, open = K.planetOpen(pl), r = pos[i].r, spr = pl.id === 'terra' ? Zget('terra' + r, () => Zterra(r)) : Zget('pl' + pl.id + open, () => Zgen(r, m.cor || P.blue, pl.id, !open));
+      const m0 = pl.mapa || { x: 60, y: 100 }, m = { x: Zmx(m0.x), y: m0.y, cor: m0.cor }, open = K.planetOpen(pl), r = pos[i].r, spr = pl.id === 'terra' ? Zget('terra' + r, () => Zterra(r)) : Zget('pl' + pl.id + open, () => Zgen(r, m.cor || P.blue, pl.id, !open));
       const bob = open ? Math.round(Math.sin(t * 1.4 + i)) : 0, x = Math.round(m.x - spr.width / 2), y = Math.round(m.y - spr.height / 2) + bob;
       g.drawImage(spr, x, y);
       if (!open) { g.drawImage(Zlock(), m.x - 5, m.y - 7 + bob); const w = K.tw('EM BREVE') + 8; K.panel(g, m.x - w / 2, m.y + r - 7 + bob, w, 13, { line: P.pink, line2: P.pink2, bg: P.night, a: 1 }); K.txt(g, 'EM BREVE', m.x, m.y + r - 6 + bob, { al: 'c', c: P.pink }); }
@@ -2590,13 +2616,14 @@ K.defScene('planeta', {
     if (!SAVE.game) K.newGame(); const pl = this.pl = REG.planet[a.id]; K.music(pl.musica || 'mapa'); this.bt = [];
     if (pl.historia && pl.historia.chegada && !SAVE.meta.visto[pl.historia.chegada]) K.story(pl.historia.chegada);
     pl.partidas.forEach((p, i) => { const rv = REG.rival[p.rival] || {}, ok = SAVE.game.vencidas[p.id], prev = pl.partidas[i - 1], y = ZRY + i * ZRP;
-      this.bt.push(UI.button({ x: 74, y: y + 3, w: 196, h: 18, dis: prev && !SAVE.game.vencidas[prev.id] ? 'Vença a partida anterior' : null, label: (ok ? '★ ' : '') + (rv.nome || p.rival) + ' · ' + ((REG.table[p.mesa] || {}).nome || p.mesa), c: ok ? P.gold : P.chrome,
+      this.bt.push(UI.button({ x: 74 + Zdx(), y: y + 3, w: 196, h: 18, dis: prev && !SAVE.game.vencidas[prev.id] ? 'Vença a partida anterior' : null, label: (ok ? '★ ' : '') + (rv.nome || p.rival) + ' · ' + ((REG.table[p.mesa] || {}).nome || p.mesa), c: ok ? P.gold : P.chrome,
         on: () => K.partida({ mesa: p.mesa, rival: p.rival, planeta: pl.id, regra: pl.regra, partida: p.id, premio: p.premio, depois: res => K.go('resultado', res) }) })); });
     Zback('mapa'); UI.fsIcon(); UI.focus = Math.max(0, pl.partidas.findIndex(p => !SAVE.game.vencidas[p.id]));
   },
   back() { K.go('mapa'); },
   draw(g) {
-    const pl = this.pl, t = K.time, W = Zw(), cur = UI.list()[UI.focus]; if (pl.fundo) pl.fundo(g, t); else Zsky(g, t);
+    const pl = this.pl, t = K.time, cur = UI.list()[UI.focus]; let W = Zw(); if (pl.fundo) pl.fundo(g, t); else Zsky(g, t);
+    g.save(); g.translate(Zdx(), 0); W = 384;   // conteúdo em 384 px, centrado em tela larga (0.4.1)
     K.txt(g, pl.nome, 8, 6, { c: P.gold, s: 2 });
     const tx = 8 + K.tw(pl.nome, 2) + 12; if ((t * 1.5 | 0) % 2 === 0) K.disc(g, tx + 2, 13, 2, P.red); K.txt(g, 'AO VIVO', tx + 9, 9, { c: P.pink });
     const n = pl.partidas.filter(p => SAVE.game.vencidas[p.id]).length, pr = 'PARTIDAS ' + n + '/' + pl.partidas.length, w = K.tw(pr) + 12, hard = K.dif() === K.DIFS.desafio;
@@ -2615,6 +2642,7 @@ K.defScene('planeta', {
       K.txt(g, 'PRÊMIO', px + 6, y + 3, { c: P.grey }); K.txt(g, '+' + Math.round((p.premio || 0) * K.dif().premio) + ' ◆', px + 6, y + 14, { c: lock ? P.grey : P.lime });
       if (ok) K.txt(g, 'FEITO', px + pw - 6, y + 3, { al: 'r', c: P.gold });
     });
+    g.restore();
   },
 });
 
@@ -2622,8 +2650,8 @@ K.defScene('planeta', {
  * 0.4.0 (pedido do Pedro): a loja tem ABAS. 1º nível: TREINO e TACOS. Dentro de TACOS, as COLEÇÕES (sub-abas): PADRÃO e uma de CAMPEÕES por planeta (K.cueColecoes, src/engine/09b-tacos.js).
  * Cada item é uma linha larga (368 px) com 3 por página; a zona de toque da linha e das abas é maior que o desenho (hit, lição 82) e nenhuma zona toca outra.
  * Teclado/gamepad: ← → ↑ ↓ andam pelo foco (abas incluídas), Q/E (ou X/Y do controle) trocam de aba, VOLTAR sai. O estado é só da cena (o save não muda). */
-const ZLJ = { x: 8, w: 368, bw: 66, bh: 28, pag: 3,
-  tx: 58, ty: 4, th: 14, tw: 66,                // abas de 1º nível (TREINO, TACOS): na faixa do título, ao lado do LOJA
+const ZLJ = { get x() { return 8 + Zdx(); }, w: 368, bw: 66, bh: 28, pag: 3,
+  get tx() { return 58 + Zdx(); }, ty: 4, th: 14, tw: 66,                // abas de 1º nível (TREINO, TACOS): na faixa do título, ao lado do LOJA
   sy: 26, sh: 14,                               // sub-abas (coleções), só em TACOS
   cy: 45,                                       // título da coleção + contador
   ty0: 28, tp: 52, th_: 48,                     // linhas do TREINO: início, passo, altura
@@ -2681,14 +2709,14 @@ K.defScene('loja', {
         on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), rebuild('c:' + c.id)) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + (c.preco ? ' ' + Zfx(c).join(', ') + '.' : '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); rebuild('c:' + c.id); } }) })); });
     /* ---- páginas (só se a coleção tem mais de 3): embaixo à direita, ao lado do VOLTAR ---- */
     if (np > 1) { const y = Zh() - 24;
-      UI.button({ key: 'pg-', x: 300, y, w: 22, h: 18, label: '←', noArrow: true, noTip: true, hit: { x: 288, y: y - 4, w: 36, h: 26 }, dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
-      UI.button({ key: 'pg+', x: 354, y, w: 22, h: 18, label: '→', noArrow: true, noTip: true, hit: { x: 338, y: y - 4, w: 38, h: 26 }, dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
+      UI.button({ key: 'pg-', x: 300 + Zdx(), y, w: 22, h: 18, label: '←', noArrow: true, noTip: true, hit: { x: 288 + Zdx(), y: y - 4, w: 36, h: 26 }, dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
+      UI.button({ key: 'pg+', x: 354 + Zdx(), y, w: 22, h: 18, label: '→', noArrow: true, noTip: true, hit: { x: 338 + Zdx(), y: y - 4, w: 38, h: 26 }, dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
     Zback('mapa'); UI.fsIcon(); const L = UI.list(), k = L.findIndex(b => b.key === keep), p = L.indexOf(this.bt[0]); UI.focus = k >= 0 ? k : p >= 0 ? p : 0;   // sem foco guardado: no 1º item da lista (↑ sobe para as abas)
   },
   back() { K.go('mapa'); },
   draw(g) {
     const t = K.time, W = Zw(), G = SAVE.game, cur = UI.list()[UI.focus], tac = this.aba === 'tacos'; Zsky(g, t);
-    K.txt(g, 'LOJA', 8, 6, { c: P.gold, s: 2 }); const cr = 'CRÉDITOS ◆ ' + G.creditos, w1 = K.tw(cr) + 12; Zchip(g, W - 24 - w1, 4, w1, cr, P.lime);
+    K.txt(g, 'LOJA', ZLJ.x, 6, { c: P.gold, s: 2 }); const cr = 'CRÉDITOS ◆ ' + G.creditos, w1 = K.tw(cr) + 12; Zchip(g, W - 24 - w1, 4, w1, cr, P.lime);
     /* linha sob as abas, com um trecho dourado sob a aba aberta; a sub-aba aberta ganha o mesmo trecho em verde */
     K.rect(g, ZLJ.tx - 2, ZLJ.ty + ZLJ.th + 1, ZLJ.w - ZLJ.tx + ZLJ.x + 2, 1, P.line2); K.rect(g, ZLJ.tx + (tac ? ZLJ.tw + 4 : 0), ZLJ.ty + ZLJ.th + 1, ZLJ.tw, 2, P.gold);
     if (!tac) {
@@ -2702,7 +2730,7 @@ K.defScene('loja', {
     K.txt(g, col.longo, ZLJ.x, ZLJ.cy, { c: P.grey }); if (col.itens.length) K.txt(g, 'COLEÇÃO ' + tem + '/' + col.itens.length, ZLJ.x + ZLJ.w, ZLJ.cy, { al: 'r', c: tem === col.itens.length ? P.gold : P.grey });
     if (cs.length > 1) { const w = Math.min(88, Math.floor((ZLJ.w - 4 * (cs.length - 1)) / cs.length)); K.rect(g, ZLJ.x + this.ci * (w + 4), ZLJ.sy + ZLJ.sh + 1, w, 2, P.lime); }
     if (!this.rows.length) { K.txt(g, 'NENHUM TACO AQUI AINDA', W / 2, 100, { al: 'c', c: P.grey }); K.txt(g, 'VENÇA OS CAMPEÕES DESTE PLANETA', W / 2, 114, { al: 'c', c: P.dim }); }
-    if (this.np > 1) K.txt(g, (this.pg + 1) + '/' + this.np, 338, Zh() - 19, { al: 'c', c: P.grey });
+    if (this.np > 1) K.txt(g, (this.pg + 1) + '/' + this.np, 338 + Zdx(), Zh() - 19, { al: 'c', c: P.grey });
     this.rows.forEach((c, i) => {
       const x = ZLJ.x, y = ZLJ.ry + i * ZLJ.rp, hot = cur === this.bt[i], eq = G.taco === c.id, lib = K.cueLiberado(c);
       K.panel(g, x, y, ZLJ.w, ZLJ.rh, { line: hot ? P.lime : eq ? P.lime2 : lib ? P.line : P.dim, line2: hot ? P.lime2 : P.line2, a: 1 });
