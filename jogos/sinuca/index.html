@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.3.5</title>
+<title>Sinuca Intergaláctica · v0.3.6</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.3.5', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.3.6', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -1047,9 +1047,13 @@ UI.draw = g => {
  *   teclado/gamepad: ←/→ mira (Shift fino) · segurar Espaço/A carrega, soltar tacada · E/X efeito · Q/Y respiro · P/Start pausa
  *   TOQUE (0.3.0, pedido do Pedro: "o taco tá duro, dois dedos não funcionam"): três zonas fixas, cada dedo faz uma coisa só, e dá para usar duas ao mesmo tempo:
  *     · mesa: arrastar GIRA o taco em volta da bola (o ângulo acompanha o dedo, 1:1 × sensibilidade: rápido perto da bola, fino longe dela); tocar e soltar aponta ali;
- *     · barra F (esquerda): puxar para BAIXO carrega a força, soltar dá a tacada (voltar ao topo cancela);
+ *     · barra F (esquerda, 0.3.6: zona de toque bem maior que a barra desenhada, de cima a baixo da calha, e SEMPRE com prioridade sobre o taco e a mesa):
+ *       puxar para BAIXO carrega a força, soltar dá a tacada (voltar ao topo cancela);
+ *     · taco (0.3.6, pedido do Pedro): tocar NO PRÓPRIO TACO (atrás da bola) e puxar para trás ao longo dele carrega a força sem girar a mira; soltar dá a tacada.
+ *       Com um dedo só: se o 1º movimento for de lado, o toque vira giro; se for para trás, vira puxada (decide em 5 px);
  *     · faixa fina (direita): arrastar para cima/baixo é o ajuste fino da mira.
- *     Um 2º dedo na mesa enquanto o 1º mira também carrega a força (vai e volta). Bola na mão: arraste e solte. */
+ *     Um 2º dedo na mesa enquanto o 1º mira também carrega a força (vai e volta). Enquanto a força está carregada a mira só mexe devagar (×0,3) e um
+ *     toque rápido na mesa NÃO reaponta o taco. Bola na mão: arraste e solte. */
 const MV = { };   // visão da mesa: escala e deslocamento
 /* LAYOUT DO HUD (0.3.1, pedido do Pedro): a mesa ocupa o miolo; TUDO que é botão ou medidor fica FORA dela: faixa de cima (nomes, bolas que faltam, relógio, avisos),
  * calha da esquerda (barra F) e calha da direita (pausa, ajuste fino, efeito, respiro). Nenhum botão encosta no trilho nem nas caçapas. */
@@ -1059,7 +1063,13 @@ function tableView(T) { const W = K.v.W, H = K.v.H, top = BAR + 2, bot = 15, sid
 const toS = (x, y) => ({ x: MV.ox + x * MV.s, y: MV.oy + y * MV.s });
 const toT = (x, y) => ({ x: (x - MV.ox) / MV.s, y: (y - MV.oy) / MV.s });
 /* zonas de toque (framebuffer 384×216) */
-const ZF = { x: 0, w: GUT, y: BAR + 2, h: 150 }, ZA = () => ({ x: K.v.W - GUT, w: GUT, y: 56, h: 78 });
+/* 0.3.6 (pedido do Pedro: "deslizo o dedo na barra F e o taco gira"): a zona da barra F tem 46 px de largura (a barra desenhada 20, e a mesa só começa em 30) e
+ * ocupa a calha inteira, da faixa de cima à de baixo; a barra tem prioridade sobre tudo (inclusive o taco que passa por baixo dela quando a branca está à esquerda). */
+const BW = 20, BX = 4;   // barra F desenhada: largura e x
+const ZF = () => ({ x: 0, w: GUT + 16, y: BAR + 2, h: K.v.H - 14 - BAR - 2 }), ZA = () => ({ x: K.v.W - GUT, w: GUT, y: 56, h: 78 });
+const live = o => o && K.input.ptr[o.id] ? o : null;   // dedo que já saiu (pointerup perdido) não segura nada: nada fica preso
+const PUXA = 70, GRAB = 9;   // px de arrasto para a força cheia · folga (px) ao lado do taco para agarrá-lo
+const CUEL = 87;   // comprimento do taco desenhado em px 1× (175 na camada 2×)
 const inZ = (z, p) => p.x >= z.x && p.x < z.x + z.w && p.y >= z.y && p.y < z.y + z.h;
 /* NÍVEL DA LINHA DE MIRA (0.3.0, pedido do Pedro): Normal e Difícil já vêm com a linha COMPLETA (nível 2: até a bola, o caminho da bola alvo e o desvio
  * da branca). No Desafio Intergaláctico começa como antes (nível 0: linha curta, sem caminho) e o caminho se COMPRA: upgrade MIRA e tacos com "mira".
@@ -1124,9 +1134,11 @@ K.defScene('partida', {
     if (M.spinOpen) { this.spinAt(M, p); M.spinDrag = true; return; }
     if (M.fase === 'mao') { M.handDrag = p.id; if (p.type === 'touch') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return;
-    if (inZ(ZF, p) && !M.barDrag) { M.barDrag = { id: p.id, y0: p.y }; return; }                    // barra F (dedo ou mouse): puxar para baixo
+    M.barDrag = live(M.barDrag); M.fine = live(M.fine); M.rot = live(M.rot); M.grab = live(M.grab);
+    if (inZ(ZF(), p)) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y }; return; }               // barra F (dedo ou mouse): puxar para baixo; prioridade sobre o taco e a mesa
     if (p.type === 'touch') {
-      if (inZ(ZA(), p) && !M.fine) { M.fine = { id: p.id, y: p.y }; return; }                        // faixa de ajuste fino
+      if (inZ(ZA(), p)) { if (!M.fine) M.fine = { id: p.id, y: p.y }; return; }                      // faixa de ajuste fino
+      if (!M.rot && !M.grab && this.noTaco(M, p)) { const c = this.cueS(M); M.grab = { id: p.id, x0: p.x, y0: p.y, a: M.ang, c, dec: 0 }; return; }   // agarrou o taco: puxar para trás = força
       if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y, livre: true }; return; }   // 2º dedo na mesa: força (vai e volta)
       if (M.rot) return;
       const c = this.cueS(M); M.rot = { id: p.id, a: Math.atan2(p.y - c.y, p.x - c.x), x0: p.x, y0: p.y, t0: K.time, moved: 0 }; return; }
@@ -1137,11 +1149,15 @@ K.defScene('partida', {
     if (M.spinOpen && M.spinDrag) return this.spinAt(M, p);
     if (M.fase === 'mao') { if (M.handDrag === p.id || p.type === 'mouse') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return; const c = this.cueS(M);
-    if (M.barDrag && M.barDrag.id === p.id) { M.pow = clamp((p.y - M.barDrag.y0) / (M.barDrag.livre ? 70 : 90), 0, 1); return; }
+    if (M.barDrag && M.barDrag.id === p.id) { M.pow = clamp((p.y - M.barDrag.y0) / (M.barDrag.livre ? PUXA : PUXA - 10), 0, 1); return; }
+    if (M.grab && M.grab.id === p.id) {   // taco agarrado: 1º movimento decide (≥ 5 px): para trás = força · de lado = giro
+      const G = M.grab, dx = p.x - G.x0, dy = p.y - G.y0, back = -(dx * Math.cos(G.a) + dy * Math.sin(G.a)), d = Math.hypot(dx, dy);
+      if (!G.dec) { if (d < 5) return; if (back >= d * .6) G.dec = 1; else { M.grab = null; M.rot = { id: p.id, a: Math.atan2(G.y0 - c.y, G.x0 - c.x), x0: G.x0, y0: G.y0, t0: K.time, moved: 1 }; } }
+      if (M.grab) { M.pow = clamp(back / PUXA, 0, 1); return; } }
     if (M.fine && M.fine.id === p.id) { M.ang += (p.y - M.fine.y) * .0022 * K.sens(); M.fine.y = p.y; return; }
     if (M.rot && M.rot.id === p.id) {   // GIRO 1:1: o taco acompanha o ângulo do dedo em volta da bola (perto = rápido, longe = fino)
       const R = M.rot, d = Math.hypot(p.x - c.x, p.y - c.y), a = Math.atan2(p.y - c.y, p.x - c.x); R.moved += Math.hypot(p.x - R.x0, p.y - R.y0) > 4 ? 1 : 0;
-      if (d > 6) { M.ang += angDiff(R.a, a) * K.sens() * Math.min(1, d / 14); R.a = a; } return; }
+      if (d > 6) { M.ang += angDiff(R.a, a) * K.sens() * Math.min(1, d / 14) * (M.pow > .03 ? .3 : 1); R.a = a; } return; }   // com a força carregada a mira só afina (0.3.6)
     if (M.powDrag) {   /* segurando o clique: o movimento lateral gira a mira em volta da bola, mais devagar (×0,35); puxar para trás dá força (pedido do Pedro, 0.2.1) */
       const a = Math.atan2(p.y - c.y, p.x - c.x); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang += angDiff(M.powDrag.a, a) * (K.input.down('fine') ? .1 : .35); M.powDrag.a = a;
       const back = -((p.x - M.powDrag.x0) * Math.cos(M.ang) + (p.y - M.powDrag.y0) * Math.sin(M.ang)); M.pow = clamp(back / 70, 0, 1); return; }
@@ -1151,12 +1167,16 @@ K.defScene('partida', {
     const M = M0(); if (!M) return; M.spinDrag = false;
     if (M.fase === 'mao' && M.handDrag !== undefined && this.human(M)) { M.handDrag = undefined; this.placeCue(M); return; }   // soltar o dedo (ou o clique) confirma a bola na mão
     if (M.barDrag && M.barDrag.id === p.id) { M.barDrag = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; return; }
+    if (M.grab && M.grab.id === p.id) { M.grab = null; if (M.pow > .05) this.shootNow(M); else M.pow = 0; return; }
     if (M.fine && M.fine.id === p.id) { M.fine = null; return; }
-    if (M.rot && M.rot.id === p.id) { if (!M.rot.moved && K.time - M.rot.t0 < .35) { const c = this.cueS(M); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang = Math.atan2(p.y - c.y, p.x - c.x); } M.rot = null; return; }
+    if (M.rot && M.rot.id === p.id) { if (!M.rot.moved && K.time - M.rot.t0 < .35 && !(M.barDrag || M.grab || M.pow > .03)) { const c = this.cueS(M); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang = Math.atan2(p.y - c.y, p.x - c.x); } M.rot = null; return; }
     if (M.powDrag) { M.powDrag = null; if (M.pow > .03) this.shootNow(M); else M.pow = 0; }
   },
   /* solta tudo (toque cancelado, janela sem foco, pausa): nenhum arrasto fica preso */
-  cancel() { const M = M0(); if (!M) return; M.rot = M.barDrag = M.powDrag = M.fine = null; M.handDrag = undefined; M.spinDrag = false; if (M.fase === 'mira') M.pow = 0; },
+  cancel() { const M = M0(); if (!M) return; M.rot = M.barDrag = M.powDrag = M.fine = M.grab = null; M.handDrag = undefined; M.spinDrag = false; if (M.fase === 'mira') M.pow = 0; },
+  /* o toque (px 1×) está em cima do taco desenhado? = atrás da bola, ao longo da mira, até GRAB px para os lados (0.3.6) */
+  noTaco(M, p) { const c = this.cueS(M), dx = Math.cos(M.ang), dy = Math.sin(M.ang), ux = p.x - c.x, uy = p.y - c.y, t = -(ux * dx + uy * dy), lat = Math.abs(ux * dy - uy * dx), r = M.rp, ini = r + 2 + M.pow * 22;
+    return t >= ini - 2 && t <= ini + CUEL && lat <= GRAB; },
   handTo(M, p) { const t = toT(p.x, p.y); if (PL.freeSpot(M.S, M.T, t.x, t.y)) { const c = M.S.balls[0]; c.x = t.x; c.y = t.y; c.in = false; } },
   wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M) && !M.pausa) M.ang += dy * .004; },
   spinAt(M, p) { const cx = K.v.W / 2, cy = K.v.H / 2; M.fx.s = clamp((p.x - cx) / 26, -1, 1); M.fx.f = clamp(-(p.y - cy) / 26, -1, 1); if (Math.hypot(M.fx.s, M.fx.f) > 1) { const k = Math.hypot(M.fx.s, M.fx.f); M.fx.s /= k; M.fx.f /= k; } },
@@ -1173,7 +1193,7 @@ K.defScene('partida', {
     const ang = M.ang + (M.vez === 0 && !M.bot ? this.wobble(M) : 0), pow = clamp(M.pow, .02, 1) * tc.forca;
     M.pre = M.regra.antes ? M.regra.antes(M, M.vez) : null;   // FOTO de antes da tacada: é com ela que a regra julga (0.3.0)
     PL.shoot(M.S, ang, Math.min(1, pow), { f: M.fx.f * tc.efeito, s: M.fx.s * tc.efeito }); M.fase = 'rolando'; M.seen = 0; M.tacadas++; M.lastPow = M.pow;
-    K.sfx('tacada', .4 + M.pow * .6); K.emit('shot', { M, ang, pow }); M.pow = 0; M.spinOpen = false; M.carga = 0; M.rot = M.barDrag = M.powDrag = M.fine = null;
+    K.sfx('tacada', .4 + M.pow * .6); K.emit('shot', { M, ang, pow }); M.pow = 0; M.spinOpen = false; M.carga = 0; M.rot = M.barDrag = M.powDrag = M.fine = M.grab = null;
   },
   cpuStart(M) { if (M.fase !== 'mao') M.fase = 'pensa'; M.aimT = 0; M.plan = null; M.gen = null; },
   turnEnd(M) {
@@ -1308,8 +1328,8 @@ K.defScene('partida', {
     const t = clamp(M.clock / M.tempoMax, 0, 1); K.rect(g, W / 2 - 30, 4, 60, 3, P.dim); K.rect(g, W / 2 - 30, 4, Math.round(60 * t), 3, t < .25 ? P.pink : P.line);
     if (!(M.msgT > 0) && !M.pausa) K.txt(g, M.vez === 0 ? (M.fase === 'mao' ? 'SUA VEZ · BOLA NA MÃO' : 'SUA VEZ') : M.fase === 'pensa' && !M.plan ? 'RIVAL PENSANDO...' : 'VEZ DO RIVAL', W / 2, 12, { al: 'c', c: M.vez === 0 ? P.lime : P.gold });
     // calha da esquerda: barra F (força); no toque é a zona de puxar para baixo
-    K.panel(g, 5, BAR + 6, 14, 126, { grad: false, line: M.barDrag ? P.lime : undefined }); K.rect(g, 8, BAR + 9, 8, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, 9, BAR + 9 + i, 6, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', 12, BAR + 134, { al: 'c', c: P.grey });
-    if (touch && this.human(M) && M.fase === 'mira' && !M.barDrag) K.txt(g, '↓', 12, BAR + 148, { al: 'c', c: (K.time * 2 | 0) % 2 ? P.lime : P.dim });
+    const fx = BX + BW / 2; K.panel(g, BX, BAR + 6, BW, 126, { grad: false, line: M.barDrag || M.grab ? P.lime : undefined }); K.rect(g, BX + 3, BAR + 9, BW - 6, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, BX + 4, BAR + 9 + i, BW - 8, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', fx, BAR + 134, { al: 'c', c: P.grey });
+    if (touch && this.human(M) && M.fase === 'mira' && !M.barDrag && !M.grab) K.txt(g, '↓', fx, BAR + 148, { al: 'c', c: (K.time * 2 | 0) % 2 ? P.lime : P.dim });
     // calha da direita (de cima para baixo): pausa · ajuste fino / medidor Q · efeito · respiro — tudo fora do trilho
     if (touch) {   // faixa de ajuste fino com ranhuras que andam com a mira; o respiro vira o preenchimento do botão Q
       const z = ZA(), x = RX(); K.panel(g, x, 58, CW, 74, { grad: false, line: M.fine ? P.lime : undefined }); const off = ((M.ang * 180 / Math.PI * 2) % 6 + 6) % 6;
@@ -1321,7 +1341,7 @@ K.defScene('partida', {
     K.rect(g, 0, H - 14, W, 14, P.ink); K.rect(g, 0, H - 14, W, 1, P.line2);
     if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.imageSmoothingEnabled = true; g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 2, 2, 44, 44, 4, H - 13, 12, 12); g.imageSmoothingEnabled = false;   // 0.3.5: rosto inteiro (antes era uma tira cortada ao meio)
       K.txt(g, M.rival.nome + ':', 20, H - 12, { c: P.gold }); K.txt(g, M.fala, 26 + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
-    else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'arraste na mesa = mira · F: puxe p/ baixo · faixa direita = ajuste fino' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
+    else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'mesa: gira a mira · puxe o taco ou a barra F = força · direita: fino' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
     else if (this.human(M) && M.fase === 'mao') K.txt(g, touch ? 'bola na mão: arraste a branca e solte' : 'bola na mão: mova a branca e clique (ou Enter)', W / 2, H - 12, { al: 'c', c: P.lime });
   },
   drawSpin(g, M) { const cx = K.v.W / 2, cy = K.v.H / 2; g.globalAlpha = .7; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; if (!M.spinArt) M.spinArt = K.ballArt(0, 26); g.drawImage(M.spinArt, cx - M.spinArt.width / 2 | 0, cy - M.spinArt.height / 2 | 0);
