@@ -59,10 +59,11 @@ const DESYNC = !/[?&]nodesync\b/.test(location.search);     /* 9.2.52: canvas de
    O atributo só vale na criação do contexto, então ao entrar/sair da tela cheia o canvas é trocado por um novo (mesmo id, estilo e tamanho)
    e os ouvintes registrados por cvOn são religados. Fora da tela cheia continua desynchronized (o ganho de fps medido). */
 let ctx = null, CV_DESYNC = null;
+const CV_QUADRO = (function(){ try{ return window.top !== window; }catch(e){ return true; } })();   /* dentro de um quadro (portfólio) a tela cheia é do site de fora e o jogo não fica sabendo: lá, sem desynchronized */
 const CV_EV = [];
 function cvOn(tipo, fn, o){ CV_EV.push([tipo, fn, o]); cv.addEventListener(tipo, fn, o); }
 function cvContexto(){
-  const quer = DESYNC && !document.fullscreenElement;
+  const quer = DESYNC && !CV_QUADRO && !document.fullscreenElement;
   if (ctx && quer === CV_DESYNC) return false;
   if (ctx){
     const n = cv.cloneNode(false); n.width = cv.width; n.height = cv.height;
@@ -322,7 +323,7 @@ const BUILD_LOG = [
   ['9.2.33', 'URGENTE: tela preta no ECO (QUAL 2–3, desde 9.2.29): a camada #hc do HUD herdava o fundo escuro do canvas e cobria o jogo inteiro — agora é transparente'],
   ['9.2.34', 'VOLTAR do menu GOLPES voltou a funcionar (o item ▶ VER escondido espremia o espaçamento da lista e a área de toque ficava com altura 0); HISTÓRICO atualizado até a 9.2.34 e de volta a 3 páginas (30 versões, uma linha cada); medidor de FPS aparece em todas as telas, menus inclusive; tools/voltar_check.mjs confere o VOLTAR de todas as telas com toque de verdade'],
   ['9.2.35', 'prévia dos golpes, bloco 2 (ar): CORTE AÉREO e CORTE REVERSO no Olho Pendente, MERGULHO na Boca-de-Chão (brota com aviso, bote e mordida) e QUEDA GIRATÓRIA no Fôlego, com salto, ar e pouso pelas regras do 08_hero.js (gravidades, câmera lenta, tremor e hitstop do pouso); rubrica R17 (altura e pouso); golpes_check cobre as 10 prévias'],
-  ['9.2.71', 'TELA CHEIA sem chuvisco: em tela cheia o canvas é recriado sem desynchronized (o atributo piscava pontos no Chrome do Android, já visto na 9.2.1) e volta a ele ao sair, com os ouvintes religados (cvOn/cvContexto); HISTÓRICO mede o texto no tamanho em que desenha (15 px; media em 14 e desenhava em 16, a 9.2.70 invadia a versão de baixo); menu DEV escondido: o ícone </> só aparece depois de 5 toques seguidos em Pedro Javarotti nos créditos (salvo em settings.dev; mais 5 escondem); tools/tela_check.mjs'],
+  ['9.2.71', 'TELA CHEIA sem chuvisco: em tela cheia o canvas é recriado sem desynchronized (o atributo piscava pontos no Chrome do Android, já visto na 9.2.1) e volta a ele ao sair, com os ouvintes religados (cvOn/cvContexto); dentro de um quadro (portfólio) fica sempre sem o atributo; HISTÓRICO mede o texto no tamanho em que desenha (15 px; media em 14 e desenhava em 16, a 9.2.70 invadia a versão de baixo); menu DEV escondido: o ícone </> só aparece depois de 5 toques seguidos em Pedro Javarotti nos créditos (salvo em settings.dev; mais 5 escondem); tools/tela_check.mjs'],
   ['9.2.70', 'etapa 0 do fechamento (conformidade com o JGK): o build acusa nome de topo repetido (aWisp do arremedo.js estava declarado 2×; a 1ª, morta, saiu); o som para também no alt-tab/troca de app/página guardada (blur, pagehide) e volta com o foco; a música olha 0,45 s à frente, pula as notas perdidas depois de quadro travado (sem rajada) e cada música toca num ganho próprio que some em 0,1 s na troca; canvas perdido (contextlost) ou página devolvida do cache recarrega o jogo'],
   ['9.2.69', 'limpeza L6: menu separado em dado, layout, desenho e toque; flags soltas viraram kind; jogo igual (entrada que faltava no registro)'],
   ['9.2.68', 'limpeza L9: módulos sem número no nome (nucleo, heroi, mundo, cenas, main…) e ordem de carga numa lista explícita, src/modulos.txt, que o build.mjs confere contra a pasta; o dist saiu byte a byte igual ao da L10 antes de mexer nos comentários; README, docs, comentários e tools com os nomes novos (tabela antigo → novo em docs/LIMPEZA_MAPA.md); jogo igual'],
