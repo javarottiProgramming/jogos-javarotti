@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v0.3.4</title>
+<title>Sinuca Intergaláctica · v0.3.5</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '0.3.4', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '0.3.5', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -473,7 +473,7 @@ AU.note = (instId, midi, t, dur, vol, o) => {
   if (I.vib) { const [cents, hz, del] = I.vib, l = c.createOscillator(), lg = c.createGain(); l.frequency.value = hz || 5.5; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(cents || 18, t + (del || .18) + .15); l.connect(lg); lg.connect(src.detune); l.start(t); src.onended = () => { try { l.stop(); } catch (e) {} }; }
   src.start(t);
   const voz = { src, g, t, m, end: z.loop ? 1e9 : t + z.pcm.length / z.taxa / src.playbackRate.value,
-    off(t2) { if (voz.offT) return; voz.offT = t2; try { g.gain.cancelScheduledValues(t2); g.gain.setTargetAtTime(0, t2, Math.max(.008, r / 4)); src.stop(t2 + r + .08); } catch (e) {} voz.end = Math.min(voz.end, t2 + r); } };
+    off(t2) { if (voz.offT !== undefined && voz.offT <= t2) return; voz.offT = t2;   /* 0.3.5: soltar MAIS CEDO vale (antes qualquer off já agendado bloqueava: a derrota, de notas longas, tocava até o fim por cima da música seguinte) */ try { g.gain.cancelScheduledValues(t2); g.gain.setTargetAtTime(0, t2, Math.max(.008, r / 4)); src.stop(t2 + r + .08); } catch (e) {} voz.end = Math.min(voz.end, t2 + r); } };
   if (dur !== undefined && dur !== null) voz.off(t + dur);
   return voz;
 };
@@ -1016,12 +1016,13 @@ function drawBtn(g, b, foc) {
   if (b.kind === 'fs') { const c = foc ? P.lime : P.line, x = b.x, y = b.y; K.rect(g, x, y, b.w, b.h, P.panel); [[x + 2, y + 2, 1, 1], [x + b.w - 3, y + 2, -1, 1], [x + 2, y + b.h - 3, 1, -1], [x + b.w - 3, y + b.h - 3, -1, -1]].forEach(([px, py, sx, sy]) => { K.rect(g, Math.min(px, px + sx * 3), py, 4, 1, c); K.rect(g, px, Math.min(py, py + sy * 3), 1, 4, c); }); return; }
   if (b.kind === 'slider') {
     K.panel(g, b.x, b.y, b.w, b.h, { line: foc ? P.lime : P.line, line2: foc ? P.lime2 : P.line2 }); const t = (b.get() - b.min) / (b.max - b.min), bx = b.x + 4, bw = b.w - 8;
-    K.rect(g, bx, b.y + b.h - 6, bw, 2, P.dim); K.rect(g, bx, b.y + b.h - 6, Math.round(bw * t), 2, foc ? P.lime : P.line); K.rect(g, bx + Math.round(bw * t) - 1, b.y + b.h - 8, 3, 6, P.white);
-    K.txt(g, b.label, b.x + 5, b.y + 2, { c: foc ? P.white : P.grey }); K.txt(g, b.fmt ? b.fmt(b.get()) : String(b.get()), b.x + b.w - 5, b.y + 2, { al: 'r', c: foc ? P.lime : P.white }); return;
+    K.rect(g, bx, b.y + b.h - 5, bw, 2, P.dim); K.rect(g, bx, b.y + b.h - 5, Math.round(bw * t), 2, foc ? P.lime : P.line); K.rect(g, bx + Math.round(bw * t) - 1, b.y + b.h - 7, 3, 5, P.white);
+    K.txt(g, b.label, b.x + 5, b.y + 1, { c: foc ? P.white : P.grey }); K.txt(g, b.fmt ? b.fmt(b.get()) : String(b.get()), b.x + b.w - 5, b.y + 1, { al: 'r', c: foc ? P.lime : P.white }); return;   // 0.3.5: rótulo não encosta no controle
   }
   K.panel(g, b.x, b.y + (pr ? 1 : 0), b.w, b.h, { bg: foc ? P.panel2 : P.panel, line: d ? P.dim : foc ? P.lime : P.line, line2: d ? P.ink : foc ? P.lime2 : P.line2 });
   K.txt(g, b.label, b.x + b.w / 2, b.y + (b.h - 10) / 2 + (pr ? 1 : 0) + 1, { al: 'c', c: d ? P.dim : foc ? P.white : (b.c || P.chrome), s: b.s || 1 });
-  if (foc && !UI.modal) { const a = (K.time * 4 | 0) % 2; K.txt(g, '→', b.x - 8 - a, b.y + (b.h - 10) / 2 + 1, { c: P.lime }); if (d) K.txt(g, d, b.x + b.w / 2, b.y + b.h + 2, { al: 'c', c: P.pink }); }
+  if (foc && !UI.modal) { const a = (K.time * 4 | 0) % 2; if (!b.noArrow) K.txt(g, '→', Math.max(1, b.x - 8 - a), b.y + (b.h - 10) / 2 + 1, { c: P.lime });   // 0.3.5: a seta nunca sai da tela (botão encostado na borda)
+    if (d) { const w = K.tw(d), cx = clamp(b.x + b.w / 2, w / 2 + 3, K.v.W - w / 2 - 3); K.txt(g, d, cx, b.y + b.h + 2, { al: 'c', c: P.pink }); } }   // e o motivo do botão trancado também não (ex.: "Última página" no canto direito)
 }
 UI.draw = g => {
   const L = UI.list(); for (const b of UI.btns) if (vis(b)) drawBtn(g, b, !UI.modal && L[UI.focus] === b);
@@ -1253,9 +1254,9 @@ K.defScene('partida', {
   drawOver(g) {
     const M = M0(); this.drawHud(g, M);
     if (M.spinOpen) this.drawSpin(g, M);
-    if (M.msgT > 0) { const a = Math.min(1, M.msgT * 3); /* aviso na faixa do topo, nunca por cima da mesa (ART_BIBLE) */ g.globalAlpha = a; const w = Math.min(K.v.W - 4, K.tw(M.msg) + 16); K.panel(g, (K.v.W - w) / 2, 1, w, BAR - 4, { line: M.msgC }); K.txt(g, M.msg, K.v.W / 2, 9, { al: 'c', c: M.msgC, s: 1 }); g.globalAlpha = 1; }
+    if (M.msgT > 0 && !M.pausa) { const a = Math.min(1, M.msgT * 3); /* aviso na faixa do topo, nunca por cima da mesa (ART_BIBLE) */ g.globalAlpha = a; const w = Math.min(K.v.W - 4, K.tw(M.msg) + 16); K.panel(g, (K.v.W - w) / 2, 1, w, BAR - 4, { line: M.msgC }); K.txt(g, M.msg, K.v.W / 2, 9, { al: 'c', c: M.msgC, s: 1 }); g.globalAlpha = 1; }
     if (M.fase === 'fim') { const t = Math.min(1, M.fimT * 2); g.globalAlpha = t * .6; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; K.txt(g, M.venceu ? 'VITÓRIA!' : 'DERROTA', K.v.W / 2, 84, { al: 'c', c: M.venceu ? P.lime : P.pink, s: 3 }); K.txt(g, M.fimMsg, K.v.W / 2, 120, { al: 'c', c: P.white }); }
-    if (M.pausa) { g.globalAlpha = .72; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; K.txt(g, M.pzTela === 'opcoes' ? 'OPÇÕES' : 'PAUSA', K.v.W / 2, M.pzTela === 'opcoes' ? 22 : 40, { al: 'c', c: P.gold, s: 2 }); }
+    if (M.pausa) { g.globalAlpha = .72; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; K.txt(g, M.pzTela === 'opcoes' ? 'OPÇÕES' : 'PAUSA', K.v.W / 2, M.pzTela === 'opcoes' ? 28 : 40, { al: 'c', c: P.gold, s: 2 }); }
   },
   /* LINHA DE MIRA por nível (K.guia): 0 = curta e tracejada · 1 = + caminho curto da bola alvo · 2 = completa (até a bola, caminho da bola alvo
    * proporcional à força que ela recebe e desvio da branca) · 3+ = linhas mais longas e o caminho da bola alvo mostra a 1ª tabela */
@@ -1285,7 +1286,7 @@ K.defScene('partida', {
   /* bolas que FALTAM de cada jogador (ids), na ordem do HUD; 8 sozinha quando acabou o grupo; null enquanto a mesa está aberta */
   faltam(M, j) { if (!M.grupos[j]) return null; const L = M.S.balls.filter(b => !b.in && K.grupo(b.id) === M.grupos[j]).map(b => b.id); return L.length ? L : [8]; },
   /* posição (px 1×) da bola i do HUD do jogador j: centro da linha das bolas, logo abaixo do nome */
-  hudBola(j, i) { const W = K.v.W, st = HUDR * 2 + 1.6; return { x: j === 0 ? 4 + HUDR + i * st : W - 4 - HUDR - i * st, y: BAR - 4 - HUDR }; },
+  hudBola(j, i) { const W = K.v.W, st = HUDR * 2 + 1.6; return { x: j === 0 ? 4 + HUDR + i * st : W - 4 - HUDR - i * st, y: BAR - 3 - HUDR }; },
   /* HUD das bolas na camada HI-RES, com o mesmo polimento da mesa: bola lisa 4× e número num círculo branco bem legível (0.3.1) */
   drawHudBolas(h, M) { const k = 2, rr = HUDR * k;
     [0, 1].forEach(j => { const L = this.faltam(M, j); if (!L) return; L.forEach((id, i) => { const p = this.hudBola(j, i), X = p.x * k, Y = p.y * k, cv = M.bh[id], w = cv.width / (cv.q || 1);
@@ -1302,10 +1303,10 @@ K.defScene('partida', {
   drawHud(g, M) {
     const W = K.v.W, H = K.v.H, touch = K.input.last === 'touch';
     [0, 1].forEach(j => { const left = j === 0, x = left ? 4 : W - 4, act = M.vez === j && M.fase !== 'fim';
-      K.txt(g, M.quem[j], x, 1, { al: left ? 'l' : 'r', c: act ? P.lime : P.grey });
+      K.txt(g, M.quem[j], x, 0, { al: left ? 'l' : 'r', c: act ? P.lime : P.grey });   // 0.3.5: 1 px acima, para a bola de baixo não encostar no nome
       if (!M.grupos[j]) K.txt(g, M.aberta ? 'mesa aberta' : '', x, BAR - 12, { al: left ? 'l' : 'r', c: P.dim }); });   // as bolas em si vão na camada hi-res (drawHudBolas)
     const t = clamp(M.clock / M.tempoMax, 0, 1); K.rect(g, W / 2 - 30, 4, 60, 3, P.dim); K.rect(g, W / 2 - 30, 4, Math.round(60 * t), 3, t < .25 ? P.pink : P.line);
-    if (!(M.msgT > 0)) K.txt(g, M.vez === 0 ? (M.fase === 'mao' ? 'SUA VEZ · BOLA NA MÃO' : 'SUA VEZ') : M.fase === 'pensa' && !M.plan ? 'RIVAL PENSANDO...' : 'VEZ DO RIVAL', W / 2, 12, { al: 'c', c: M.vez === 0 ? P.lime : P.gold });
+    if (!(M.msgT > 0) && !M.pausa) K.txt(g, M.vez === 0 ? (M.fase === 'mao' ? 'SUA VEZ · BOLA NA MÃO' : 'SUA VEZ') : M.fase === 'pensa' && !M.plan ? 'RIVAL PENSANDO...' : 'VEZ DO RIVAL', W / 2, 12, { al: 'c', c: M.vez === 0 ? P.lime : P.gold });
     // calha da esquerda: barra F (força); no toque é a zona de puxar para baixo
     K.panel(g, 5, BAR + 6, 14, 126, { grad: false, line: M.barDrag ? P.lime : undefined }); K.rect(g, 8, BAR + 9, 8, 120, P.ink); const ph = Math.round(118 * M.pow); for (let i = 0; i < ph; i += 2) K.rect(g, 9, BAR + 9 + i, 6, 1, i > 100 ? P.pink : i > 60 ? P.gold : P.lime); K.txt(g, 'F', 12, BAR + 134, { al: 'c', c: P.grey });
     if (touch && this.human(M) && M.fase === 'mira' && !M.barDrag) K.txt(g, '↓', 12, BAR + 148, { al: 'c', c: (K.time * 2 | 0) % 2 ? P.lime : P.dim });
@@ -1318,7 +1319,8 @@ K.defScene('partida', {
       K.panel(g, RX(), 58, CW, 74, { grad: false }); const bh = Math.round(66 * M.breath); for (let i = 0; i < bh; i += 2) K.rect(g, RX() + 3, 128 - i, CW - 6, 1, M.holding ? P.line : P.line2); K.txt(g, 'Q', RX() + CW / 2, 138, { al: 'c', c: P.grey });
       K.txt(g, 'E', RX() + CW / 2, 172, { al: 'c', c: P.grey }); }
     K.rect(g, 0, H - 14, W, 14, P.ink); K.rect(g, 0, H - 14, W, 1, P.line2);
-    if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 0, 10, 48, 18, 4, H - 13, 24, 9); K.txt(g, M.rival.nome + ':', 32, H - 12, { c: P.gold }); K.txt(g, M.fala, 38 + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
+    if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.imageSmoothingEnabled = true; g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 2, 2, 44, 44, 4, H - 13, 12, 12); g.imageSmoothingEnabled = false;   // 0.3.5: rosto inteiro (antes era uma tira cortada ao meio)
+      K.txt(g, M.rival.nome + ':', 20, H - 12, { c: P.gold }); K.txt(g, M.fala, 26 + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
     else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'arraste na mesa = mira · F: puxe p/ baixo · faixa direita = ajuste fino' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
     else if (this.human(M) && M.fase === 'mao') K.txt(g, touch ? 'bola na mão: arraste a branca e solte' : 'bola na mão: mova a branca e clique (ou Enter)', W / 2, H - 12, { al: 'c', c: P.lime });
   },
@@ -1635,7 +1637,7 @@ K.defScene('creditos', {
   back() { K.go('titulo'); },
   update(dt) { const fast = K.input.down('ok') || K.input.down('down') || Object.keys(K.input.ptr).length > 0; this.y -= dt * 18 * (fast ? 5 : 1); if (this.y < -this.alt - 20) this.y = H_(); },
   draw(g) { K.drawSpace(g, K.time); let y = this.y; const L = typeof K.creditos === 'function' ? K.creditos() : K.creditos;
-    g.save(); g.beginPath(); g.rect(0, 4, W_(), H_() - 34); g.clip();   /* janela da rolagem: o texto nunca passa por cima do VOLTAR nem da dica (QA 0.2.0) */
+    g.save(); g.beginPath(); g.rect(0, 22, W_(), H_() - 52); g.clip();   /* janela da rolagem: o texto nunca passa por cima do VOLTAR, da dica (QA 0.2.0) nem do ícone de tela cheia (0.3.5) */
     for (const l of L) { const s = l.s || 1; if (y > -20 && y < H_()) K.txt(g, l.t || '', W_() / 2, y, { al: 'c', c: l.c || P.white, s }); y += (l.gap || 12) * (s > 1 ? 1.6 : 1); }
     g.restore(); this.alt = y - this.y; K.txt(g, 'segure para acelerar', W_() - 6, H_() - 11, { al: 'r', c: P.dim }); },
 });
@@ -1687,7 +1689,7 @@ D.planets = () => { if (!SAVE.game) K.newGame(); K.planets().forEach(pl => pl.pa
 D.sim = (mesa, balls, deg, pow, fx, max) => { const T = PL.prep(REG.table[mesa]); const S = { balls: balls.map(b => Object.assign({ vx: 0, vy: 0, in: false, f: 0, s: 0 }, b)), t: 0, log: [] }; PL.shoot(S, deg * Math.PI / 180, pow, fx); PL.simulate(S, T, max || 15); return S; };
 
 {
-/*==CONTENT:mesas==  DONO: designer de mesas A (MVP 0.2.0). Mesas: hangar7 (clássica), empenada (relevo leve), brasil (formato temático).
+/*==CONTENT:mesas==  DONO: designer de mesas A (MVP 0.2.0). Mesas: hangar7 (clássica), empenada (pano em ondas), brasil (formato temático).
  * K.defTable(id, { nome, w, h, poly | polys, pockets: [{x,y,r,boca?}], hgt(x,y) (relevo), nivel (passo das curvas de nível), atrito(x,y), forca(b,dt,S),
  *   bumpers: [{x,y,r,k,cor}], head, foot, kitchen, feltro, borda, bordaLuz, bordaSombra, regra, musica, desenho(g,s,pad) (enfeite fixo), desenhoVivo(g,MV,t),
  *   ganchos: { avaliar(M, r) } })     — K.tableRect({...}) monta a retangular de 6 caçapas e aceita os mesmos extras.
@@ -1736,21 +1738,24 @@ D.sim = (mesa, balls, deg, pow, fx, max) => { const T = PL.prep(REG.table[mesa])
       } }));
   }
 
-  /* ================= 2 · MESA EMPENADA · relevo leve (partida 2) =================
-   * Mesa velha de bar com o pé quebrado: inclina para a direita (e um tiquinho para baixo). O lado alto fica quase plano (g = 0,03: a tacada normal mal sente);
-   * perto do trilho baixo a ladeira passa de 0,17 e a bola parada ali escorrega devagar até a tabela. Nas ladeiras < 0,17 a bola parada fica parada.
-   * h(x,y) = −(0,03·x + 0,172·∫S) − 0,012·y, com S = smoothstep a partir de x = 170 (derivada em x: g(x) = 0,03 + 0,172·S). */
+  /* ================= 2 · MESA EMPENADA · pano em ondas (partida 2) =================
+   * Mesa velha de bar que empenou: o pano ondula, sem lado alto nem lado baixo. 0.3.5 (Pedro: "desde a 1ª tacada todas as bolas ficavam presas no canto direito, enfileiradas"):
+   * a versão antiga era uma ladeira para a direita que passava de 0,17 perto do trilho, e a quebra mandava as 15 bolas para a tabela (medido: 77% delas ali, colunas de até 14).
+   * Agora o relevo é uma onda de MÉDIA ZERO: h = A·sen(kx·x + 0,9·sen(ky·y)), A = 0,55, λx = 100 u, λy = 110 u (as curvas de nível saem onduladas de verdade).
+   * Ladeira máxima 0,045 (≈ 40 u/s², menos que o atrito de rolamento MU = 45): bola parada NUNCA anda sozinha, nenhum canto vira ralo, e a bola em movimento só entorta:
+   * tacada forte (≥ 0,9) desvia < 0,5 u até o fim da mesa, tacada média ~1 u e tacada MUITO fraca até ~6 u (quase 2 bolas). Quem manda na curva é a força. A IA simula com a mesma física. */
   {
-    const XS = 170, WW = 256, A = .03, B = .172, YT = .012;
-    const hgt = (x, y) => { const t = Math.max(0, Math.min(1, (x - XS) / (WW - XS))); return -(A * x + B * (WW - XS) * (t * t * t - t * t * t * t / 2)) - YT * y; };
-    const F = '#2B83AD', SETAS = [K.mix(F, '#FFFFFF', .14), K.mix(F, '#FFFFFF', .22), K.mix(F, '#FFFFFF', .3)];
-    K.defTable('empenada', K.tableRect({ nome: 'Mesa Empenada', feltro: F, borda: '#6F7F98', bordaLuz: '#A4B2C8', bordaSombra: '#2A3348', nivel: 2.1, hgt,
+    const A = .55, KX = 2 * Math.PI / 100, KY = 2 * Math.PI / 110, FY = .9;
+    const hgt = (x, y) => A * Math.sin(KX * x + FY * Math.sin(KY * y));
+    const F = '#2B83AD', ONDA = [K.mix(F, '#FFFFFF', .34), K.mix(F, '#FFFFFF', .5)];
+    K.defTable('empenada', K.tableRect({ nome: 'Mesa Empenada', feltro: F, borda: '#6F7F98', bordaLuz: '#A4B2C8', bordaSombra: '#2A3348', nivel: .4, hgt,
       desenho(g, s, pad) {
         g.imageSmoothingEnabled = false;
         const X = x => (pad + x * s) / 2, Y = y => (pad + y * s) / 2;
-        // três setas (>) em fila, cada vez mais claras: apontam para o lado baixo, sem ruído
-        SETAS.forEach((c, i) => { const x = Math.round(X(104 + i * 10)), y = Math.round(Y(64)); for (let k = 0; k <= 3; k++) { GP(g, x + k, y - 3 + k, c); GP(g, x + k, y + 3 - k, c); GP(g, x + k + 1, y - 3 + k, c); GP(g, x + k + 1, y + 3 - k, c); } });
-        // "calço" dobrado no pé quebrado, em cinza frio, na quina de baixo (trilho)
+        // três ondas (~) em fila, a do meio mais clara: a marca da mesa que empenou (cada uma tem 12 × 5 pixels do jogo)
+        [0, 1, 2].forEach(i => { const x0 = Math.round(X(100 + i * 20)), y0 = Math.round(Y(64)) - 2, c = ONDA[i === 1 ? 1 : 0];
+          [[0, 3], [1, 2], [2, 1], [3, 0], [4, 0], [5, 1], [6, 2], [7, 3], [8, 4], [9, 4], [10, 3], [11, 2]].forEach(([dx, dy]) => { GP(g, x0 + dx, y0 + dy, c); GP(g, x0 + dx, y0 + dy + 1, c); }); });
+        // "calço" dobrado de papel no pé que bambeia, em cinza frio, na quina de baixo (trilho)
         sprite(g, ['.cccccc.', 'cLLLLLDc', 'cLLLLDDc', '.cccccc.'], Math.round(X(236)) - 4, Math.round(Y(133)) - 1, { c: '#2A3348', L: '#C9D3E4', D: '#8796B0' });
         g.imageSmoothingEnabled = true;
       } }));
@@ -2574,7 +2579,7 @@ K.defScene('planeta', {
       K.rect(g, 30, y, 32, 26, fl); K.rect(g, 31, y + 1, 30, 24, P.ink); Zface(g, p.rival, 33, y + 1, 28, 24, hot && !lock ? (K.time * 4 | 0) % 2 : 0);
       if (lock) { g.globalAlpha = .7; K.rect(g, 31, y + 1, 30, 24, P.ink); g.globalAlpha = 1; g.drawImage(Zlock(), 41, y + 7); }
       /* prêmio */
-      const pw = 82, px = 276; K.panel(g, px, y, pw, 26, { line: lock ? P.dim : P.line2, line2: P.ink, a: 1 });
+      const pw = 92, px = 276; K.panel(g, px, y, pw, 26, { line: lock ? P.dim : P.line2, line2: P.ink, a: 1 });
       K.txt(g, 'PRÊMIO', px + 6, y + 3, { c: P.grey }); K.txt(g, '+' + Math.round((p.premio || 0) * K.dif().premio) + ' ◆', px + 6, y + 14, { c: lock ? P.grey : P.lime });
       if (ok) K.txt(g, 'FEITO', px + pw - 6, y + 3, { al: 'r', c: P.gold });
     });
@@ -2582,7 +2587,7 @@ K.defScene('planeta', {
 });
 
 /* ====================================================================== LOJA */
-const ZLJ = { y: 38, p: 48, ph: 46, pw: 110, bw: 56, pag: 3 };   // pag = tacos por página (0.3.2: a coleção dos rivais ocupa 2 páginas)
+const ZLJ = { y: 37, p: 51, ph: 50, pw: 110, bw: 56, pag: 3 };   // pag = tacos por página (0.3.2: a coleção dos rivais ocupa 2 páginas)
 const ZFX = { mira: 'LINHA MAIS LONGA E MÃO FIRME', tempo: '+6 SEGUNDOS EM CADA TACADA', calma: 'MÃO MAIS FIRME E RESPIRO LONGO' };
 function Zicon(g, id, x, y, c) {   // ícones 16×16 dos treinos, desenhados com primitivas
   K.disc(g, x + 8, y + 8, 8, P.ink); K.disc(g, x + 8, y + 8, 7, P.night);
@@ -2613,8 +2618,8 @@ K.defScene('loja', {
     this.rows.forEach((c, i) => { const lib = K.cueLiberado(c), tem = G.tacos[c.id], eq = G.taco === c.id, y = ZLJ.y + i * ZLJ.p;
       this.bt.push(UI.button({ key: 'c:' + c.id, x: 198 + ZLJ.pw + 12, y: y + (ZLJ.ph - 28) / 2, w: ZLJ.bw, h: 28, label: !lib ? 'TRANCADO' : eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: !lib ? P.dim : eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome, dis: !lib ? Zmotivo(c) : null,
         on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), rebuild('c:' + c.id)) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + (c.preco ? ' ' + Zfx(c).join(', ') + '.' : '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); rebuild('c:' + c.id); } }) })); });
-    if (np > 1) { UI.button({ key: 'pg-', x: 336, y: 21, w: 18, h: 13, label: '←', dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
-      UI.button({ key: 'pg+', x: 356, y: 21, w: 18, h: 13, label: '→', dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
+    if (np > 1) { UI.button({ key: 'pg-', x: 336, y: 21, w: 18, h: 13, label: '←', noArrow: true, dis: () => this.pg <= 0 ? 'Primeira página' : null, on: () => { this.pg--; rebuild('pg-'); } });
+      UI.button({ key: 'pg+', x: 356, y: 21, w: 18, h: 13, label: '→', noArrow: true, dis: () => this.pg >= np - 1 ? 'Última página' : null, on: () => { this.pg++; rebuild('pg+'); } }); }
     Zback('mapa'); UI.fsIcon(); const L = UI.list(), k = L.findIndex(b => b.key === keep); UI.focus = k >= 0 ? k : 0;
   },
   back() { K.go('mapa'); },
@@ -2629,19 +2634,22 @@ K.defScene('loja', {
     U.forEach((u, i) => {
       const x = 10, y = ZLJ.y + i * ZLJ.p, lv = G.up[u.id] || 0, max = u.precos.length, hot = cur === this.bt[i];
       K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : P.line, line2: hot ? P.lime2 : P.line2, a: 1 }); Zicon(g, u.id, x + 5, y + 5, P.line);
-      K.txt(g, u.nome, x + 26, y + 3, { c: P.gold }); for (let k = 0; k < max; k++) Zdiamond(g, x + 26 + k * 10, y + 14, k < lv);
+      K.txt(g, u.nome, x + 26, y + 2, { c: P.gold }); for (let k = 0; k < max; k++) Zdiamond(g, x + 26 + k * 10, y + 13, k < lv);
       K.wrap(ZFX[u.id] || (u.desc || '').split('.')[0], ZLJ.pw - 10).slice(0, 2).forEach((l, j) => K.txt(g, l, x + 5, y + 23 + j * 9, { c: P.white }));
     });
     this.rows.forEach((c, i) => {
       const x = 198, y = ZLJ.y + i * ZLJ.p, hot = cur === this.bt[U.length + i], eq = G.taco === c.id, lib = K.cueLiberado(c);
       K.panel(g, x, y, ZLJ.pw, ZLJ.ph, { line: hot ? P.lime : eq ? P.lime2 : lib ? P.line : P.dim, line2: hot ? P.lime2 : P.line2, a: 1 });
-      K.txt(g, lib ? c.nome : '? ? ?', x + 6, y + 3, { c: lib ? P.gold : P.dim }); if (eq) K.txt(g, '●', x + ZLJ.pw - 8, y + 3, { al: 'r', c: P.lime });
+      K.txt(g, lib ? c.nome : '? ? ?', x + 6, y + 2, { c: lib ? P.gold : P.dim }); if (eq) K.txt(g, '●', x + ZLJ.pw - 8, y + 2, { al: 'r', c: P.lime });
       const L = lib ? Zfx(c) : K.wrap('VENÇA ' + Zrival(c).nome + ' PARA LIBERAR', ZLJ.pw - 12);
-      (lib && c.preco === 0 ? K.wrap(L[0], ZLJ.pw - 10) : L).slice(0, 3).forEach((l, j) => K.txt(g, l, x + 6, y + 21 + j * 8, { c: lib ? P.white : P.grey }));
+      /* 0.3.5 (Pedro: "o nome do taco encosta no desenho"): cartão de 50 px — nome (linhas y+4..10) · desenho do taco (centro em y+16, de y+12 a y+20) · atributos a partir de y+21,
+       * 9 px entre linhas (3 linhas terminam em y+47). Nada encosta em nada, nem a cedilha de FORÇA na linha de baixo. */
+      const AL = (lib && c.preco === 0 ? K.wrap(L[0], ZLJ.pw - 10) : L).slice(0, 3);
+      AL.forEach((l, j) => K.txt(g, l, x + 6, y + 21 + j * 9, { c: lib ? P.white : P.grey }));
     });
   },
   /* tacos LISOS na camada 2× com a mesma função da partida (K.drawCue, pedido do Pedro 2026-11-21): ponta à esquerda, cabo à direita. Trancado = silhueta escura */
-  drawHi(h) { this.rows.forEach((c, i) => { const A = K.cueArte(c); K.drawCue(h, (198 + 8) * 2, (ZLJ.y + i * ZLJ.p + 14.5) * 2, 1, 0, 150, this.vis[i], Math.min(1.1, 188 / (150 * A.comp))); }); },
+  drawHi(h) { this.rows.forEach((c, i) => { const A = K.cueArte(c); K.drawCue(h, (198 + 8) * 2, (ZLJ.y + i * ZLJ.p + 16) * 2, 1, 0, 150, this.vis[i], Math.min(1.1, 188 / (150 * A.comp))); }); },
 });
 
 }
