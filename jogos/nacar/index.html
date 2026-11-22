@@ -53,9 +53,27 @@ const VIEW_W = Math.round(VW/ZOOM);   // largura de mundo visível
 const VIEW_H = Math.round(VH/ZOOM);
 const VIEW_Y = -62;                   // folga em cima (chefe alto, pulos)
 const VIEW_B = VIEW_Y + VIEW_H;       // borda de baixo do mundo desenhado
-const cv = document.getElementById('c');
+let cv = document.getElementById('c');
 const DESYNC = !/[?&]nodesync\b/.test(location.search);     /* 9.2.52: canvas desynchronized por padrão (Moto G35: 52 → 59 fps, quadros perdidos 17% → 2%); ?nodesync na URL desliga */
-const ctx = cv.getContext('2d', DESYNC ? { alpha:false, desynchronized:true } : { alpha:false });
+/* 9.2.71: em TELA CHEIA o canvas desynchronized pisca "chuvisco de TV" no Chrome do Android (já visto na 9.2.1; voltou quando a 9.2.52 o religou).
+   O atributo só vale na criação do contexto, então ao entrar/sair da tela cheia o canvas é trocado por um novo (mesmo id, estilo e tamanho)
+   e os ouvintes registrados por cvOn são religados. Fora da tela cheia continua desynchronized (o ganho de fps medido). */
+let ctx = null, CV_DESYNC = null;
+const CV_EV = [];
+function cvOn(tipo, fn, o){ CV_EV.push([tipo, fn, o]); cv.addEventListener(tipo, fn, o); }
+function cvContexto(){
+  const quer = DESYNC && !document.fullscreenElement;
+  if (ctx && quer === CV_DESYNC) return false;
+  if (ctx){
+    const n = cv.cloneNode(false); n.width = cv.width; n.height = cv.height;
+    cv.replaceWith(n); cv = n;
+    for (const e of CV_EV) cv.addEventListener(e[0], e[1], e[2]);
+  }
+  ctx = cv.getContext('2d', quer ? { alpha:false, desynchronized:true } : { alpha:false });
+  CV_DESYNC = quer;
+  return true;
+}
+cvContexto();
 const wrap = document.getElementById('wrap');
 const hc = document.getElementById('hc'), hx = hc.getContext('2d');   // camada do HUD em resolução cheia quando o jogo desce de qualidade (ECO): texto e botões não ficam moles
 const bgc = document.getElementById('bgc'), bgx = bgc.getContext('2d');
@@ -110,7 +128,7 @@ function scheduleLayout(ms){
 }
 addEventListener('resize', function(){ scheduleLayout(); });
 addEventListener('orientationchange', function(){ scheduleLayout(250); });
-document.addEventListener('fullscreenchange', function(){ scheduleLayout(250); });
+document.addEventListener('fullscreenchange', function(){ cvContexto(); scheduleLayout(250); });
 try{ if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', function(){ scheduleLayout(250); }); }catch(e){}
 document.getElementById('forceBtn').addEventListener('click', function(){
   forcedRotate = true; rotateEl.classList.remove('on'); layout();
@@ -130,7 +148,7 @@ const store = {
   get(k,d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({ music:true, sfx:true, vib:true, hard:false, diff:'normal', fps:false, calm:false }, store.get('nacar3.settings', {}));
+const settings = Object.assign({ music:true, sfx:true, vib:true, hard:false, diff:'normal', fps:false, calm:false, dev:false }, store.get('nacar3.settings', {}));
 /* Dificuldade: tudo que muda entre os níveis passa por aqui.
    dmgIn  = dano que o Nácar sofre      dmgOut = dano que ele causa
    hpMul  = vida dos inimigos           tokens = quantos podem atacar ao mesmo tempo
@@ -158,7 +176,7 @@ function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function rnd(a,b){ return a + Math.random()*(b-a); }
 function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function sgn(v){ return v<0?-1:1; }
-const BUILD = '9.2.70';
+const BUILD = '9.2.71';
 const BUILD_LOG = [
   ['1 e 2',  'Nácar em formas geométricas — rejeitado'],
   ['3 (1ª)', 'marionete recortada do desenho original'],
@@ -304,6 +322,7 @@ const BUILD_LOG = [
   ['9.2.33', 'URGENTE: tela preta no ECO (QUAL 2–3, desde 9.2.29): a camada #hc do HUD herdava o fundo escuro do canvas e cobria o jogo inteiro — agora é transparente'],
   ['9.2.34', 'VOLTAR do menu GOLPES voltou a funcionar (o item ▶ VER escondido espremia o espaçamento da lista e a área de toque ficava com altura 0); HISTÓRICO atualizado até a 9.2.34 e de volta a 3 páginas (30 versões, uma linha cada); medidor de FPS aparece em todas as telas, menus inclusive; tools/voltar_check.mjs confere o VOLTAR de todas as telas com toque de verdade'],
   ['9.2.35', 'prévia dos golpes, bloco 2 (ar): CORTE AÉREO e CORTE REVERSO no Olho Pendente, MERGULHO na Boca-de-Chão (brota com aviso, bote e mordida) e QUEDA GIRATÓRIA no Fôlego, com salto, ar e pouso pelas regras do 08_hero.js (gravidades, câmera lenta, tremor e hitstop do pouso); rubrica R17 (altura e pouso); golpes_check cobre as 10 prévias'],
+  ['9.2.71', 'TELA CHEIA sem chuvisco: em tela cheia o canvas é recriado sem desynchronized (o atributo piscava pontos no Chrome do Android, já visto na 9.2.1) e volta a ele ao sair, com os ouvintes religados (cvOn/cvContexto); HISTÓRICO mede o texto no tamanho em que desenha (15 px; media em 14 e desenhava em 16, a 9.2.70 invadia a versão de baixo); menu DEV escondido: o ícone </> só aparece depois de 5 toques seguidos em Pedro Javarotti nos créditos (salvo em settings.dev; mais 5 escondem); tools/tela_check.mjs'],
   ['9.2.70', 'etapa 0 do fechamento (conformidade com o JGK): o build acusa nome de topo repetido (aWisp do arremedo.js estava declarado 2×; a 1ª, morta, saiu); o som para também no alt-tab/troca de app/página guardada (blur, pagehide) e volta com o foco; a música olha 0,45 s à frente, pula as notas perdidas depois de quadro travado (sem rajada) e cada música toca num ganho próprio que some em 0,1 s na troca; canvas perdido (contextlost) ou página devolvida do cache recarrega o jogo'],
   ['9.2.69', 'limpeza L6: menu separado em dado, layout, desenho e toque; flags soltas viraram kind; jogo igual (entrada que faltava no registro)'],
   ['9.2.68', 'limpeza L9: módulos sem número no nome (nucleo, heroi, mundo, cenas, main…) e ordem de carga numa lista explícita, src/modulos.txt, que o build.mjs confere contra a pasta; o dist saiu byte a byte igual ao da L10 antes de mexer nos comentários; README, docs, comentários e tools com os nomes novos (tabela antigo → novo em docs/LIMPEZA_MAPA.md); jogo igual'],
@@ -440,9 +459,9 @@ const onDown = function(e){
     const s = touch.stick; s.active = true; s.id = e.pointerId; s.ox = p.x; s.oy = p.y; s.x = 0; s.y = 0;
   }
 };
-cv.addEventListener('pointerdown', onDown, {passive:true});
+cvOn('pointerdown', onDown, {passive:true});
 bgc.addEventListener('pointerdown', onDown, {passive:true});      // dedo nas faixas laterais também vale (stick e botões passam das bordas do jogo)
-cv.addEventListener('pointermove', function(e){
+cvOn('pointermove', function(e){
   if (touch.ids[e.pointerId] !== 'stick') return;
   const p = toGame(e), s = touch.stick;
   let dx = p.x - s.ox, dy = p.y - s.oy;
@@ -460,8 +479,8 @@ function releasePointer(e){
   else if (role) touch.held[role] = 0;
   delete touch.ids[e.pointerId];
 }
-cv.addEventListener('pointerup', releasePointer, {passive:true});
-cv.addEventListener('pointercancel', releasePointer, {passive:true});
+cvOn('pointerup', releasePointer, {passive:true});
+cvOn('pointercancel', releasePointer, {passive:true});
 
 function axis(){
   let x = 0, y = 0;
@@ -16799,9 +16818,9 @@ function titleMenu(){
     { label:'bestiário', kind:'icon', glyph:'bestiario', act:()=>openBestiary() },
     { label:'golpes', kind:'icon', glyph:'golpes', act:()=>openMoves('title') },
     { label:'opções', kind:'icon', glyph:'opcoes', act:()=>{ G.optBack = 'title'; openOptions(); } },
-    { label:'créditos', kind:'icon', glyph:'creditos', act:()=>openCredits() },
-    { label:'dev', kind:'icon', glyph:'dev', act:()=>openDev() }
+    { label:'créditos', kind:'icon', glyph:'creditos', act:()=>openCredits() }
   ];
+  if (settings.dev) rodape.push({ label:'dev', kind:'icon', glyph:'dev', act:()=>openDev() });   // DEV escondido (9.2.71): só aparece depois do segredo dos créditos
   // v6.2: fileira de ícones só na coluna da esquerda (antes ia até embaixo do herói)
   let rx = 86;
   for (const it of rodape){ it.x = rx; it.y = 446; rx += 84; items.push(it); }
@@ -17278,8 +17297,23 @@ function drawSelect(g, dt){
     }
     T(g, 'CAPÍTULO ' + C.num + ' · ' + C.name, cx + 10, cy + 20, { size:13, w:'700', sp:3, col:'#A8A194' }); }
 }
+/* DEV escondido (9.2.71, pedido do autor): 5 toques/cliques seguidos em "Pedro Javarotti" nos créditos liga o ícone </> do título
+   (fica salvo em settings.dev); mais 5 escondem de novo. Sem pista na tela: é só para o autor e o time testarem. */
+const DEV_NOME = { x:60, y:172, w:300, h:34 };
+function creditsSecret(dt){
+  if (G.devMsg && (G.devMsg.t -= dt) <= 0) G.devMsg = null;
+  for (const p of touch.taps){
+    if (p.x < DEV_NOME.x || p.x > DEV_NOME.x + DEV_NOME.w || p.y < DEV_NOME.y || p.y > DEV_NOME.y + DEV_NOME.h) continue;
+    const now = performance.now()/1000;
+    G.devTaps = now - (G.devTapT || -9) < 1.2 ? (G.devTaps || 0) + 1 : 1; G.devTapT = now;
+    if (G.devTaps >= 5){
+      G.devTaps = 0; settings.dev = !settings.dev; saveSettings(); AU.play(settings.dev ? 'uiOk' : 'ui');
+      G.devMsg = { t:2.6, txt: settings.dev ? 'MODO DEV DESBLOQUEADO' : 'MODO DEV ESCONDIDO' };
+    }
+  }
+}
 function openCredits(){
-  G.state = 'credits'; menu.t = 0;
+  G.state = 'credits'; menu.t = 0; G.devMsg = null; G.devTaps = 0;
   setMenu([
     { label:'VOLTAR', act:()=>toMenu('title') },
     { label:'ver histórico', kind:'small', x:640, y:294, act:()=>openHistory() }
@@ -17288,6 +17322,7 @@ function openCredits(){
 /* histórico para o jogador: uma linha por versão, 10 por página (3 páginas), sem jargão (o BUILD_LOG técnico continua em nucleo.js).
    A cada rodada entregue: acrescentar a versão nova NO TOPO (regra no CLAUDE.md). */
 const HIST_JOGO = [
+  ['9.2.71', 'tela cheia sem o chuvisco piscando; histórico sem texto encavalado'],
   ['9.2.70', 'o som para quando você sai do jogo e a música não engasga nem atropela na troca de tela; tela perdida em segundo plano recarrega'],
   ['9.2.69', 'limpeza interna: menus separados por partes; jogo igual'],
   ['9.2.68', 'limpeza interna: arquivos do jogo com nomes que dizem o que fazem; jogo igual'],
@@ -17352,7 +17387,7 @@ const HIST_JOGO = [
   ['9.2.6', 'Vitória: a câmera desliza até o Nácar'],
   ['9.2.5', 'Troca de fase do chefe com sinal único']
 ];
-const HIST_PER_PAGE = 10;
+const HIST_PER_PAGE = 8;
 function historyMenu(){
   const pages = Math.ceil(HIST_JOGO.length/HIST_PER_PAGE);
   const get = ()=>G.histPage || 0, set = p=>{ G.histPage = p; menu.t = 0; };
@@ -17366,8 +17401,9 @@ function openHistory(){
   historyMenu();
 }
 /* texto do histórico: quebra pela largura real e corta com reticências só depois de `max` linhas */
+const HIST_TXT = 15;
 function histLines(g, txt, w, max){
-  const L = wrapLines(g, txt, w, { size:14, w:'500' });
+  const L = wrapLines(g, txt, w, { size:HIST_TXT, w:'500' });             // mede no MESMO tamanho em que desenha (9.2.71: media em 14 e desenhava em 16, a linha vazava)
   if (L.length <= max) return L;
   const out = L.slice(0, max); let last = out[max - 1];
   while (last.length > 1 && g.measureText(last + '…').width > w) last = last.slice(0, -1);
@@ -17385,16 +17421,16 @@ function drawHistory(g, dt){
   const pages = Math.ceil(lista.length/HIST_PER_PAGE);
   const page = clamp(G.histPage || 0, 0, pages - 1);
   const pag = lista.slice(page*HIST_PER_PAGE, (page+1)*HIST_PER_PAGE);
-  const half = Math.ceil(pag.length/2);                    // duas colunas de 5
+  const half = Math.ceil(pag.length/2);                    // duas colunas de 4
   for (let i=0;i<pag.length;i++){
     const b = pag[i], col = i < half ? 0 : 1, row = i < half ? i : i - half;
-    const x = 70 + col*430, y = 186 + row*56;
+    const x = 70 + col*430, y = 184 + row*68;                // 4 por coluna: cabem as 2 linhas sem encostar na versão de baixo (9.2.71)
     const atual = b[0] === BUILD;
     g.save(); g.globalAlpha = clamp((menu.t - i*0.05)*5, 0, 1);
     if (atual){ g.fillStyle = BLOOD; g.fillRect(x - 14, y - 18, 4, 40); }
     T(g, 'v' + b[0], x, y, { size:21, f:FD, sp:1, col: atual ? BONE : '#A8A194' });
     const ln = histLines(g, b[1], 390, 2);
-    for (let j=0;j<ln.length;j++) T(g, ln[j], x, y + 24 + j*18, { size:16, w:'500', col: atual ? '#D8D2C6' : '#8C877F' });
+    for (let j=0;j<ln.length;j++) T(g, ln[j], x, y + 23 + j*17, { size:HIST_TXT, w:'500', col: atual ? '#D8D2C6' : '#8C877F' });
     g.restore();
   }
   drawMenuList(g, 70, VH - 46, 50, { w:200 });
@@ -17423,6 +17459,7 @@ function drawCredits(g, dt){
   T(g, 'v' + BUILD, 640, 252, { size:30, f:FD, sp:2, col:BONE });
   g.fillStyle = BLOOD; g.fillRect(642, 262, 26, 3);
   drawMenuList(g, 70, VH - 40, 50, { w:230 });
+  if (G.devMsg){ g.save(); g.globalAlpha = clamp(G.devMsg.t*2, 0, 1); T(g, G.devMsg.txt, 640, 340, { size:15, w:'700', sp:4, col:BONE }); g.fillStyle = BLOOD; g.fillRect(642, 350, 26, 3); g.restore(); }
 }
 /* abertura */
 /* entra numa fase: a primeira de cada capítulo mostra antes o cartão de título do capítulo */
@@ -19977,7 +20014,7 @@ const SCENES = {
     },
     render(dt){ drawLoading(ctx, dt); } },
   bench: { update(dt){ benchStep(dt); }, render(dt){ drawBench(ctx, dt); } },
-  title: menuScene(drawTitle), options: menuScene(drawOptions), padcfg: menuScene(drawPadCfg), credits: menuScene(drawCredits),
+  title: menuScene(drawTitle), options: menuScene(drawOptions), padcfg: menuScene(drawPadCfg), credits: { update(dt, busy){ if (!busy){ creditsSecret(dt); menuInput(); } }, render(dt){ drawCredits(ctx, dt); } },
   select: menuScene(drawSelect), history: menuScene(drawHistory), moves: menuScene(drawMoves), best: menuScene(drawBestiary),
   dev: menuScene(drawDev), pause: menuScene(drawPause), gameover: menuScene(drawGameOver),
   play: {                                              // o jogo em si: passo fixo da simulação + HUD/toque por cima
@@ -20126,7 +20163,7 @@ function telaPerdida(motivo){
   if (window.__semRecarregar){ window.__recarga = motivo; return; }
   location.reload();
 }
-cv.addEventListener('contextlost', function(e){ e.preventDefault(); telaPerdida('contextlost'); });
+cvOn('contextlost', function(e){ e.preventDefault(); telaPerdida('contextlost'); });
 /* botão voltar do Android (fora da tela cheia): age como Esc — volta no menu, pausa no jogo; a página não sai */
 function trapBack(){ try{ history.pushState({ nacar:1 }, ''); }catch(e){} }
 addEventListener('popstate', function(){
