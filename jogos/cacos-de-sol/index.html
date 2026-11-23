@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.4.1</title>
+<title>Cacos de Sol 1.4.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -25,16 +25,17 @@ body.dlgopen #touch,body.uimodal #touch{display:none!important}
 #tknob{position:absolute;left:50%;top:50%;width:4rem;height:4rem;border-radius:50%;background:var(--paper);border:.25rem solid var(--ink);transform:translate(-50%,-50%)}
 .tb{position:absolute;border:.28rem solid var(--ink);border-radius:50%;background:rgba(244,241,232,.82);color:var(--ink);font:400 1.15rem 'Lilita One',system-ui,sans-serif;width:5rem;height:5rem;display:grid;place-items:center;padding:0;touch-action:none;box-shadow:.25rem .3rem 0 rgba(16,24,48,.55)}
 .tb.on{background:var(--sun);transform:scale(.94)}
-:root{--tb:clamp(54px,calc(var(--vh,1vh)*15),92px);--R0:max(64px,calc(var(--sr) + 3.2rem));--B0:max(40px,calc(var(--sb) + 1.6rem))}
+:root{--tb:clamp(54px,calc(var(--vh,1vh)*15),92px);--tr:calc(var(--tb) * .9);--R0:max(64px,calc(var(--sr) + 3.2rem));--B0:max(40px,calc(var(--sb) + 1.6rem))}
 .tb{width:var(--tb);height:var(--tb);font-size:calc(var(--tb) * .24)}
-.b-atk{right:var(--R0);bottom:var(--B0);width:calc(var(--tb) * 1.65);height:calc(var(--tb) * 1.65);background:rgba(255,90,95,.92);color:#fff;font-size:calc(var(--tb) * .3)}
-.b-jump{right:calc(var(--R0) + var(--tb) * .35);bottom:calc(var(--B0) + var(--tb) * 1.65 + 12px)}
-.b-roll{right:calc(var(--R0) + var(--tb) * 1.65 + 14px);bottom:var(--B0);width:calc(var(--tb) * 1.1);height:calc(var(--tb) * 1.1)}
-.b-s1{right:calc(var(--R0) + var(--tb) * 2.75 + 26px);bottom:var(--B0);width:calc(var(--tb) * .9);height:calc(var(--tb) * .9)}
-.b-s2{right:calc(var(--R0) + var(--tb) * 1.65 + 14px);bottom:calc(var(--B0) + var(--tb) * 1.1 + 10px);width:calc(var(--tb) * .9);height:calc(var(--tb) * .9)}
-.b-s3{right:calc(var(--R0) + var(--tb) * 2.75 + 26px);bottom:calc(var(--B0) + var(--tb) * .9 + 10px);width:calc(var(--tb) * .9);height:calc(var(--tb) * .9)}
-.b-lock{right:calc(var(--R0) + var(--tb) * 3.8 + 40px);bottom:var(--B0);width:calc(var(--tb) * .8);height:calc(var(--tb) * .8);font-size:calc(var(--tb) * .2)}
-.b-int{white-space:nowrap;right:calc(var(--R0) + var(--tb) * 4.6 + 54px);bottom:var(--B0);width:calc(var(--tb) * 1.2);height:calc(var(--tb) * 1.2);background:rgba(255,210,63,.96);display:none}
+.b-jump,.b-roll,.b-s1,.b-s2,.b-s3{width:var(--tr);height:var(--tr);font-size:calc(var(--tr) * .24)}
+.b-atk{right:var(--R0);bottom:var(--B0);width:calc(var(--tr) * 1.65);height:calc(var(--tr) * 1.65);background:rgba(255,90,95,.92);color:#fff;font-size:calc(var(--tr) * .3)}
+.b-jump{right:calc(var(--R0) + var(--tr) * .35);bottom:calc(var(--B0) + var(--tr) * 1.65 + 12px)}
+.b-roll{right:calc(var(--R0) + var(--tr) * 1.65 + 14px);bottom:var(--B0);width:calc(var(--tr) * 1.1);height:calc(var(--tr) * 1.1)}
+.b-s1{right:calc(var(--R0) + var(--tr) * 2.75 + 26px);bottom:var(--B0);width:calc(var(--tr) * .9);height:calc(var(--tr) * .9)}
+.b-s2{right:calc(var(--R0) + var(--tr) * 1.65 + 14px);bottom:calc(var(--B0) + var(--tr) * 1.1 + 10px);width:calc(var(--tr) * .9);height:calc(var(--tr) * .9)}
+.b-s3{right:calc(var(--R0) + var(--tr) * 2.75 + 26px);bottom:calc(var(--B0) + var(--tr) * .9 + 10px);width:calc(var(--tr) * .9);height:calc(var(--tr) * .9)}
+.b-lock{right:calc(var(--R0) + var(--tr) * 3.8 + 40px);bottom:var(--B0);width:calc(var(--tr) * .8);height:calc(var(--tr) * .8);font-size:calc(var(--tr) * .2)}
+.b-int{white-space:nowrap;right:calc(var(--R0) + var(--tr) * 4.6 + 54px);bottom:var(--B0);width:calc(var(--tr) * 1.2);height:calc(var(--tr) * 1.2);background:rgba(255,210,63,.96);display:none}
 .b-pot{left:max(64px,calc(var(--sl) + 3.2rem));top:calc(var(--st) + 11rem);width:calc(var(--tb) * .85);height:calc(var(--tb) * .85);background:rgba(61,220,132,.92)}
 .b-pause{right:calc(var(--sr) + var(--mm,11.5rem) + 3.1rem);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75)}
 .b-map{right:calc(var(--sr) + var(--mm,11.5rem) + 3.1rem + var(--tb) * .75 + 10px);top:calc(var(--st) + 1rem);width:calc(var(--tb) * .75);height:calc(var(--tb) * .75);font-size:calc(var(--tb) * .17)}
@@ -4295,7 +4296,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.4.1', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.4.2', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -4326,7 +4327,7 @@ const PAL = K.pal = { ink: '#101830', ink2: '#1E2A55', paper: '#F4F1E8', paper2:
 const SAVE_KEY = 'cacosdesol.v1.save';
 /* opt: sv/mv volumes 0-100 · sens 1..10 (padrão 5) · inv (inverter Y) · q 0..2 / qa 1 = automático (só em memória, regra h) · shake · hap · fov · outl (contornos) · shadow
  * game: null | snapshot da partida (K.snapshot) · meta: coisas que sobrevivem ao "novo jogo" (finais, recordes) */
-const SAVE = K.save = { opt: { sv: 100, mv: 70, sens: 5, inv: 0, q: 1, qa: 1, shake: 1, hap: 1, fov: 1, outl: 1, shadow: 1, tsz: 1, mms: 1, mmrot: 1, lang: 'pt' }, game: null, meta: { ends: 0, best: 0, seen: {}, plays: 0, time: 0 } };
+const SAVE = K.save = { opt: { sv: 100, mv: 70, sens: 5, inv: 0, q: 1, qa: 1, shake: 1, hap: 1, fov: 1, outl: 1, shadow: 1, tsz: 1, cdist: 7.2, mms: 1, mmrot: 1, lang: 'pt' }, game: null, meta: { ends: 0, best: 0, seen: {}, plays: 0, time: 0 } };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s) { Object.assign(SAVE, s, { opt: Object.assign(SAVE.opt, s.opt || {}), meta: Object.assign(SAVE.meta, s.meta || {}) }); } } catch (e) {}
 SAVE.opt.snd = SAVE.opt.sv > 0 ? 1 : 0; SAVE.opt.mus = SAVE.opt.mv > 0 ? 1 : 0;
 K.qRun = 1; K.qEff = () => SAVE.opt.qa ? Math.min(K.qRun, 2) : SAVE.opt.q;            // qualidade automática só em memória (regra h)
@@ -5444,8 +5445,12 @@ function trailMesh(P) {
 K.G = null; const GRAV = 26, RUN = 6.4;
 const fwd = a => [Math.sin(a), Math.cos(a)];
 K.fwd = fwd;
+/* 1.4.2: distância da câmera (m) é opção do jogador (SAVE.opt.cdist; padrão 7,2 como sempre). Opções e roda do mouse usam K.setCamDist; vai de 3,6 a 24 m. */
+K.CAM_MIN = 3.6; K.CAM_MAX = 24;
+K.camDist = () => { const v = +(K.save.opt.cdist); return clamp(isFinite(v) && v > 0 ? v : 7.2, K.CAM_MIN, K.CAM_MAX); };
+K.setCamDist = v => { v = clamp(+v || 7.2, K.CAM_MIN, K.CAM_MAX); K.save.opt.cdist = Math.round(v * 100) / 100; if (K.G) K.G.cam.tdist = K.save.opt.cdist; clearTimeout(K._cdT); K._cdT = setTimeout(K.persist, 300); return v; };
 K.newGame = function (snap, look) {
-  const G = K.G = { look: K.normLook((snap && snap.look) || look), t: 0, tod: 9, day: 1, ents: [], enemies: [], drops: [], projs: [], inter: [], q: {}, flags: {}, inv: {}, coins: 0, xp: 0, lvl: 1, kills: 0, deaths: 0, play: 0, nodes: {}, chests: {}, opened: {}, equip: { weapon: 'espada_madeira', charm: null }, cam: { yaw: 0, pitch: .42, dist: 7.2, tdist: 7.2 }, lock: null, freeze: 0, region: null, banner: 0, skillsOpen: {}, bossFight: null, won: false, spawns: {}, track: null, hint: null, log: [], combatT: 0, rest: { x: 0, z: 26 }, pots: ['pocao_vida', 'pocao_brilho'], slots: { skill1: 'giro', skill2: 'lanca', skill3: 'nova' }, buffs: {}, buff: {} };
+  const G = K.G = { look: K.normLook((snap && snap.look) || look), t: 0, tod: 9, day: 1, ents: [], enemies: [], drops: [], projs: [], inter: [], q: {}, flags: {}, inv: {}, coins: 0, xp: 0, lvl: 1, kills: 0, deaths: 0, play: 0, nodes: {}, chests: {}, opened: {}, equip: { weapon: 'espada_madeira', charm: null }, cam: { yaw: 0, pitch: .42, dist: K.camDist(), tdist: K.camDist() }, lock: null, freeze: 0, region: null, banner: 0, skillsOpen: {}, bossFight: null, won: false, spawns: {}, track: null, hint: null, log: [], combatT: 0, rest: { x: 0, z: 26 }, pots: ['pocao_vida', 'pocao_brilho'], slots: { skill1: 'giro', skill2: 'lanca', skill3: 'nova' }, buffs: {}, buff: {} };
   K.fx.clear(); K.clearEntities && K.clearEntities();
   const spawn = REG.poi.vila ? [REG.poi.vila.x, REG.poi.vila.z + 6] : [0, 24];
   G.pl = newPlayer(spawn[0], spawn[1]); G.rest = { x: spawn[0], z: spawn[1] };
@@ -5658,7 +5663,7 @@ function updCamera(dt) {
   const G = K.G, c = G.cam, p = G.pl, I = K.input, cam = K.r3.cam; const unlockedLook = !G.lock && !K.uiBlock;
   if (unlockedLook) { c.yaw -= I.look.x; c.pitch = clamp(c.pitch + I.look.y, -.3, 1.05); }
   if (I.hit.camreset && !G.lock) { c.yaw = p.yaw + Math.PI; c.pitch = .42; }
-  if (I.zoomD) c.tdist = clamp(c.tdist + I.zoomD * .8, 3.6, 11);
+  if (I.zoomD) K.setCamDist(c.tdist + I.zoomD * .8);   /* 1.4.2: roda do mouse também grava a opção (até 24 m) */
   if (G.lock) { const d = Math.hypot(G.lock.x - p.x, G.lock.z - p.z), want = Math.atan2(G.lock.x - p.x, G.lock.z - p.z) + (d < 3 ? 0 : 0); c.yaw = angLerp(c.yaw, want, 1 - Math.exp(-6 * dt)); c.pitch = lerp(c.pitch, clamp(.3 + d * .012, .25, .6), 1 - Math.exp(-4 * dt)); }
   const px = p.x, pz = p.z, py = p.y + 1.55; if (G.camSnap) { c.tx = px; c.ty = py; c.tz = pz; G.camSnap = false; } if (c.tx === undefined) { c.tx = px; c.ty = py; c.tz = pz; }
   const k = 1 - Math.exp(-14 * dt); c.tx += (px - c.tx) * k; c.tz += (pz - c.tz) * k; c.ty += (py - c.ty) * (1 - Math.exp(-8 * dt));
@@ -6704,6 +6709,7 @@ UI.optPanel = function (l, back) {
   { const b = UI.btn('', () => { o.mmrot = o.mmrot === 0 ? 1 : 0; u(); K.persist(); }, { cls: 'small', parent: p }), u = () => { b.textContent = 'Minimapa: ' + (o.mmrot === 0 ? 'norte para cima' : 'gira com a câmera'); }; b.dataset.mmrot = 1; b.style.margin = '.25rem .25rem 0 0'; u(); }
   const q = UI.btn(K.qLabel(), () => { K.qCycle(); q.textContent = K.qLabel(); }, { cls: 'small', parent: p }); q.style.margin = '.25rem .25rem 0 0';
   row('Campo de visão', rng_('fov', .85, 1.2, .05, v => { o.fov = v; }), v => (+v).toFixed(2), 'fov');
+  row('Distância da câmera', rng_('cdist', K.CAM_MIN, K.CAM_MAX, .6, v => K.setCamDist(v)), v => (+v).toFixed(1).replace('.', ',') + ' m', 'cdist');   /* 1.4.2: bem mais longe que a roda do mouse permitia (era no máximo 11 m) */
   /* tamanho do minimapa (1.1.0): 3 botões, o escolhido fica destacado; vale na hora (e vale no mapa da pausa de fundo) */
   const mmr = h('div', 'row', '', p); mmr.style.margin = '.5rem 0'; const mml = h('span', '', 'Minimapa', mmr); mml.style.cssText = 'width:11rem;flex:none'; const mmb = [];
   const mmUpd = () => mmb.forEach((b, i) => { b.classList.toggle('pri', i === (o.mms === undefined ? 1 : o.mms)); b.style.opacity = i === (o.mms === undefined ? 1 : o.mms) ? 1 : .8; });
@@ -6981,7 +6987,7 @@ SC('play', {
   exit() { K.showTouch(false); if (K.G) { K.clearEntities(); } K.fx.clear(); K.showWorld(false); K.sky.biomeFog = null; K.G = null; K.dlg = null; K.ui.bossBar && 0; }
 });
 /* botão de interação (toque): mostra o VERBO da ação (FALAR, ABRIR, MINERAR, DESCANSAR…). Palavra longa encolhe a letra para caber no círculo (1.2.0) */
-K.showInteractBtn = (on, verb) => { const b = document.querySelector('.b-int'); if (!b) return; b.style.display = on ? 'grid' : 'none'; if (!on || !verb) return; const t = String(verb).toUpperCase(); if (b.textContent !== t) { b.textContent = t; const n = t.length; b.style.fontSize = n <= 5 ? '' : 'calc(var(--tb) * ' + (n <= 7 ? .19 : n <= 8 ? .165 : .145) + ')'; } };
+K.showInteractBtn = (on, verb) => { const b = document.querySelector('.b-int'); if (!b) return; b.style.display = on ? 'grid' : 'none'; if (!on || !verb) return; const t = String(verb).toUpperCase(); if (b.textContent !== t) { b.textContent = t; const n = t.length; b.style.fontSize = n <= 5 ? '' : 'calc(var(--tr) * ' + (n <= 7 ? .19 : n <= 8 ? .165 : .145) + ')'; } };
 /* ---------------------------------------------------------------- galeria: modelos e props numa mesa giratória (QA e agentes de arte)
  * K.go('gallery', { what:'models', ids:['gosma','morcego'], anim:'idle', page:0, per:5 })   ·   { what:'props', ids:[...] } */
 SC('gallery', {
@@ -8810,7 +8816,12 @@ K.reskinProp('poco', (mk) => {
   /* ============================================================ CALÇADO (pé: leg pivô; solo em y −.702) */
   const soleY = -LEGL;
   K.defLook('calcado', 'bota', { nome: 'Bota de couro', build(mk, c) {
-    for (const [s] of SIDES) mk.box(.22, .07, .22, PAPER, { y: -.78 * .9 + .2, z: .02, parent: c.P['leg' + s], name: 'canoBota' });
+    /* 1.4.2: o pé era um bloco quase simétrico (a ponta passava só 9 cm da canela e o calcanhar aparecia por trás): de costas parecia virado para trás. Agora o calcanhar fica rente à canela, a ponta avança bastante e tem biqueira clara e solado escuro. */
+    for (const [s] of SIDES) { const L = c.P['leg' + s];
+      hide(c.base['boot' + s]);
+      mk.box(.2, .12, .335, c.col, { y: soleY + .095, z: .0725, parent: L, name: 'bota' }); mk.box(.21, .04, .345, sh(c.col, .45), { y: soleY + .02, z: .0775, parent: L, name: 'solado' });
+      mk.box(.19, .085, .1, lite(c.col, .22), { y: soleY + .085, z: .2, parent: L, name: 'biqueira' });
+      mk.box(.22, .07, .22, PAPER, { y: -.78 * .9 + .2, z: .02, parent: L, name: 'canoBota' }); }
   } });
 
   K.defLook('calcado', 'tenis', { nome: 'Tênis', build(mk, c) {
