@@ -7045,7 +7045,7 @@ K.endingStart = function () {
  * Só visual: a roupa não muda atributo; `equip` (opcional) veste a prévia com K.dressModel (é por onde o guarda-roupa da fase 2 vai reaproveitar a tela).
  * Tudo dentro de um bloco: o motor é um arquivo só no navegador e const de topo repetido colide em silêncio. */
 /* ponto de encaixe do item 35 (slots de save + nome do herói): quando existirem, entram AQUI antes do criador. */
-K.newGameFlow = () => K.go('creator', {});
+K.newGameFlow = () => { if (K.LOOKS.cabelo && Object.keys(K.LOOKS.cabelo).length) K.go('creator', {}); else K.newGameStart(null); };   /* jogo sem peças registradas (ex.: o kit do motor) segue direto ao jogo, como antes do criador */
 /* o que o Confirmar do criador faz num jogo novo: só aqui o save antigo é apagado (quem aperta Voltar não perde nada) */
 K.newGameStart = look => { K.save.game = null; K.persist(); K.go('play', { new: true, look }); };
 {
