@@ -5,7 +5,7 @@ Portfólio rápido dos jogos do Pedro Javarotti: um painel para escolher o jogo 
 | Jogo | Versão | Pasta |
 |---|---|---|
 | **Nácar** (beat'em up em nanquim, em destaque; feito antes do motor JGK) | 9.2.76 | `jogos/nacar/` |
-| **Cacos de Sol** (RPG de ação 3D) | 1.4.0 | `jogos/cacos-de-sol/` |
+| **Cacos de Sol** (RPG de ação 3D) | 1.4.1 | `jogos/cacos-de-sol/` |
 | **Pedrada de Palito** (FPS de estilingue) | 1.1.7 | `jogos/pedrada/` |
 | **Sinuca Intergaláctica** (sinuca 16 bits) | 0.4.1 | `jogos/sinuca/` |
 | **Kuku e a Semente do Sol** (plataforma 2D) | 2.9 | `jogos/kuku/` |

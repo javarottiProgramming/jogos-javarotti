@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Cacos de Sol 1.4.0</title>
+<title>Cacos de Sol 1.4.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -4295,7 +4295,7 @@ void main() {
 /*==ENGINE:core==  núcleo: utilitários, ruído, save, registros, eventos, cenas, loop de passo fixo.
  * Motor JGK-3D — Javarotti Game Kit, módulos de gênero em 3D (three.js). 1º jogo 3D do time de agentes Javarotti. */
 'use strict';
-const K = window.K = { version: '1.4.0', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '1.4.1', /* ÚNICO lugar da versão (regra a): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -5135,6 +5135,45 @@ K.lookModelId = function (look, tag) {
 K.lookGalleryIds = function (cat, extra) {
   const ids = []; for (const id in (K.LOOKS[cat] || {})) ids.push(K.lookModelId(Object.assign({}, extra || {}, { [cat]: id }), cat + '_' + id)); return ids;
 };
+/* ---------------------------------------------------------------- 1.4.1: a ficha como dado do jogo (save, normalização, sorteio, troca em jogo). A TELA é a cena `creator` (09b-creator.js). */
+K.LOOK_OPTIONAL = ['detalhe', 'oculos', 'chapeu', 'acc'];   /* categorias que aceitam "nenhum" */
+K.LOOK_PAL = { pele: 'pele', corCabelo: 'cabelo', iris: 'iris', corCima: 'roupa', corCima2: 'roupa', corBaixo: 'roupa', corBaixo2: 'roupa', corCalcado: 'roupa', corChapeu: 'roupa', corOculos: 'roupa', corAcc: 'roupa' };
+K.LOOK_COLOR_DEF = { corChapeu: 1, corOculos: 10 };   /* o K.buildLook assume estes quando a chave falta (não estão em LOOK_DEFAULT) */
+/* K.normLook(ficha) → ficha COMPLETA e VÁLIDA: chave ausente = padrão, peça inexistente = padrão da categoria, índice de cor reduzido à paleta (mod), hex '#rrggbb' aceito, chave desconhecida descartada. */
+K.normLook = function (look) {
+  const D = Object.assign({}, K.LOOK_DEFAULT, K.LOOK_COLOR_DEF), s = look && typeof look === 'object' ? look : {}, o = {};
+  for (const cat of K.LOOK_CATS) { const v = s[cat]; o[cat] = typeof v === 'string' && (v === 'nenhum' ? K.LOOK_OPTIONAL.includes(cat) : K.LOOKS[cat] && K.LOOKS[cat][v]) ? v : D[cat]; }
+  for (const k in K.LOOK_PAL) { const v = s[k], n = K.LOOK_COLORS[K.LOOK_PAL[k]].length; o[k] = typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : (typeof v === 'number' && isFinite(v)) ? ((Math.floor(v) % n) + n) % n : D[k]; }
+  return o;
+};
+K.heroLook = () => K.normLook((K.G && K.G.look) || (K.save && K.save.game && K.save.game.look));
+K.lookKey = look => { const l = K.normLook(look || K.heroLook()); return Object.keys(l).sort().map(k => l[k]).join('.'); };
+/* peças de uma categoria para a tela: [{id, nome}] ("nenhum" primeiro nas opcionais) */
+K.lookOptions = cat => { const a = Object.values(K.LOOKS[cat] || {}).map(d => ({ id: d.id, nome: d.nome || d.id })); if (K.LOOK_OPTIONAL.includes(cat)) a.unshift({ id: 'nenhum', nome: 'Nenhum' }); return a; };
+/* cor padrão de uma peça (campo opcional `corPadrao` da K.defLook): a tela aplica ao escolher a peça */
+K.lookPieceColor = (cat, id) => { const d = K.LOOKS[cat] && K.LOOKS[cat][id]; return d && d.corPadrao !== undefined ? d.corPadrao : undefined; };
+K.COLOR_KEY_OF = { cima: ['corCima', 'corCima2'], baixo: ['corBaixo', 'corBaixo2'], calcado: ['corCalcado'], oculos: ['corOculos'], chapeu: ['corChapeu'], acc: ['corAcc'] };
+/* sorteio: personagem inteiro; nunca cor principal = cor de detalhe; respeita cobreBaixo (sorteia o baixo mesmo assim: a escolha volta se trocar a roupa de cima) */
+K.randomLook = function () {
+  const pk = a => a[Math.random() * a.length | 0], ni = (cat, p) => K.LOOK_OPTIONAL.includes(cat) && Math.random() < p, l = {};
+  for (const cat of K.LOOK_CATS) { const ids = Object.keys(K.LOOKS[cat]); l[cat] = ni(cat, { detalhe: .55, oculos: .65, chapeu: .55, acc: .35 }[cat] || 0) || !ids.length ? 'nenhum' : pk(ids); }
+  for (const k in K.LOOK_PAL) l[k] = Math.random() * K.LOOK_COLORS[K.LOOK_PAL[k]].length | 0;
+  for (const [a, b] of [['corCima', 'corCima2'], ['corBaixo', 'corBaixo2']]) if (l[a] === l[b]) l[b] = (l[b] + 1 + (Math.random() * 12 | 0)) % K.LOOK_COLORS.roupa.length;
+  for (const cat of ['oculos', 'chapeu']) { const c = K.lookPieceColor(cat, l[cat]); if (c !== undefined && Math.random() < .5) l[K.COLOR_KEY_OF[cat][0]] = c; }
+  return K.normLook(l);
+};
+/* liberta as geometrias de um objeto descartado (a prévia e o guarda-roupa refazem o herói a cada troca) */
+K.disposeObj = obj => { obj.traverse(o => { if (o.geometry && !o.geometry._keep) o.geometry.dispose(); }); };
+/* K.setLook(ficha, {save:true}) — API do guarda-roupa (fase 2, sem tela): grava G.look, refaz o herói do jogo (mesma posição e animação), veste o equipamento de novo, limpa retratos e salva. Fora de jogo só grava no save. */
+K.setLook = function (look, o) {
+  o = o || {}; const nl = K.normLook(look), G = K.G;
+  if (G) {
+    G.look = nl; const p = G.pl, old = p.mi, mi = K.model('faisca'); mi.obj.position.copy(old.obj.position); mi.obj.rotation.copy(old.obj.rotation);
+    K.r3.ents.add(mi.obj); K.r3.ents.remove(old.obj); K.disposeObj(old.obj); p.mi = mi; mi.ctx.sp = old.ctx.sp; mi.play(old.name || 'idle', { restart: true }); K.equipVisual();
+    if (o.save !== false) K.saveGame(true);
+  } else if (K.save.game) { K.save.game.look = nl; K.persist(); }
+  K.clearPortraits(); K.emit('look', { look: nl }); return nl;
+};
 
 /*==ENGINE:world==  mundo aberto: relevo procedural por biomas, malha facetada, água, props instanciados, colisão, pontos de interesse (POIs), minimapa
  * Convenção: x leste, z sul, y cima; frente do personagem = (sin yaw, cos yaw). Ilha centrada em (0,0), raio ~105; nível do mar y = 0.
@@ -5405,8 +5444,8 @@ function trailMesh(P) {
 K.G = null; const GRAV = 26, RUN = 6.4;
 const fwd = a => [Math.sin(a), Math.cos(a)];
 K.fwd = fwd;
-K.newGame = function (snap) {
-  const G = K.G = { t: 0, tod: 9, day: 1, ents: [], enemies: [], drops: [], projs: [], inter: [], q: {}, flags: {}, inv: {}, coins: 0, xp: 0, lvl: 1, kills: 0, deaths: 0, play: 0, nodes: {}, chests: {}, opened: {}, equip: { weapon: 'espada_madeira', charm: null }, cam: { yaw: 0, pitch: .42, dist: 7.2, tdist: 7.2 }, lock: null, freeze: 0, region: null, banner: 0, skillsOpen: {}, bossFight: null, won: false, spawns: {}, track: null, hint: null, log: [], combatT: 0, rest: { x: 0, z: 26 }, pots: ['pocao_vida', 'pocao_brilho'], slots: { skill1: 'giro', skill2: 'lanca', skill3: 'nova' }, buffs: {}, buff: {} };
+K.newGame = function (snap, look) {
+  const G = K.G = { look: K.normLook((snap && snap.look) || look), t: 0, tod: 9, day: 1, ents: [], enemies: [], drops: [], projs: [], inter: [], q: {}, flags: {}, inv: {}, coins: 0, xp: 0, lvl: 1, kills: 0, deaths: 0, play: 0, nodes: {}, chests: {}, opened: {}, equip: { weapon: 'espada_madeira', charm: null }, cam: { yaw: 0, pitch: .42, dist: 7.2, tdist: 7.2 }, lock: null, freeze: 0, region: null, banner: 0, skillsOpen: {}, bossFight: null, won: false, spawns: {}, track: null, hint: null, log: [], combatT: 0, rest: { x: 0, z: 26 }, pots: ['pocao_vida', 'pocao_brilho'], slots: { skill1: 'giro', skill2: 'lanca', skill3: 'nova' }, buffs: {}, buff: {} };
   K.fx.clear(); K.clearEntities && K.clearEntities();
   const spawn = REG.poi.vila ? [REG.poi.vila.x, REG.poi.vila.z + 6] : [0, 24];
   G.pl = newPlayer(spawn[0], spawn[1]); G.rest = { x: spawn[0], z: spawn[1] };
@@ -6166,11 +6205,11 @@ K.sell = (id, price) => { if (!K.inv.has(id)) return false; const G = K.G; if (K
 K.craft = function (id) { const G = K.G, r = REG.recipe[id]; if (!r) return false; for (const k in r.in) if (!K.inv.has(k, r.in[k])) { K.sfx('erro'); K.ui.toast('Faltam materiais.'); return false; } for (const k in r.in) K.inv.remove(k, r.in[k]); K.inv.add(r.out.id, r.out.n || 1); K.sfx('fabricar'); K.ui.toast('Fabricado: ' + REG.item[r.out.id].nome); K.emit('craft', { id }); return true; };
 /* ---------------------------------------------------------------- salvar / carregar */
 K.snapshot = function () {
-  const G = K.G, p = G.pl; return { v: 1, lvl: G.lvl, xp: G.xp, coins: G.coins, inv: Object.assign({}, G.inv), equip: Object.assign({}, G.equip), q: JSON.parse(JSON.stringify(G.q)), flags: Object.assign({}, G.flags), nodes: Object.assign({}, G.nodes), opened: Object.assign({}, G.opened), kills: G.kills, deaths: G.deaths, dodges: G.dodges || 0, dodgesPerfect: G.dodgesPerfect || 0, play: G.play, tod: G.tod, day: G.day, x: G.rest.x, z: G.rest.z, hp: p.hp, pots: G.pots.slice(), slots: Object.assign({}, G.slots), won: G.won, pin: G.pin === undefined ? null : G.pin, trail: G.trail || null };
+  const G = K.G, p = G.pl; return { v: 1, lvl: G.lvl, xp: G.xp, coins: G.coins, inv: Object.assign({}, G.inv), equip: Object.assign({}, G.equip), q: JSON.parse(JSON.stringify(G.q)), flags: Object.assign({}, G.flags), nodes: Object.assign({}, G.nodes), opened: Object.assign({}, G.opened), kills: G.kills, deaths: G.deaths, dodges: G.dodges || 0, dodgesPerfect: G.dodgesPerfect || 0, play: G.play, tod: G.tod, day: G.day, x: G.rest.x, z: G.rest.z, hp: p.hp, pots: G.pots.slice(), slots: Object.assign({}, G.slots), won: G.won, pin: G.pin === undefined ? null : G.pin, trail: G.trail || null, look: Object.assign({}, G.look) };
 };
 K.applySnapshot = function (s) {
   const G = K.G, p = G.pl; Object.assign(G, { lvl: s.lvl, xp: s.xp, coins: s.coins, inv: s.inv, equip: Object.assign({ weapon: 'espada_madeira', charm: null }, s.equip || {}),   /* save antigo (sem as chaves novas) = slots vazios */
-    q: s.q, flags: s.flags || {}, nodes: s.nodes || {}, opened: s.opened || {}, kills: s.kills || 0, deaths: s.deaths || 0, dodges: s.dodges || 0, dodgesPerfect: s.dodgesPerfect || 0, play: s.play || 0, day: s.day || 1, pots: s.pots || G.pots, won: !!s.won, trail: s.trail || null });
+    q: s.q, flags: s.flags || {}, nodes: s.nodes || {}, opened: s.opened || {}, kills: s.kills || 0, deaths: s.deaths || 0, dodges: s.dodges || 0, dodgesPerfect: s.dodgesPerfect || 0, play: s.play || 0, day: s.day || 1, pots: s.pots || G.pots, won: !!s.won, trail: s.trail || null, look: K.normLook(s.look) });
   /* 1.3.5: G.pin = missão opcional fixada no HUD (null = automática, '' = nenhuma). Save antigo trazia G.track (a missão acompanhada): se era opcional, vira a fixada */
   G.pin = s.pin !== undefined ? s.pin : (s.track && REG.quest[s.track] && REG.quest[s.track].tipo !== 'main' ? s.track : null);
   if (s.slots) G.slots = s.slots; G.rest = { x: s.x, z: s.z }; p.x = s.x; p.z = s.z; p.y = K.world.h(p.x, p.z);
@@ -6311,18 +6350,27 @@ UI.init = function () {
 document.addEventListener('click', e => { if (!K.dlg || !UI.dlgEl) return; if (e.target.closest && e.target.closest('.btn, .dlg-x, .tb')) return; K.sfx('ui'); UI.dlgAdvance(); });
 UI.clear = function () { for (const l of UI.layers.slice()) { if (!l.keep) l.el.remove(); } UI.layers = UI.layers.filter(l => l.keep); UI.hud = null; UI.nav = null; UI.dlgEl = null; K.dlg = null; K.uiBlock = false; document.body.classList.remove('dlgopen'); };
 /* UI.layer(cls, {modal, onBack, keep}) → div cobrindo a tela; o mais recente é o foco de navegação */
-UI.layer = function (cls, o) { o = o || {}; const el = h('div', 'layer ' + (cls || '') + (o.modal ? ' modal' : ' menu'), ''); UI.root.appendChild(el); const l = { el, onBack: o.onBack, keep: o.keep, modal: o.modal }; UI.layers.push(l); return l; };
+UI.layer = function (cls, o) { o = o || {}; const el = h('div', 'layer ' + (cls || '') + (o.modal ? ' modal' : ' menu'), ''); UI.root.appendChild(el); const l = { el, onBack: o.onBack, keep: o.keep, modal: o.modal, spatial: o.spatial, onKey: o.onKey }; UI.layers.push(l); return l; };
 UI.drop = function (l) { l.el.remove(); UI.layers = UI.layers.filter(x => x !== l); UI.focusIdx = 0; K.input.relockSoon && K.input.relockSoon(); };
 UI.btn = function (text, cb, o) { o = o || {}; const b = h('button', 'btn ' + (o.cls || ''), text); b.addEventListener('click', e => { e.stopPropagation(); K.sfx('ui_ok'); cb(e); }); if (o.parent) o.parent.appendChild(b); b.dataset.nav = 1; return b; };
 UI.top = () => UI.layers.filter(l => l.el.classList.contains('menu') || l.el.classList.contains('modal')).pop();
 function navItems() { const t = UI.top(); if (!t) return []; return [...t.el.querySelectorAll('[data-nav]')].filter(e => !e.disabled && e.offsetParent !== null); }
 UI.focusIdx = 0;
 function setFocus(i, still) { const it = navItems(); if (!it.length) return; UI.focusIdx = (i + it.length) % it.length; it.forEach((e, k) => e.classList.toggle('focus', k === UI.focusIdx)); if (!still && it[UI.focusIdx].scrollIntoView) it[UI.focusIdx].scrollIntoView({ block: 'nearest' }); }
+/* 1.4.1: foco por posição: o item mais perto NA DIREÇÃO apertada (centros em coordenadas do palco, via K.pt: certo também com o palco girado). Devolve o índice ou -1. */
+UI.spatialNext = function (items, from, dir) {
+  const c = e => { const r = e.getBoundingClientRect(), a = K.pt({ clientX: r.left, clientY: r.top }), b = K.pt({ clientX: r.right, clientY: r.bottom }); return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) }; };
+  const cur = items[from]; if (!cur) return items.length ? 0 : -1; const p = c(cur), dx = dir === 'r' ? 1 : dir === 'l' ? -1 : 0, dy = dir === 'd' ? 1 : dir === 'u' ? -1 : 0; let best = -1, bs = 1e9;
+  items.forEach((e, i) => { if (i === from) return; const q = c(e), ax = (q.x - p.x) * dx + (q.y - p.y) * dy, pp = Math.abs((q.x - p.x) * dy) + Math.abs((q.y - p.y) * dx); if (ax <= 1 || pp > ax * 2) return; const sc = ax + pp * 2.2;   /* só vale o que está DENTRO do cone da direção (±63°): senão o vizinho de cima, com o centro 1 px adiante, ganhava do vizinho do lado */ if (sc < bs) { bs = sc; best = i; } });
+  return best;
+};
 UI.key = function (e) {
   const t = UI.top(); const dlg = K.dlg; if (dlg) { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyE') { K.sfx('ui'); UI.dlgAdvance(); return true; } if (e.code === 'Escape') { K.dialogClose(); return true; } const ch = navItems(); if (ch.length) { if (e.code === 'ArrowRight' || e.code === 'ArrowDown') { setFocus(UI.focusIdx + 1); return true; } if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') { setFocus(UI.focusIdx - 1); return true; } } return false; }
   if (!t) { if (K.sceneName === 'play' && !K.paused && e.code === 'Escape') { K.pause(); return true; } if (K.sceneName === 'play' && !K.paused && (e.code === 'KeyI' || e.code === 'KeyJ' || e.code === 'KeyM' || e.code === 'Tab' || e.code === 'KeyH')) { K.pause(e.code === 'KeyI' ? 'inv' : e.code === 'KeyJ' ? 'quests' : e.code === 'KeyH' ? 'char' : 'map'); return true; } return false; }
   const it = navItems(); if (e.code === 'Escape' || e.code === 'Backspace') { if (t.onBack) { K.sfx('ui_volta'); t.onBack(); } return true; }
+  if (t.onKey && t.onKey(e)) return true;   /* 1.4.1: a tela trata as suas teclas (ex.: criador: Tab, Q, E) */
   if (!it.length) return false; const cur = it[UI.focusIdx] || null;
+  if (t.spatial && /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/.test(e.code)) { const j = UI.spatialNext(it, UI.focusIdx, { ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' }[e.code]); if (j >= 0 && j !== UI.focusIdx) { setFocus(j); K.sfx('ui'); } return true; }   /* 1.4.1: setas por POSIÇÃO (camada { spatial:true }) */
   if (e.code === 'ArrowDown' || e.code === 'KeyS') { setFocus(UI.focusIdx + 1); K.sfx('tick' in REG ? 'ui' : 'ui'); return true; } if (e.code === 'ArrowUp' || e.code === 'KeyW') { setFocus(UI.focusIdx - 1); K.sfx('ui'); return true; }
   if (e.code === 'ArrowRight' || e.code === 'KeyD') { if (cur && cur.type === 'range') { cur.value = +cur.value + (+cur.step || 10); cur.dispatchEvent(new Event('input')); return true; } setFocus(UI.focusIdx + 1); return true; } if (e.code === 'ArrowLeft' || e.code === 'KeyA') { if (cur && cur.type === 'range') { cur.value = +cur.value - (+cur.step || 10); cur.dispatchEvent(new Event('input')); return true; } setFocus(UI.focusIdx - 1); return true; }
   if (e.code === 'Enter' || e.code === 'Space') { if (cur) { cur.click(); return true; } }
@@ -6461,7 +6509,7 @@ const TOUCHY = () => K.input.dev === 'touch' || document.body.classList.contains
 UI.showDialog = function () {
   const D = K.dlg; if (!D) return; if (UI.dlgEl) UI.dlgEl.remove(); const n = D.node; if (n.do && D.lastDo !== n) { D.lastDo = n; try { n.do(K.G); } catch (e) { console.error(e); } }
   const wi = whoInfo(n.who), el = UI.dlgEl = h('div', 'dlg', '', UI.root); el.style.pointerEvents = 'auto'; D.rev = 0; document.body.classList.add('dlgopen');
-  const pt = h('div', 'pt', '', el); if (wi.model && REG.model[wi.model]) pt.appendChild(K.portrait(wi.model, { w: 192, h: 192 })); else pt.style.display = 'none';
+  const pt = h('div', 'pt', '', el); if (wi.model && REG.model[wi.model]) pt.appendChild(K.portrait(wi.model, { w: 192, h: 192, key: wi.model === 'faisca' ? 'look=' + K.lookKey() : undefined })); else pt.style.display = 'none';
   const box = h('div', 'panel', '', el); box.style.flex = 1; box.style.position = 'relative'; h('div', 'nm', esc(wi.nome), box); h('div', 'tx', '', box); const ch = h('div', 'ch', '', box);
   if (n.choices) n.choices.filter(c => !c.if || c.if(K.G)).forEach((c, i) => UI.btn(c.t, () => K.dialogChoose(i), { parent: ch, cls: 'small' })); else h('div', 'hint', TOUCHY() ? 'toque para continuar' : 'clique ou Enter · continuar', box);
   if (TOUCHY()) { const x = h('button', 'btn small ghost dlg-x', 'Sair', box); x.style.cssText = 'position:absolute;right:.8rem;top:.6rem;background:var(--paper2);color:var(--ink);border-color:var(--ink);box-shadow:none'; x.addEventListener('click', e => { e.stopPropagation(); K.sfx('ui_volta'); K.dialogClose(); }); }   // celular: sempre há saída da conversa
@@ -6834,7 +6882,7 @@ UI.equipCompare = function (id, body) {
   h('div', '', (cur === id ? 'Equipado agora. Se tirar:' : 'No espaço ' + esc(sl.nome) + ' agora: <b>' + esc(curNm) + '</b>. Se trocar:'), sec).style.cssText = 'font-size:.9rem;font-weight:800;margin-bottom:.15rem';
   const df = UI.equipDiff(id), c = h('div', 'ch-cmp', '', sec); c.innerHTML = df.length ? df.map(x => '<span class="' + (x.d > 0 ? 'up' : 'dn') + '">' + (x.d > 0 ? '▲ ' : '▼ ') + esc(x.txt) + '</span>').join('') : 'Nada muda nos atributos.';
 };
-UI.charKey = () => K.slotsOn().map(s => s.id + '=' + (K.G.equip[s.id] || '')).join('|');   /* muda com o equipamento → chave do cache do retrato */
+UI.charKey = () => K.slotsOn().map(s => s.id + '=' + (K.G.equip[s.id] || '')).join('|') + '|look=' + K.lookKey();   /* muda com o equipamento → chave do cache do retrato */
 UI.charPanel = function (l) {
   const G = K.G, p = panelFrame(l, 'Personagem · Nível ' + G.lvl, 68); p.classList.add('chp'); p.style.width = ''; p.style.overflowX = 'hidden';   /* o panelFrame põe overflow:auto INLINE (vence a classe): o canto dobrado do .panel (3 px) viraria barra de rolagem horizontal */ let pick = null, tipK = null;
   const wrap = h('div', 'ch', '', p), doll = h('div', 'ch-doll', '', wrap), cs = h('div', 'ch-col', '', wrap), cb = h('div', 'ch-col', '', wrap);
@@ -6901,7 +6949,7 @@ SC('title', {
   ui() {
     const l = K.ui.layer('title', { onBack: () => {} }); const col = h('div', 'menu-col', '', l.el); col.style.cssText = 'left:calc(var(--sl) + 3rem);top:50%;transform:translateY(-50%);width:min(24rem,calc(var(--vw,1vw)*40))';
     const lg = h('div', '', '<div style="font:400 4.4rem/0.95 \'Lilita One\';color:#FFD23F;text-shadow:.22rem .3rem 0 #101830,-.1rem .1rem 0 #101830">CACOS<br>DE SOL</div><div style="font:400 1.4rem \'Lilita One\';color:#F4F1E8;text-shadow:.1rem .14rem 0 #101830;margin-top:.4rem">A Ilha Quebrada</div>', col);
-    const has = !!SAVE.game; if (has) K.ui.btn('Continuar', () => K.go('play', { load: true }), { parent: col, cls: 'pri' }); K.ui.btn('Novo jogo', () => { if (has) { const c = h('div', 'panel', '<h2>Começar de novo?</h2><p>A partida salva será substituída.</p>', l.el); c.style.cssText += ';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22rem;text-align:center;z-index:4'; const r = h('div', 'row', '', c); r.style.justifyContent = 'center'; K.ui.btn('Voltar', () => c.remove(), { parent: r, cls: 'aqua' }); K.ui.btn('Novo jogo', () => { SAVE.game = null; K.persist(); K.go('play', { new: true }); }, { parent: r, cls: 'pri' }); } else K.go('play', { new: true }); }, { parent: col, cls: has ? '' : 'pri' });
+    const has = !!SAVE.game; if (has) K.ui.btn('Continuar', () => K.go('play', { load: true }), { parent: col, cls: 'pri' }); K.ui.btn('Novo jogo', () => { if (has) { const c = h('div', 'panel', '<h2>Começar de novo?</h2><p>A partida salva será substituída.</p>', l.el); c.style.cssText += ';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22rem;text-align:center;z-index:4'; const r = h('div', 'row', '', c); r.style.justifyContent = 'center'; K.ui.btn('Voltar', () => c.remove(), { parent: r, cls: 'aqua' }); K.ui.btn('Novo jogo', () => K.newGameFlow(), { parent: r, cls: 'pri' }); } else K.go('play', { new: true }); }, { parent: col, cls: has ? '' : 'pri' });
     K.ui.btn('Opções', () => { const o = K.ui.layer('opt', { modal: true, onBack: () => K.ui.drop(o) }); K.ui.optPanel(o, () => K.ui.drop(o)); }, { parent: col }); K.ui.btn('Créditos', () => K.go('credits'), { parent: col });
     K.ui.btn('Tela cheia', () => K.fullscreen(), { parent: col, cls: 'ghost small' });
     const v = h('div', '', 'v' + K.version + ' · Pedro Javarotti · Motor JGK', l.el); v.style.cssText = 'position:absolute;left:calc(var(--sl) + 1rem);bottom:calc(var(--sb) + .6rem);font:400 .9rem \'Lilita One\';color:#F4F1E8;text-shadow:.08rem .1rem 0 #101830';
@@ -6918,7 +6966,7 @@ SC('play', {
     args = args || {}; K.clearMenuGroup(); K.uiBlock = false; K.paused = false; K.input.clear();
     return new Promise(res => setTimeout(() => {
       K.showWorld(true); K.r3.frame(0); if (!K.world.built) K.world.build(); K.world.update(0);
-      const snap = args.load ? SAVE.game : null; K.clearEntities && K.G && K.clearEntities(); K.newGame(snap); K.initQuestEvents(); const G = K.G; G.slots = G.slots || { skill1: 'giro', skill2: 'lanca', skill3: 'nova' };
+      const snap = args.load ? SAVE.game : null; K.clearEntities && K.G && K.clearEntities(); K.newGame(snap, args.look); K.initQuestEvents(); const G = K.G; G.slots = G.slots || { skill1: 'giro', skill2: 'lanca', skill3: 'nova' };
       if (snap) K.applySnapshot(snap); K.statsRecalc(true); G.pl.hp = snap && snap.hp ? Math.max(snap.hp, G.pl.maxhp * .5) : G.pl.maxhp; K.ui.hudBuild(); K.showTouch(K.input.touch || K.debug.touch); G.camSnap = true; K.sky.set(G.tod);
       K.music('vila'); K.persist();
       if (!snap && !K.debug.nointro && REG.dialog.intro) setTimeout(() => K.say('intro'), 400); res();
@@ -6991,6 +7039,184 @@ K.endingStart = function () {
   const after = () => { K.go('credits', { ending: true }); };
   if (REG.dialog.fim) K.say('fim', { then: after }); else after();
 };
+
+/*==ENGINE:creator==  tela do criador de personagem (1.4.1, item 26): prévia 3D girando à direita, coluna de papel à esquerda com abas, peças (chips) e cores.
+ * K.go('creator', { look?, equip?, onDone?(look), onBack? })  ·  sem argumentos: é o "Novo jogo" (Confirmar apaga o save antigo e vai ao jogo com a ficha).
+ * Só visual: a roupa não muda atributo; `equip` (opcional) veste a prévia com K.dressModel (é por onde o guarda-roupa da fase 2 vai reaproveitar a tela).
+ * Tudo dentro de um bloco: o motor é um arquivo só no navegador e const de topo repetido colide em silêncio. */
+/* ponto de encaixe do item 35 (slots de save + nome do herói): quando existirem, entram AQUI antes do criador. */
+K.newGameFlow = () => K.go('creator', {});
+/* o que o Confirmar do criador faz num jogo novo: só aqui o save antigo é apagado (quem aperta Voltar não perde nada) */
+K.newGameStart = look => { K.save.game = null; K.persist(); K.go('play', { new: true, look }); };
+{
+  const TABS = [
+    { id: 'pele', nome: 'Pele', zoom: 'rosto', secs: [{ pal: 'pele', key: 'pele', t: 'Cor da pele' }] },
+    { id: 'cabelo', nome: 'Cabelo', zoom: 'rosto', secs: [{ cat: 'cabelo', t: 'Estilo' }, { pal: 'cabelo', key: 'corCabelo', t: 'Cor' }] },
+    { id: 'olhos', nome: 'Olhos', zoom: 'rosto', secs: [{ cat: 'olhos', t: 'Formato' }, { pal: 'iris', key: 'iris', t: 'Íris' }] },
+    { id: 'rosto', nome: 'Rosto', zoom: 'rosto', secs: [{ cat: 'boca', t: 'Boca' }, { cat: 'expr', t: 'Expressão' }, { cat: 'detalhe', t: 'Detalhe' }] },
+    { id: 'cima', nome: 'Cima', zoom: 'corpo', secs: [{ cat: 'cima', t: 'Roupa de cima' }, { pal: 'roupa', key: 'corCima', t: 'Cor principal' }, { pal: 'roupa', key: 'corCima2', t: 'Cor de detalhe' }] },
+    { id: 'baixo', nome: 'Baixo', zoom: 'corpo', secs: [{ cat: 'baixo', t: 'Roupa de baixo' }, { pal: 'roupa', key: 'corBaixo', t: 'Cor principal' }, { pal: 'roupa', key: 'corBaixo2', t: 'Cor de detalhe' }] },
+    { id: 'pes', nome: 'Pés', zoom: 'corpo', secs: [{ cat: 'calcado', t: 'Calçado' }, { pal: 'roupa', key: 'corCalcado', t: 'Cor', dep: 'calcado' }] },
+    { id: 'oculos', nome: 'Óculos', zoom: 'rosto', secs: [{ cat: 'oculos', t: 'Óculos' }, { pal: 'roupa', key: 'corOculos', t: 'Cor', dep: 'oculos' }] },
+    { id: 'chapeu', nome: 'Chapéu', zoom: 'rosto', secs: [{ cat: 'chapeu', t: 'Chapéu' }, { pal: 'roupa', key: 'corChapeu', t: 'Cor', dep: 'chapeu' }] },
+    { id: 'extra', nome: 'Extra', zoom: 'corpo', secs: [{ cat: 'acc', t: 'Acessório' }, { pal: 'roupa', key: 'corAcc', t: 'Cor', dep: 'acc' }] }
+  ];
+  K.CREATOR_TABS = TABS;
+  const GUARD_MS = 250;   /* o clique que abriu a tela/pop-up não pode confirmar (mesma trava do UI.itemModal) */
+  K.css(`
+.crt-stage{position:absolute;inset:0;touch-action:none;cursor:grab}.crt-stage.drag{cursor:grabbing}
+.panel.crt-col{position:absolute;left:max(64px,calc(var(--sl) + 1.5rem));top:max(.8rem,calc(var(--st) + .8rem));bottom:max(40px,calc(var(--sb) + 1rem));width:min(30rem,calc(var(--vw,1vw)*46));display:flex;flex-direction:column;gap:.45rem;padding:.7rem .8rem;overflow:hidden}
+.crt-head{font:400 1.35rem/1 'Lilita One';color:var(--ink);flex:none}.crt-head small{font:800 .78rem Nunito;color:var(--grey);margin-left:.4rem}
+.crt-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:.28rem;flex:none}
+.crt-tab,.crt-chip{font:400 .85rem/1.05 'Lilita One',system-ui,sans-serif;color:var(--ink);background:var(--paper);border:.16rem solid var(--ink);border-radius:.55rem;padding:.2rem .15rem;min-height:max(2.2rem,32px);cursor:pointer;touch-action:manipulation;text-align:center;position:relative}
+.crt-tab:hover,.crt-chip:hover,.crt-tab.focus,.crt-chip.focus,.crt-sw.focus{background:var(--sun);transform:translate(-.05rem,-.07rem)}
+.crt-tab.on{background:var(--ink);color:var(--paper)}.crt-tab.on.focus{background:var(--ink2)}
+.crt-tab.off,.crt-tab.off:hover{background:var(--paper2);color:var(--grey);border-style:dashed;transform:none;cursor:help}
+.crt-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:.15rem .25rem .3rem .1rem;border-top:.14rem dashed var(--ink);margin-top:.1rem;-webkit-overflow-scrolling:touch}
+.crt-sec{margin:.35rem 0 .15rem}.crt-sec>h3{font:400 .98rem 'Lilita One';margin:.1rem 0 .25rem;color:var(--ink2);display:flex;justify-content:space-between;gap:.5rem}.crt-sec>h3 b{font:800 .85rem Nunito;color:var(--coral2)}
+.crt-sec.hide{display:none}
+.crt-chips{display:grid;grid-template-columns:repeat(4,1fr);gap:.28rem}
+.crt-chip{font-size:.8rem}.crt-chip.on{background:var(--sun);box-shadow:inset 0 0 0 .1rem var(--ink)}.crt-chip.on::after{content:'✓';position:absolute;right:.15rem;top:-.1rem;font:400 .8rem 'Lilita One';color:var(--ink)}
+.crt-sws{display:flex;flex-wrap:wrap;gap:.4rem .38rem;padding:.2rem .15rem}
+.crt-sw{width:2.05rem;height:2.05rem;border-radius:50%;border:.16rem solid var(--ink);padding:0;cursor:pointer;position:relative;touch-action:manipulation;box-shadow:.08rem .1rem 0 var(--ink)}
+.crt-sw::before{content:'';position:absolute;inset:-.3rem}
+.crt-sw.on{box-shadow:0 0 0 .18rem var(--paper),0 0 0 .38rem var(--ink)}.crt-sw.on::after{content:'✓';position:absolute;inset:0;font:400 1.1rem/1.7rem 'Lilita One';color:#fff;text-shadow:0 0 .15rem var(--ink),0 0 .15rem var(--ink),.06rem .08rem 0 var(--ink)}
+.crt-sw.focus{transform:scale(1.15);background-clip:padding-box}
+.crt-msg{font:800 .85rem/1.2 Nunito;color:var(--coral2);background:var(--paper2);border:.14rem solid var(--ink);border-radius:.5rem;padding:.2rem .5rem;margin:.2rem 0;display:none}.crt-msg.on{display:block}
+.crt-foot{display:flex;gap:.3rem;flex:none;align-items:stretch;border-top:.14rem dashed var(--ink);padding-top:.45rem}
+.crt-foot .btn{font-size:.9rem;padding:.25rem .45rem;min-height:max(2.3rem,34px);flex:1 1 auto;box-shadow:.14rem .18rem 0 var(--ink);border-width:.18rem}.crt-foot .btn.pri{flex:1.5 1 auto}.crt-foot .btn.ico{flex:0 0 auto;min-width:max(2.6rem,34px)}
+.crt-view{position:absolute;right:max(64px,calc(var(--sr) + 1.5rem));top:50%;transform:translateY(-50%);width:7.2rem;display:flex;flex-direction:column;align-items:stretch;gap:.35rem;pointer-events:none}
+.crt-view .row{display:flex;gap:.35rem;pointer-events:auto}.crt-view .row .btn{flex:1}.crt-view .btn{font-size:.95rem;padding:.2rem .4rem;min-height:max(2.2rem,34px);pointer-events:auto}.crt-view .btn.on{background:var(--sun)}
+.crt-hint{text-align:center;font:800 .75rem/1.15 Nunito;color:var(--ink);background:var(--paper);border:.14rem solid var(--ink);border-radius:.6rem;padding:.1rem .6rem;box-shadow:.1rem .12rem 0 rgba(16,24,48,.45)}
+.panel.crt-ask{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(24rem,calc(var(--vw,1vw)*90));text-align:center}
+.crt-ask p{margin:.1rem 0 .8rem;font-weight:800;line-height:1.3}.crt-ask .row{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+body.rot90 .crt-head{font-size:1.15rem}
+`);
+  K.defScene('creator', {
+    enter(args) {
+      args = this.args = args || {}; this.t = 0; this.born = performance.now();
+      K.showWorld(false); K.fx.clear(); K.clearMenuGroup(); const g = K.menuGroup(); g.visible = true; K.sky.set(16.8); K.music('titulo'); K.showTouch(false); K.input.bot = null; K.paused = false; K.uiBlock = false;
+      this.look = K.normLook(args.look); this.init = JSON.stringify(this.look); this.hist = []; this.tab = 'pele'; this.yaw = .4; this.idle = 3; this.spin = 0; this.zoomO = null; this.camY = 1.1; this.camD = 3.4; this.padPrev = {};
+      /* palco: pedestal de papel, anel de sol e um sol grande ao fundo (só atrás do herói, na área livre) */
+      mk.cyl(1.05, 1.15, .2, '#F4F1E8', { y: .1, parent: g }, 28); mk.torus(1.1, .05, '#FFD23F', { y: .2, rx: Math.PI / 2, parent: g }, 8, 28);
+      const sun = mk.cyl(1.7, 1.7, .05, '#FFE486', { y: 1.35, z: -2.4, rx: Math.PI / 2, glow: true, parent: g }, 32); sun.castShadow = false; this.sun = sun;
+      this.stage = mk.grp({ y: .2, parent: g });
+      this.build(); this.ui(); this.resize();
+    },
+    /* a prévia: UMA instância viva; troca de peça/cor refaz o modelo (≈ ms) e libera as geometrias antigas */
+    rebuild() {
+      if (this.mi) { this.stage.remove(this.mi.obj); K.disposeObj(this.mi.obj); }
+      const id = K.lookModelId(this.look, 'creator'); const mi = this.mi = K.model(id); mi.obj.rotation.y = this.yaw; this.stage.add(mi.obj); mi.play('idle');
+      if (this.args.equip && K.dressModel) { try { K.dressModel(mi, this.args.equip); } catch (e) { console.warn('creator dress', e); } }
+    },
+    build() { this.rebuild(); },
+    changed() { return JSON.stringify(this.look) !== this.init; },
+    /* mexe na ficha: guarda o estado para o Desfazer, refaz a prévia e atualiza só as marcas (o DOM fica estável: o foco não pula) */
+    apply(patch, quiet) {
+      const before = JSON.stringify(this.look); const nl = K.normLook(Object.assign({}, this.look, patch)); if (JSON.stringify(nl) === before) return;
+      this.hist.push(before); if (this.hist.length > 20) this.hist.shift(); this.look = nl; this.rebuild(); this.refresh(); if (!quiet) K.sfx('ui');
+    },
+    undo() { const s = this.hist.pop(); if (!s) { K.sfx('erro'); return; } this.look = K.normLook(JSON.parse(s)); this.rebuild(); this.refresh(); K.sfx('ui_volta'); },
+    pickPiece(cat, id) {
+      const p = { [cat]: id }, c = K.lookPieceColor(cat, id), ck = K.COLOR_KEY_OF[cat]; if (c !== undefined && ck && id !== this.look[cat]) p[ck[0]] = c; this.apply(p);
+    },
+    cobre() { return !!(K.LOOKS.cima[this.look.cima] || {}).cobreBaixo; },
+    say(txt) { const m = this.msgEl; if (!m) return; m.textContent = txt; m.classList.add('on'); clearTimeout(this._mt); this._mt = setTimeout(() => m.classList.remove('on'), 4200); },
+    ui() {
+      const self = this, l = this.layer = K.ui.layer('creator', { onBack: () => self.back(), spatial: true, onKey: e => self.key(e) }), el = l.el;
+      const st = this.stageEl = h('div', 'crt-stage', '', el); let drag = null;
+      st.addEventListener('pointerdown', e => { e.preventDefault(); try { st.setPointerCapture(e.pointerId); } catch (_) {} drag = { id: e.pointerId, x: K.pt(e).x }; st.classList.add('drag'); self.idle = 0; });
+      st.addEventListener('pointermove', e => { if (!drag || drag.id !== e.pointerId) return; const x = K.pt(e).x; self.yaw += (x - drag.x) * .012; drag.x = x; self.idle = 0; });
+      const end = e => { if (drag && drag.id === e.pointerId) { drag = null; st.classList.remove('drag'); } }; st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+      const col = this.col = h('div', 'panel crt-col', '', el);
+      h('div', 'crt-head', 'Monte o seu herói<small>só o visual</small>', col);
+      const tabs = this.tabsEl = h('div', 'crt-tabs', '', col); this.tabBtn = {};
+      for (const t of TABS) { const b = h('button', 'crt-tab', t.nome, tabs); b.dataset.nav = 1; b.dataset.tab = t.id; b.addEventListener('click', () => { if (t.id === 'baixo' && self.cobre()) { K.sfx('ui'); self.say('A roupa de cima que você escolheu já cobre as pernas. Troque a roupa de cima para escolher a de baixo.'); } self.setTab(t.id); }); this.tabBtn[t.id] = b; }
+      this.body = h('div', 'crt-body', '', col); this.msgEl = h('div', 'crt-msg', '', this.body); this.secEl = h('div', '', '', this.body);
+      const f = h('div', 'crt-foot', '', col);
+      this.bUndo = K.ui.btn('↶', () => self.undo(), { parent: f, cls: 'small ico' }); this.bUndo.title = 'Desfazer'; this.bUndo.setAttribute('aria-label', 'Desfazer'); this.bUndo.dataset.act = 'undo';
+      const rnd = K.ui.btn('Aleatório', () => { self.apply(K.randomLook(), true); K.sfx('ui_ok'); }, { parent: f, cls: 'small aqua' }); rnd.dataset.act = 'random';
+      const dft = K.ui.btn('Padrão', () => { self.apply(K.LOOK_DEFAULT, true); K.sfx('ui_ok'); }, { parent: f, cls: 'small' }); dft.dataset.act = 'default';
+      const bk = K.ui.btn('Voltar', () => self.back(), { parent: f, cls: 'small' }); bk.dataset.act = 'back';
+      const ok = K.ui.btn('Confirmar', () => { if (performance.now() - self.born < GUARD_MS) return; self.confirm(); }, { parent: f, cls: 'small pri' }); ok.dataset.act = 'confirm';
+      /* barra da prévia (coluna à direita, fora do herói): girar, frente, rosto/corpo */
+      const v = this.view = h('div', 'crt-view', '', el), row = h('div', 'row', '', v), mkSpin = (txt, dir, tt) => { const b = h('button', 'btn small', txt, row); b.dataset.nav = 1; b.title = tt; b.setAttribute('aria-label', tt); b.dataset.act = dir > 0 ? 'giraD' : 'giraE';
+        b.addEventListener('pointerdown', e => { self.spin = dir; self.idle = 0; try { b.setPointerCapture(e.pointerId); } catch (_) {} }); const stop = () => { self.spin = 0; }; b.addEventListener('pointerup', stop); b.addEventListener('pointercancel', stop); b.addEventListener('lostpointercapture', stop);
+        b.addEventListener('click', e => { if (e.detail === 0) { self.yaw += dir * .5; self.idle = 0; } }); return b; };
+      mkSpin('⟲', -1, 'Girar para a esquerda (Q)'); mkSpin('⟳', 1, 'Girar para a direita (E)');
+      const fr = h('button', 'btn small', 'Frente', v); fr.dataset.nav = 1; fr.dataset.act = 'frente'; fr.addEventListener('click', () => { self.yaw = 0; self.idle = 0; K.sfx('ui'); });
+      this.zb = {}; for (const z of ['rosto', 'corpo']) { const b = h('button', 'btn small', z === 'rosto' ? 'Rosto' : 'Corpo', v); b.dataset.nav = 1; b.dataset.zoom = z; b.addEventListener('click', () => { self.zoomO = z; K.sfx('ui'); self.refresh(); }); this.zb[z] = b; }
+      h('div', 'crt-hint', K.input.touch ? 'Arraste o herói para girar' : 'Arraste o herói para girar · Q/E · Tab troca de aba', v);
+      this.setTab('pele', true); UI.focusIdx = 0; setTimeout(() => setFocus(0, true), 0);   /* setFocus marca UM só (a marca manual deixava foco duplicado) */
+    },
+    setTab(id, quiet) {
+      this.tab = id; this.zoomO = null; const t = TABS.find(x => x.id === id); this.secEl.innerHTML = ''; this.secs = [];
+      for (const s of t.secs) {
+        const sec = h('div', 'crt-sec', '', this.secEl), hd = h('h3', '', s.t, sec), val = h('b', '', '', hd); sec.dataset.key = s.cat || s.key; const o = { s, sec, val };
+        if (s.cat) { const cs = h('div', 'crt-chips', '', sec); o.items = K.lookOptions(s.cat).map(p => { const b = h('button', 'crt-chip', p.nome, cs); b.dataset.nav = 1; b.dataset.cat = s.cat; b.dataset.id = p.id; b.addEventListener('click', () => this.pickPiece(s.cat, p.id)); return { p, b }; }); }
+        else { const ws = h('div', 'crt-sws', '', sec), names = K.LOOK_NAMES[s.pal]; o.items = K.LOOK_COLORS[s.pal].map((c, i) => { const b = h('button', 'crt-sw', '', ws); b.style.background = c; b.dataset.nav = 1; b.dataset.key = s.key; b.dataset.i = i; b.title = names[i]; b.setAttribute('aria-label', s.t + ': ' + names[i]); b.addEventListener('click', () => this.apply({ [s.key]: i })); return { i, b, n: names[i] }; }); }
+        this.secs.push(o);
+      }
+      this.body.scrollTop = 0; this.refresh(); if (!quiet) K.sfx('ui');
+    },
+    /* atualiza só as marcas (selecionado, nome, abas, desfazer, zoom): o DOM não é refeito */
+    refresh() {
+      const L = this.look;
+      for (const o of this.secs || []) {
+        const s = o.s;
+        if (s.cat) { let nm = ''; for (const it of o.items) { const on = L[s.cat] === it.p.id; it.b.classList.toggle('on', on); if (on) nm = it.p.nome; } o.val.textContent = nm; }
+        else { let nm = ''; for (const it of o.items) { const on = L[s.key] === it.i || (typeof L[s.key] === 'string' && false); it.b.classList.toggle('on', on); if (on) nm = it.n; } o.val.textContent = nm; }
+        if (s.dep) o.sec.classList.toggle('hide', L[s.dep] === 'nenhum');
+      }
+      const cob = this.cobre(); for (const id in this.tabBtn) { const b = this.tabBtn[id]; b.classList.toggle('on', id === this.tab); b.classList.toggle('off', id === 'baixo' && cob); if (id === 'baixo') { b.setAttribute('aria-disabled', cob ? 'true' : 'false'); b.title = cob ? 'A roupa de cima já cobre as pernas' : ''; } }
+      if (this.tab === 'baixo' && cob) this.msgEl.classList.add('on'), this.msgEl.textContent = 'A roupa de cima que você escolheu já cobre as pernas. Troque a roupa de cima para escolher a de baixo. A sua escolha de baixo continua guardada.'; else if (this.tab === 'baixo') this.msgEl.classList.remove('on');
+      const secBaixo = this.secEl && this.tab === 'baixo'; if (secBaixo) this.secEl.style.opacity = cob ? .45 : 1;
+      this.bUndo.disabled = !this.hist.length; this.bUndo.title = this.hist.length ? 'Desfazer' : 'Nada para desfazer';
+      const z = this.zoomMode(); for (const k in this.zb) this.zb[k].classList.toggle('on', k === z);
+    },
+    snapCam() { const r = this.zoomMode() === 'rosto'; this.camY = r ? 1.15 : .85; this.camD = r ? 2.7 : 3.6; },
+    zoomMode() { return this.zoomO || TABS.find(x => x.id === this.tab).zoom; },
+    key(e) {
+      const i = TABS.findIndex(x => x.id === this.tab);
+      if (e.code === 'Tab' || e.code === 'PageDown' || e.code === 'PageUp') { if (e.preventDefault) e.preventDefault(); const d = (e.code === 'PageUp' || e.shiftKey) ? -1 : 1; this.setTab(TABS[(i + d + TABS.length) % TABS.length].id); return true; }
+      if (e.code === 'KeyQ') { this.yaw -= .3; this.idle = 0; return true; } if (e.code === 'KeyE') { this.yaw += .3; this.idle = 0; return true; }
+      return false;
+    },
+    /* Voltar: sem mudanças vai direto; com mudanças pergunta (foco em "Continuar editando"). Nada foi salvo nem apagado até aqui. */
+    back() {
+      if (this.ask) { this.closeAsk(); return; }
+      if (!this.changed()) { this.leave(); return; }
+      this.openAsk('Sair do criador?', 'O visual que você montou ainda não foi confirmado e será descartado.', 'Continuar editando', 'Sair', () => this.leave());
+    },
+    leave() { K.sfx('ui_volta'); if (this.args.onBack) this.args.onBack(); else K.go('title'); },
+    confirm() { if (this.ask) return; this.openAsk('Começar a aventura com este visual?', 'Depois só dá para trocar no guarda-roupa, que ainda vai chegar.', 'Voltar a editar', 'Começar!', () => this.finish()); },
+    finish() { const look = K.normLook(this.look); if (this.args.onDone) this.args.onDone(look); else K.newGameStart(look); },
+    /* pop-up de confirmação: foco abre no 1º botão (o seguro); o botão de ação ignora os primeiros 250 ms; clique no fundo só fecha o pop-up */
+    openAsk(titulo, txt, voltar, ok, cb) {
+      if (this.ask) return; const l = K.ui.layer('crask', { modal: true, onBack: () => this.closeAsk() }); this.ask = l; const born = performance.now();
+      const p = h('div', 'panel crt-ask', '<h2>' + titulo + '</h2><p>' + txt + '</p>', l.el), r = h('div', 'row', '', p);
+      const b1 = K.ui.btn(voltar, () => this.closeAsk(), { parent: r, cls: 'aqua' }); b1.dataset.act = 'askBack';
+      const b2 = K.ui.btn(ok, () => { if (performance.now() - born < GUARD_MS) return; this.ask = null; UI.drop(l); cb(); }, { parent: r, cls: 'pri' }); b2.dataset.act = 'askOk';
+      let downBg = false; l.el.addEventListener('pointerdown', e => { downBg = e.target === l.el; }); l.el.addEventListener('click', e => { if (e.target === l.el && downBg && performance.now() - born >= GUARD_MS) this.closeAsk(); });
+      UI.focusIdx = 0; setTimeout(() => setFocus(0), 0);
+    },
+    closeAsk() { const l = this.ask; if (!l) return; this.ask = null; UI.drop(l); K.sfx('ui_volta'); UI.focusIdx = 0; const it = navItems(); const k = it.findIndex(x => x.dataset.act === 'confirm' || x.dataset.act === 'back'); setFocus(k >= 0 ? k : 0); },
+    update(dt) {
+      this.t += dt; K.ui.update(dt);
+      const P = K.input.Pad, pp = this.padPrev; if (P && !this.ask) { if (P.lx) { this.yaw += P.lx * Math.abs(P.lx) * dt * 3; this.idle = 0; } if (P.skill1 && !pp.skill1) this.key({ code: 'PageDown' }); if (P.skill2 && !pp.skill2) this.key({ code: 'PageUp' }); } if (P) { pp.skill1 = P.skill1; pp.skill2 = P.skill2; }
+      if (this.spin) this.yaw += this.spin * dt * 2.2;
+      this.idle += dt; if (this.idle > 3 && !this.spin) this.yaw += dt * .45;
+      if (this.mi) { this.mi.obj.rotation.y = this.yaw; this.mi.update(dt); }
+      const rosto = this.zoomMode() === 'rosto', ty = rosto ? 1.15 : .85, td = rosto ? 2.7 : 3.6, k = 1 - Math.exp(-7 * dt); this.camY += (ty - this.camY) * k; this.camD += (td - this.camD) * k;
+      const c = K.r3.cam; c.position.set(0, this.camY + .12, this.camD); c.lookAt(0, this.camY, 0); c.fov = 38; c.updateProjectionMatrix();
+      if (this.sun) this.sun.scale.setScalar(1 + Math.sin(this.t * 1.2) * .02);
+      K.sky.follow(0, 0, 0, dt); K.fx.update(dt);
+    },
+    /* o 3D fica centrado na área livre à direita da coluna (regra c): desloca a câmera pela borda da coluna, em qualquer proporção */
+    resize() { if (!this.col) return; const vw = K.vw() || 960, left = this.col.offsetLeft + this.col.offsetWidth, right = this.view ? this.view.offsetLeft : vw; K.r3.frame(clamp(((left + right) / 2 - vw / 2) / vw, 0, .4)); },
+    exit() { clearTimeout(this._mt); if (this.mi) { K.disposeObj(this.mi.obj); this.mi = null; } K.clearMenuGroup(); const g = K.menuGroup(); g.visible = false; K.r3.frame(0); this.ask = null; this.col = null; this.secs = null; }
+  });
+}
 
 /*==ENGINE:debug==  ferramentas de teste (K.debug) e o piloto automático (bot) que prova que o jogo é terminável.
  * K.debug.state() → JSON com cena, versão, erro, "cleared" (chefe final derrotado), nível, posição, missão atual...
@@ -7115,43 +7341,10 @@ K.art = { mix, wrap, sm, face, faceX };
 
 /* ============================================================ FAÍSCA (herói) — 1.4.0: aventureira corajosa, olhar decidido, sorriso de canto (nada de olhão kawaii) */
 {
-  const hsH = .33 * 1.3, L = { walk: .55, run: 1.05, jump: .25, fall: -2.2, roll: .7, spin: 1.0, charge: .45, atk1: .55, atk2: .55, atk3: .4, hurt: .9, die: .3, cast: .3 };
-  const HAIR = '#3A2F8F', HAIR2 = '#5B4FC4', LEATHER = '#8A4B2D', INK = '#101830', PAPER = '#F4F1E8', CORAL = '#FF5A5F', SUN = '#FFD23F', AQUA = '#2BD4C8';
+  const L = { walk: .55, run: 1.05, jump: .25, fall: -2.2, roll: .7, spin: 1.0, charge: .45, atk1: .55, atk2: .55, atk3: .4, hurt: .9, die: .3, cast: .3 };
   K.defModel('faisca', { height: 1.75, radius: .38, scale: .8, rig: 'humanoid', portrait: { y: 1.3, d: 1.5, x: .2 },
-    build(mk) {
-      const H = .9, b = mk.humanoid({ skin: '#F5C6A0', shirt: AQUA, pants: '#2F3A8A', boots: LEATHER, belt: LEATHER, hair: HAIR, hairStyle: 'none', height: H, headScale: 1.3 }), P = b.parts, T = P.torso, hs = hsH;
-      /* ---- ROSTO (grupo "rosto": olhos, sobrancelhas, boca, orelhas, nariz; sem pelos faciais: bigode e barba serão peças do criador) ---- */
-      const ex = hs * .25, ey = hs * .56, fz = hs * .52;
-      P.eyeL.position.set(-ex, ey, fz + .006); P.eyeR.position.set(ex, ey, fz + .006); for (const e of [P.eyeL, P.eyeR]) e.scale.set(1.05, 1.15, 1);
-      for (const s of [-1, 1]) mk.box(hs * .24, hs * .27, .014, PAPER, { x: s * ex, y: ey, z: fz - .004, parent: P.head, name: 'olhoBranco' });
-      P.mouth = mk.box(hs * .27, hs * .05, .02, '#5A1830', { x: hs * .04, y: hs * .17, z: fz, rz: .09, parent: P.head, name: 'mouth' });   /* linha fina (a barra vermelha larga parecia bigode) */
-      mk.box(hs * .07, hs * .045, .02, '#5A1830', { x: hs * .04 + hs * .15, y: hs * .2, z: fz, rz: .7, parent: P.head, name: 'bocaCanto' });   /* cantinho do sorriso de lado */
-      P.browL = mk.box(hs * .3, .034, .022, INK, { x: -ex, y: hs * .84, z: fz, rz: -.1, parent: P.head, name: 'browL' });
-      P.browR = mk.box(hs * .3, .034, .022, INK, { x: ex, y: hs * .84, z: fz, rz: .1, parent: P.head, name: 'browR' });
-      mk.box(hs * .09, hs * .11, .04, '#E8A784', { y: hs * .38, z: fz + .01, parent: P.head, name: 'nariz' });
-      for (const s of [-1, 1]) mk.box(.03, hs * .22, hs * .2, '#F5C6A0', { x: s * hs * .53, y: hs * .5, parent: P.head, name: 'orelha' });
-      /* ---- CABELO (grupo "hair": base + tufos azul-roxo; mecha lilás) ---- */
-      const hr = P.hair; mk.box(hs * 1.14, hs * .3, hs * 1.14, HAIR, { y: hs * 1.0, parent: hr, name: 'cabeloTopo' }); mk.box(hs * 1.14, hs * .78, hs * .3, HAIR, { y: hs * .66, z: -hs * .42, parent: hr, name: 'cabeloNuca' });
-      for (const s of [-1, 1]) mk.box(hs * .12, hs * .5, hs * .7, HAIR, { x: s * hs * .57, y: hs * .8, z: -hs * .05, parent: hr, name: 'cabeloLado' });
-      for (let i = 0; i < 4; i++) { const k = i - 1.5, g = P['tuft' + i] = mk.grp({ x: k * hs * .3, y: hs * 1.12, z: -.01 + (i === 1 || i === 2 ? hs * .08 : -hs * .06), parent: hr, rz: -k * .4, name: 'tufo' + i }); mk.cone(.08, .27 + (i === 1 ? .08 : i === 2 ? .03 : 0), i === 2 ? HAIR2 : HAIR, { y: .13, parent: g }, 5); }
-      P.fringe = mk.grp({ y: hs * 1.02, z: hs * .52, parent: hr, name: 'franja' }); for (const x of [-.32, 0, .32]) mk.box(hs * .32, hs * .24, .04, x === 0 ? HAIR2 : HAIR, { x: x * hs, y: -.07, rz: x * .7, parent: P.fringe });
-      /* ---- ROUPA: túnica, emblema de sol, bainha, cinto, bolsinha, remendo ---- */
-      const em = mk.grp({ y: .36 * H, z: .157, parent: T, name: 'emblema' }); mk.cyl(.085, .085, .02, SUN, { rx: PI / 2, parent: em }, 10);
-      mk.box(.27, .03, .014, SUN, { z: -.004, parent: em }); mk.box(.27, .03, .014, SUN, { z: -.004, rz: PI / 2, parent: em }); mk.box(.24, .028, .014, SUN, { z: -.004, rz: PI / 4, parent: em }); mk.box(.24, .028, .014, SUN, { z: -.004, rz: -PI / 4, parent: em });
-      mk.sphere(.035, '#FFF3B0', { z: .012, parent: em }, 6);
-      mk.box(.6, .24, .36, '#22BDB1', { y: -.1, parent: T, name: 'saiote' }); mk.box(.61, .04, .37, SUN, { y: -.205, parent: T, name: 'bainha' });
-      mk.box(.09, .08, .022, SUN, { y: .03, z: .165, parent: T, name: 'fivela' });
-      const bag = mk.grp({ x: .3, y: -.04, z: .02, parent: T, name: 'bolsinha' }); mk.box(.14, .17, .17, LEATHER, { parent: bag }); mk.box(.15, .07, .18, '#A8603A', { y: .07, parent: bag }); mk.box(.03, .04, .02, SUN, { y: .03, z: .095, parent: bag });
-      mk.box(.17, .17, .018, '#8478D0', { x: -.1, y: .26 * H, z: -.157, rz: .12, parent: T, name: 'remendo' });
-      /* ---- ombreiras, munhequeiras, canos das botas, joelheira ---- */
-      for (const s of ['L', 'R']) { const a = P['arm' + s]; mk.sphere(.11, SUN, { y: .03, sy: .7, parent: a, name: 'ombreira' }, 6); mk.box(.18, .06, .19, CORAL, { y: -.38 * H, parent: a, name: 'munhequeira' }); mk.box(.22, .07, .22, PAPER, { y: -.78 * H + .2, z: .02, parent: P['leg' + s], name: 'canoBota' }); }
-      /* ---- cachecol coral: argola + 3 segmentos que balançam ---- */
-      mk.box(.4, .11, .36, CORAL, { y: .63 * H, parent: T, name: 'cachecol' }); mk.sphere(.075, CORAL, { x: .18, y: .6 * H, z: .1, parent: T, name: 'nozinho' }, 6);
-      P.scarfA = mk.grp({ x: .1, y: .6 * H, z: -.17, parent: T, rx: .12, name: 'scarfA' }); mk.box(.14, .24, .035, CORAL, { y: -.12, parent: P.scarfA });
-      P.scarfB = mk.grp({ y: -.24, parent: P.scarfA, name: 'scarfB' }); mk.box(.13, .24, .032, CORAL, { y: -.12, parent: P.scarfB }); mk.box(.135, .04, .036, SUN, { y: -.05, parent: P.scarfB });
-      P.scarfC = mk.grp({ y: -.24, parent: P.scarfB, name: 'scarfC' }); mk.box(.12, .22, .03, CORAL, { y: -.11, parent: P.scarfC }); mk.cone(.08, .1, SUN, { y: -.27, rx: PI, parent: P.scarfC }, 4);
-      return b;
-    },
+    /* 1.4.1: o herói é montado pela FICHA (K.buildLook, src/engine/04b-look.js; peças em 17-look-rosto.js e 17b-look-roupas.js). Ficha padrão = a Faísca de sempre. */
+    build(mk) { return K.buildLook(K.heroLook(), mk); },
     anims: wrap((n, p, c) => {
       const sp = c.sp || 1, t = c.t, w = t * (n === 'run' ? 15 : n === 'walk' ? 9 : 3.3), base = (L[n] === undefined ? .06 : L[n]) * (n === 'walk' || n === 'run' ? Math.min(1, .4 + sp) : 1), amp = n === 'idle' ? .06 : .2;
       const r = { scarfA: [base + sn(w) * amp, sn(w * .7) * amp * 1.2, sn(w * .6) * .06], scarfB: [sn(w - .9) * amp * 1.6, sn(w * .5 - 1) * amp * 1.3, 0], scarfC: [sn(w - 1.8) * amp * 2, sn(w * .5 - 2) * amp * 1.6, 0],
@@ -8396,7 +8589,7 @@ K.reskinProp('poco', (mk) => {
     const hs = c.hs, hr = c.P.hair, k = c.hair, k2 = c.hair2;
     topo(c);
     for (let i = 0; i < 4; i++) { const q = i - 1.5, g = c.P['tuft' + i] = mk.grp({ x: q * hs * .3, y: hs * 1.12, z: -.01 + (i === 1 || i === 2 ? hs * .08 : -hs * .06), parent: hr, rz: -q * .4, name: 'tufo' + i }); mk.cone(.08, .27 + (i === 1 ? .08 : i === 2 ? .03 : 0), i === 2 ? k2 : k, { y: .13, parent: g }, 5); }
-    const f = c.P.fringe = mk.grp({ y: hs * 1.02, z: hs * .52, parent: hr, name: 'franja' }); for (const x of [-.32, 0, .32]) mk.box(hs * .32, hs * .24, .04, x === 0 ? k2 : k, { x: x * hs, y: -.07, rz: x * .7, parent: f });
+    const f = c.P.fringe = mk.grp({ y: hs * 1.02, z: hs * .52, parent: hr, name: 'franja' }); for (const x of [-.32, 0, .32]) mk.box(hs * .32, hs * .15, .04, x === 0 ? k2 : k, { x: x * hs, y: -.02, rz: x * .7, parent: f });   /* 1.4.1: franja mais curta para as sobrancelhas (y ≈ hs·.84) aparecerem */
   } });
   K.defLook('cabelo', 'curto', { nome: 'Curto', build(mk, c) { topo(c); franjaReta(c, .16); } });
   K.defLook('cabelo', 'curtinho', { nome: 'Curtinho', build(mk, c) {
@@ -8466,7 +8659,7 @@ K.reskinProp('poco', (mk) => {
   const lite = (hex, k) => '#' + new THREE.Color(hex).lerp(new THREE.Color('#FFFFFF'), k).getHexString();
   const hide = (...a) => { for (const m of a) if (m) m.visible = false; };
   const paint = (m, col) => { if (m) m.material = K.mat(col); };
-  const tufts = c => { for (let i = 0; i < 4; i++) { const t = c.P['tuft' + i]; if (t) t.visible = false; } };   /* tufos do cabelo furariam o chapéu */
+  const tufts = c => { for (let i = 0; i < 4; i++) { const t = c.P['tuft' + i]; if (t) t.visible = false; } c.P.hair.traverse(o => { if (o.name === 'topete' || o.name === 'coque') o.visible = false; }); };   /* tufos, topete e coque do cabelo furariam o chapéu (1.4.1: topete e coque entraram) */
   const SIDES = [['L', -1], ['R', 1]];
   const LEGL = .78 * .9;   /* comprimento da perna do corpo base (H .9) */
 
@@ -8476,7 +8669,7 @@ K.reskinProp('poco', (mk) => {
     const em = mk.grp({ y: .36 * H, z: .157, parent: T, name: 'emblema' }); mk.cyl(.085, .085, .02, c.col2, { rx: PI / 2, parent: em }, 10);
     mk.box(.27, .03, .014, c.col2, { z: -.004, parent: em }); mk.box(.27, .03, .014, c.col2, { z: -.004, rz: PI / 2, parent: em }); mk.box(.24, .028, .014, c.col2, { z: -.004, rz: PI / 4, parent: em }); mk.box(.24, .028, .014, c.col2, { z: -.004, rz: -PI / 4, parent: em });
     mk.sphere(.035, lite(c.col2, .6), { z: .012, parent: em }, 6);
-    mk.box(.6, .24, .36, sh(c.col, .83), { y: -.1, parent: T, name: 'saiote' }); mk.box(.61, .04, .37, c.col2, { y: -.205, parent: T, name: 'bainha' });
+    if (c.look.baixo !== 'shorts') { mk.box(.6, .24, .36, sh(c.col, .83), { y: -.1, parent: T, name: 'saiote' }); mk.box(.61, .04, .37, c.col2, { y: -.205, parent: T, name: 'bainha' }); }   /* 1.4.1: com shorts o saiote escondia o shorts inteiro (as outras roupas de baixo aparecem sob a bainha) */
     mk.box(.09, .08, .022, c.col2, { y: .03, z: .165, parent: T, name: 'fivela' });
     const bag = mk.grp({ x: .3, y: -.04, z: .02, parent: T, name: 'bolsinha' }); mk.box(.14, .17, .17, LEATHER, { parent: bag }); mk.box(.15, .07, .18, '#A8603A', { y: .07, parent: bag }); mk.box(.03, .04, .02, SUN, { y: .03, z: .095, parent: bag });
     mk.box(.17, .17, .018, '#8478D0', { x: -.1, y: .26 * H, z: -.157, rz: .12, parent: T, name: 'remendo' });
@@ -8721,7 +8914,7 @@ K.reskinProp('poco', (mk) => {
     mk.box(.46, .06, .02, c.col2, { y: F.ey, z: -.22, parent: Hd, name: 'tiraTras' }); mk.box(.065, .14, .03, c.col2, { x: .205, y: F.ey + .03, z: z + .015, parent: Hd, name: 'valvula' });
   } });
 
-  K.defLook('oculos', 'coracao', { nome: 'Óculos de coração', build(mk, c) {
+  K.defLook('oculos', 'coracao', { nome: 'Óculos de coração', corPadrao: 1, build(mk, c) {
     const F = c.face, Hd = c.P.head, z = F.fz + GZ, dk = sh(c.col, .72);
     for (const sx of [-1, 1]) {
       const g = mk.grp({ x: sx * F.ex, y: F.ey, z, parent: Hd, name: 'coracao' });
@@ -8754,13 +8947,13 @@ K.reskinProp('poco', (mk) => {
     for (let i = 0; i < 5; i++) mk.box(.012, .09, .515, sh(c.col2, .85), { x: -.2 + i * .1, y: .465, parent: Hd, name: 'costelaDobra' });
     mk.sphere(.075, c.col2, { y: .7, parent: Hd, name: 'pompom' }, 6);
   } });
-  K.defLook('chapeu', 'palha', { nome: 'Chapéu de palha', build(mk, c) {
+  K.defLook('chapeu', 'palha', { nome: 'Chapéu de palha', corPadrao: 2, build(mk, c) {
     const Hd = c.P.head; tufts(c);
     mk.cyl(.44, .44, .03, c.col, { y: .475, parent: Hd, name: 'aba' }, 10); mk.cyl(.22, .27, .2, c.col, { y: .56, parent: Hd, name: 'copa' }, 8); mk.cyl(.275, .285, .05, c.col2, { y: .5, parent: Hd, name: 'fita' }, 8);
     mk.cyl(.44, .445, .018, sh(c.col, .8), { y: .488, parent: Hd, name: 'bordaTrancada' }, 10);
     mk.box(.07, .06, .05, c.col2, { x: .27, y: .5, z: .1, parent: Hd, name: 'lacinho' });
   } });
-  K.defLook('chapeu', 'explorador', { nome: 'Chapéu de explorador', build(mk, c) {
+  K.defLook('chapeu', 'explorador', { nome: 'Chapéu de explorador', corPadrao: 13, build(mk, c) {
     const Hd = c.P.head, dk = sh(c.col, .8); tufts(c);
     mk.cyl(.38, .38, .025, dk, { y: .475, parent: Hd, name: 'aba' }, 8); mk.cyl(.16, .27, .24, c.col, { y: .575, parent: Hd, name: 'copa' }, 8); mk.cyl(.28, .29, .06, c.col2, { y: .5, parent: Hd, name: 'fita' }, 8);
     mk.box(.07, .06, .02, PAPER, { y: .5, z: .275, parent: Hd, name: 'fivela' }); mk.box(.2, .05, .02, dk, { y: .715, z: .0, parent: Hd, name: 'vinco' }).scale.set(1, 1, 3);
@@ -8768,8 +8961,8 @@ K.reskinProp('poco', (mk) => {
   } });
   K.defLook('chapeu', 'bruxo', { nome: 'Chapéu de bruxo', build(mk, c) {
     const Hd = c.P.head; tufts(c);
-    mk.cyl(.42, .42, .03, c.col, { y: .47, parent: Hd, name: 'aba' }, 8); mk.cone(.28, .32, c.col, { y: .64, parent: Hd, name: 'copa' }, 8);
-    const tip = mk.grp({ y: .8, parent: Hd, name: 'ponta', rx: -.3 }); mk.cone(.17, .3, c.col, { y: .12, parent: tip }, 8); mk.sphere(.05, c.col2, { y: .29, parent: tip }, 5);
+    mk.cyl(.42, .42, .03, c.col, { y: .47, parent: Hd, name: 'aba' }, 8); mk.cone(.28, .26, c.col, { y: .61, parent: Hd, name: 'copa' }, 8);   /* 1.4.1: copa e ponta mais baixas: a ponta afundava 21 cm no chão no rolar */
+    const tip = mk.grp({ y: .72, parent: Hd, name: 'ponta', rx: -.3 }); mk.cone(.17, .22, c.col, { y: .09, parent: tip }, 8); mk.sphere(.05, c.col2, { y: .21, parent: tip }, 5);
     mk.cyl(.285, .3, .07, c.col2, { y: .52, parent: Hd, name: 'fita' }, 8); mk.box(.09, .08, .02, PAPER, { y: .52, z: .29, parent: Hd, name: 'fivela' });
   } });
   K.defLook('chapeu', 'tiara', { nome: 'Tiara', build(mk, c) {
@@ -11119,11 +11312,11 @@ K.buildTitleUI = function () {
   const has = !!SAVE.game;
   if (has) K.ui.btn('Continuar', () => K.go('play', { load: true }), { parent: col, cls: 'pri' });
   K.ui.btn('Novo jogo', () => {
-    if (!has) { K.go('play', { new: true }); return; }
+    if (!has) { K.newGameFlow(); return; }
     const c = hh('div', 'panel tt-ask', '<h2>Começar de novo?</h2><p style="margin:.2rem 0 .8rem">A partida salva será substituída.</p>', l.el);
     const r = hh('div', 'row', '', c); r.style.justifyContent = 'center';
     const back = K.ui.btn('Voltar', () => { c.remove(); }, { parent: r, cls: 'aqua' });
-    K.ui.btn('Novo jogo', () => { SAVE.game = null; K.persist(); K.go('play', { new: true }); }, { parent: r, cls: 'pri' });
+    K.ui.btn('Novo jogo', () => K.newGameFlow(), { parent: r, cls: 'pri' });
     document.querySelectorAll('.tt-col [data-nav]').forEach(e => e.classList.remove('focus')); back.classList.add('focus');
   }, { parent: col, cls: has ? '' : 'pri' });
   K.ui.btn('Opções', () => { const o = K.ui.layer('opt', { modal: true, onBack: () => K.ui.drop(o) }); K.ui.optPanel(o, () => K.ui.drop(o)); }, { parent: col });
