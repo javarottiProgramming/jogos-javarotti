@@ -162,7 +162,7 @@ function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function rnd(a,b){ return a + Math.random()*(b-a); }
 function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function sgn(v){ return v<0?-1:1; }
-const BUILD = '9.2.75';
+const BUILD = '9.2.76';
 const BUILD_LOG = [
   ['1 e 2',  'Nácar em formas geométricas — rejeitado'],
   ['3 (1ª)', 'marionete recortada do desenho original'],
@@ -308,6 +308,7 @@ const BUILD_LOG = [
   ['9.2.33', 'URGENTE: tela preta no ECO (QUAL 2–3, desde 9.2.29): a camada #hc do HUD herdava o fundo escuro do canvas e cobria o jogo inteiro — agora é transparente'],
   ['9.2.34', 'VOLTAR do menu GOLPES voltou a funcionar (o item ▶ VER escondido espremia o espaçamento da lista e a área de toque ficava com altura 0); HISTÓRICO atualizado até a 9.2.34 e de volta a 3 páginas (30 versões, uma linha cada); medidor de FPS aparece em todas as telas, menus inclusive; tools/voltar_check.mjs confere o VOLTAR de todas as telas com toque de verdade'],
   ['9.2.35', 'prévia dos golpes, bloco 2 (ar): CORTE AÉREO e CORTE REVERSO no Olho Pendente, MERGULHO na Boca-de-Chão (brota com aviso, bote e mordida) e QUEDA GIRATÓRIA no Fôlego, com salto, ar e pouso pelas regras do 08_hero.js (gravidades, câmera lenta, tremor e hitstop do pouso); rubrica R17 (altura e pouso); golpes_check cobre as 10 prévias'],
+  ['9.2.76', 'SEM CONTORNO DE LUZ nos inimigos (pedido do autor, ALTO): nos cenários escuros o inimigo era desenhado uma 2ª vez em branco (drawEnemy, G.bg.dark e QUAL 0) e no celular aparecia como sombra branca fantasma — a escala do halo era em torno da origem (0,0) da tela, não do pé do bicho, então a cópia saía deslocada 3,5% da posição (≈21 px à direita e 16 abaixo; achado no Bosque Negro, em todos os 13 cenários escuros). O autor viu e mandou tirar o contorno, mesmo corrigido; saíram o bloco do halo e a flag ENG_HALO (engolidos.js). Custo do halo medido (perf.mjs --stage 1 --enemies 6 --qual 0, headless por software): mobile 30,7 → 23,8 ms (≈ 7 ms, 22%), desktop ≈ 4–6 ms; o ALTO agora desenha cada bicho uma vez (medido depois: mobile ≈ 25,1 ms, −18%; laço real mobile ALTO ≈ 40 fps, MÉDIO ≈ 49, LEVE ≈ 57), e o MÉDIO (QUAL 1) segue cortando o resto (clip de contorno do rig, rastros). tools/halo_check.mjs guarda que nada branco passa da silhueta (falha na 9.2.75: 21 px à direita, 16 abaixo)'],
   ['9.2.75', 'GRÁFICOS nas OPÇÕES → TELA: LEVE · MÉDIO · ALTO (settings.gfx, padrão ALTO, também para saves antigos); SEM escada automática — o jogo nunca baixa a qualidade sozinho (saíram qualStep, QCAP, sondas e G.qualCool; escada_qualidade.js virou o mapeamento nível → QUAL: ALTO = QUAL 0, MÉDIO = QUAL 1, LEVE = QUAL 3; o QUAL 2 fica sem uso). Medido com tools/perf.mjs (headless por software, fase I, 6 inimigos, ms/quadro desktop · mobile 844×390): QUAL 0 = 8,7 · 17,9; QUAL 1 = 6,9 (−21%) · 16,6 (−7%); QUAL 2 = 6,2 · 11,3; QUAL 3 = 4,0 (−54%) · 7,2 (−60%). MÉDIO corta o desenho de inimigo (−40%) e herói (−35%), rastros e halos; LEVE corta também resolução 0,66×, primeiro plano, névoa e grão. No aparelho real a resolução não pesa (BENCH_DESEMPENHO.md): conferir no moto g35. OPÇÕES: lista com 10 linhas (gap 29, VOLTAR em y 460) sem o VOLTAR cobrir a DIFICULDADE; medidor de FPS mostra o nível; tools: perf.mjs --enemies N, play.mjs --gfx'],
   ['9.2.74', 'opções: VOLUME (padrão 70%) em SOM; ZERAR PROGRESSO em vermelho no fim das OPÇÕES, com confirmação (apaga o save, mantém as opções); ESQUIVA escreve o aviso quando o golpe passa; HISTÓRICO com textos mais curtos; HIST_JOGO 9.2.74'],
   ['9.2.73', 'limpeza: sai o código morto da tela "gire o celular" (já não aparecia desde a 8.3.3; o giro por CSS segue igual); jogo igual, sem mudança visível; HIST_JOGO 9.2.73'],
@@ -7444,14 +7445,8 @@ function drawEnemy(g, e){
   if (e.type === 'boss'){ drawBoss(g, e); return; }
   g.save(); g.globalAlpha = e.alpha;
   if (e.state === 'grabbed') g.translate(Math.sin(G.t*38)*2.2, Math.sin(G.t*27)*1.4);
-  // contorno de luz no cenário escuro: uma passada só (eram duas) e nenhuma no modo econômico
+  /* sem contorno de luz (9.2.76): era uma 2ª passada do rig por bicho no cenário escuro (≈7 ms de 31 no celular) e lia como sombra branca; o autor mandou tirar */
   if (e.eng){ engBegin(g, e); engFiosDraw(g, e); }               // fiapos do Vazio atrás do corpo: a raiz fica escondida dentro da tira (engSprite)
-  if (G.bg.dark && !e.prop && QUAL < 1){
-    g.save(); TINT = 'w'; g.globalAlpha = e.alpha*0.55;
-    g.scale(1.035, 1.035); g.translate(0, -1.6);
-    ENG_HALO = true; BEH[e.type].draw(g, e); ENG_HALO = false;     // no Engolido a peça rasgada fica fora do halo (os dentes deslocados viravam zigue-zague branco)
-    TINT = null; g.restore();
-  }
   BEH[e.type].draw(g, e);
   if (e.flash > 0){ g.save(); TINT = G.bg.dark ? 'w' : 'k'; g.globalAlpha = e.alpha*e.flash;   // flash de acerto: claro no escuro, escuro no claro (não engole o bicho)
     BEH[e.type].draw(g, e); TINT = null; g.restore(); }
@@ -11615,10 +11610,8 @@ function engTeeth(sp, key){
   T = { teeth, path:p }; ENG_TEETH.set(sp, T); return T;
 }
 /* desenha a peça comida pelo Vazio: rasgada em tiras; registra a raiz de cada fiapo (dentro da tira) no espaço do mundo */
-let ENG_HALO = false;
 function engSprite(g, e, sp, x, y, k, key){
   if (!e.eng || !ENG_TEAR[key]){ drawSprite(g, sp, x, y, k); return; }
-  if (ENG_HALO) return;
   const T = engTeeth(sp, key);
   g.save(); g.translate(x, y); g.scale(k, k); g.clip(T.path); drawSprite(g, sp, 0, 0, 1);
   if (!TINT && e.engM0){
@@ -17370,6 +17363,7 @@ function openCredits(){
 /* histórico para o jogador: uma linha por versão, 10 por página (3 páginas), sem jargão (o BUILD_LOG técnico continua em nucleo.js).
    A cada rodada entregue: acrescentar a versão nova NO TOPO (regra no CLAUDE.md). */
 const HIST_JOGO = [
+  ['9.2.76', 'saiu o contorno branco dos inimigos nos cenários escuros (parecia sombra); fica mais leve no alto'],
   ['9.2.75', 'gráficos LEVE, MÉDIO e ALTO nas opções; o jogo não baixa a qualidade sozinho'],
   ['9.2.74', 'volume nas opções; zerar progresso; aviso ESQUIVA'],
   ['9.2.73', 'limpeza interna: saiu o código morto da tela "gire o celular"; o jogo igual'],
