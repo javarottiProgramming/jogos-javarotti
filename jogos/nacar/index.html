@@ -24,21 +24,11 @@
   #hc.on { display: block; }
   #wrap { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; will-change: transform; transform: translateZ(0); backface-visibility: hidden; }
   canvas { display: block; background: #0D0D11; touch-action: none; will-change: transform; }
-  #rotate { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-    background: #0D0D11; color: var(--fg); font-family: "Barlow Condensed", "Arial Narrow", sans-serif; text-align: center; z-index: 5; padding: 24px; }
-  #rotate.on { display: flex; }
-  #rotate .ph { width: 64px; height: 104px; border: 4px solid var(--fg); border-radius: 12px; animation: rot 2.2s ease-in-out infinite; }
-  @keyframes rot { 0%,25% { transform: rotate(0deg); } 55%,100% { transform: rotate(90deg); } }
-  #rotate h1 { font-family: Anton, Impact, sans-serif; font-weight: 400; letter-spacing: 6px; margin: 6px 0 0; font-size: 34px; }
-  #rotate p { margin: 0; font-size: 18px; color: #A8A194; letter-spacing: 1px; }
-  #rotate button { margin-top: 10px; font: 700 16px "Barlow Condensed", sans-serif; letter-spacing: 3px; color: #141317;
-    background: var(--fg); border: 0; padding: 12px 22px; border-radius: 4px; }
 </style>
 </head>
 <body>
 <canvas id="bgc" width="96" height="54"></canvas>
 <div id="wrap"><canvas id="c"></canvas><canvas id="hc"></canvas></div>
-<div id="rotate"><div class="ph"></div><h1>NÁCAR</h1><p>Gire o celular para jogar na horizontal</p><button id="forceBtn">JOGAR ASSIM MESMO</button></div>
 <script>
 (function(){
 /* =====================================================================
@@ -79,7 +69,6 @@ const wrap = document.getElementById('wrap');
 const hc = document.getElementById('hc'), hx = hc.getContext('2d');   // camada do HUD em resolução cheia quando o jogo desce de qualidade (ECO): texto e botões não ficam moles
 const bgc = document.getElementById('bgc'), bgx = bgc.getContext('2d');
 let BARS = false;     // tela mais larga que 16:9: as faixas laterais ganham um eco escurecido do jogo (frame() desenha em 96×54)
-const rotateEl = document.getElementById('rotate');
 let forcedRotate = false, SCALE = 1, DPR = 1, DPRH = 1, HUDX = false;
 /* escada de qualidade: 0 cheio, 1 sem rastros, 2 resolução menor, 3 mínimo.
    Sobe sozinha quando o quadro afunda e desce quando estabiliza. */
@@ -97,7 +86,6 @@ function layout(){
   // o giro por CSS só vale enquanto a tela está em retrato: se o aparelho virou de verdade, desliga (senão gira 2× e encolhe)
   if (!portrait && forcedRotate) forcedRotate = false;
   if (portrait && !forcedRotate && aw < 900) forcedRotate = true;   // retrato no celular: gira por CSS e já entra no jogo, sem tela de aviso (a tela inicial de loading vem depois: ROADMAP)
-  rotateEl.classList.remove('on');
   let bw = aw, bh = ah;
   if (forcedRotate){ bw = ah; bh = aw; }
   SCALE = Math.min(bw / VW, bh / VH);
@@ -131,9 +119,6 @@ addEventListener('resize', function(){ scheduleLayout(); });
 addEventListener('orientationchange', function(){ scheduleLayout(250); });
 document.addEventListener('fullscreenchange', function(){ cvContexto(); scheduleLayout(250); });
 try{ if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', function(){ scheduleLayout(250); }); }catch(e){}
-document.getElementById('forceBtn').addEventListener('click', function(){
-  forcedRotate = true; rotateEl.classList.remove('on'); layout();
-});
 async function goLandscape(){
   fsBusy = true;                                   // enquanto pede tela cheia e trava paisagem, nada de giro por CSS
   try{
@@ -149,7 +134,7 @@ const store = {
   get(k,d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({ music:true, sfx:true, vib:true, hard:false, diff:'normal', fps:false, calm:false, dev:false }, store.get('nacar3.settings', {}));
+const settings = Object.assign({ music:true, sfx:true, vib:true, hard:false, diff:'normal', fps:false, calm:false, dev:false, vol:70 }, store.get('nacar3.settings', {}));   // vol: volume geral em % (OPÇÕES → SOM), padrão 70
 /* Dificuldade: tudo que muda entre os níveis passa por aqui.
    dmgIn  = dano que o Nácar sofre      dmgOut = dano que ele causa
    hpMul  = vida dos inimigos           tokens = quantos podem atacar ao mesmo tempo
@@ -177,7 +162,7 @@ function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function rnd(a,b){ return a + Math.random()*(b-a); }
 function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function sgn(v){ return v<0?-1:1; }
-const BUILD = '9.2.72';
+const BUILD = '9.2.74';
 const BUILD_LOG = [
   ['1 e 2',  'Nácar em formas geométricas — rejeitado'],
   ['3 (1ª)', 'marionete recortada do desenho original'],
@@ -323,6 +308,8 @@ const BUILD_LOG = [
   ['9.2.33', 'URGENTE: tela preta no ECO (QUAL 2–3, desde 9.2.29): a camada #hc do HUD herdava o fundo escuro do canvas e cobria o jogo inteiro — agora é transparente'],
   ['9.2.34', 'VOLTAR do menu GOLPES voltou a funcionar (o item ▶ VER escondido espremia o espaçamento da lista e a área de toque ficava com altura 0); HISTÓRICO atualizado até a 9.2.34 e de volta a 3 páginas (30 versões, uma linha cada); medidor de FPS aparece em todas as telas, menus inclusive; tools/voltar_check.mjs confere o VOLTAR de todas as telas com toque de verdade'],
   ['9.2.35', 'prévia dos golpes, bloco 2 (ar): CORTE AÉREO e CORTE REVERSO no Olho Pendente, MERGULHO na Boca-de-Chão (brota com aviso, bote e mordida) e QUEDA GIRATÓRIA no Fôlego, com salto, ar e pouso pelas regras do 08_hero.js (gravidades, câmera lenta, tremor e hitstop do pouso); rubrica R17 (altura e pouso); golpes_check cobre as 10 prévias'],
+  ['9.2.74', 'opções: VOLUME (padrão 70%) em SOM; ZERAR PROGRESSO em vermelho no fim das OPÇÕES, com confirmação (apaga o save, mantém as opções); ESQUIVA escreve o aviso quando o golpe passa; HISTÓRICO com textos mais curtos; HIST_JOGO 9.2.74'],
+  ['9.2.73', 'limpeza: sai o código morto da tela "gire o celular" (já não aparecia desde a 8.3.3; o giro por CSS segue igual); jogo igual, sem mudança visível; HIST_JOGO 9.2.73'],
   ['9.2.72', 'DESTRAVAR TUDO segue o modo DEV: o botão do mapa só aparece/recebe toque com settings.dev; libera também a transformação (progress.trans) e guarda o save de verdade em progress.real; desligar o DEV (5 toques nos créditos) ou abrir o jogo com ele desligado chama devRestaurar() e o mapa volta à fase, ao treino e à transformação do save (sem transformação na história, volta sem ela); HIST_JOGO 9.2.72'],
   ['9.2.71', 'TELA CHEIA sem chuvisco: em tela cheia o canvas é recriado sem desynchronized (o atributo piscava pontos no Chrome do Android, já visto na 9.2.1) e volta a ele ao sair, com os ouvintes religados (cvOn/cvContexto); dentro de um quadro (portfólio) fica sempre sem o atributo; HISTÓRICO mede o texto no tamanho em que desenha (15 px; media em 14 e desenhava em 16, a 9.2.70 invadia a versão de baixo); menu DEV escondido: o ícone </> só aparece depois de 5 toques seguidos em Pedro Javarotti nos créditos (salvo em settings.dev; mais 5 escondem); tools/tela_check.mjs'],
   ['9.2.70', 'etapa 0 do fechamento (conformidade com o JGK): o build acusa nome de topo repetido (aWisp do arremedo.js estava declarado 2×; a 1ª, morta, saiu); o som para também no alt-tab/troca de app/página guardada (blur, pagehide) e volta com o foco; a música olha 0,45 s à frente, pula as notas perdidas depois de quadro travado (sem rajada) e cada música toca num ganho próprio que some em 0,1 s na troca; canvas perdido (contextlost) ou página devolvida do cache recarrega o jogo'],
@@ -521,7 +508,7 @@ const AU = {
     if (!AC) return;
     try{
       this.ac = new AC();
-      this.master = this.ac.createGain(); this.master.gain.value = 0.9; this.master.connect(this.ac.destination);
+      this.master = this.ac.createGain(); this.master.gain.value = 0.9 * settings.vol/100; this.master.connect(this.ac.destination);
       const comp = this.ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
       comp.connect(this.master);
       this.sfx = this.ac.createGain(); this.sfx.gain.value = settings.sfx ? 0.8 : 0; this.sfx.connect(comp);
@@ -537,6 +524,7 @@ const AU = {
   foco(on){ if (!this.ac) return; try{ on ? this.ac.resume() : this.ac.suspend(); }catch(e){} },
   apply(){
     if (!this.ac) return;
+    this.master.gain.value = 0.9 * settings.vol/100;
     this.sfx.gain.value = settings.sfx ? 0.8 : 0;
     this.mus.gain.value = settings.music ? 0.34 : 0;
   },
@@ -6069,8 +6057,14 @@ function heroHit(A){
     vibrate(Math.round(7 + wt*32));
   }
 }
+/* ESQUIVA com aviso: o golpe de um inimigo que passa pela arrancada invulnerável escreve ESQUIVA sobre o herói (um aviso por 0,7 s, sem festa) */
+function esquivaAviso(){
+  if (G.esqAt !== undefined && G.t - G.esqAt < 0.7) return;
+  G.esqAt = G.t; floatText(hero.x, hero.z, hero.y + 200, 'ESQUIVA');
+}
 function hurtHero(dmg, dir, down, src){
   const h = hero;
+  if (h.inv > 0 && src && G.state === 'play' && h.state !== 'down' && h.state !== 'special' && h.state !== 'trans') esquivaAviso();
   if (h.inv > 0 || h.state === 'down' || h.state === 'special' || h.state === 'trans' || G.state !== 'play') return false;
   if (h.grabbed) releaseGrab();
   if (src && src.type === 'boss') dmg *= diff.bossDmg;               // chefe: dano próprio por dificuldade (além do dmgIn)
@@ -15761,7 +15755,8 @@ function drawCurrent(g){                                           // fios de Va
    ===================================================================== */
 const FD = 'Anton, Impact, "Arial Narrow", sans-serif';
 const FU = '"Barlow Condensed", "Arial Narrow", sans-serif';
-const progress = Object.assign({ stage:0, best:0, trained:false, ranks:[], bicho:{}, surv:{ round:0, score:0 } }, store.get('nacar3.progress', {}));
+const PROG_DEF = { stage:0, best:0, trained:false, ranks:[], bicho:{}, surv:{ round:0, score:0 } };   // save novo (ZERAR PROGRESSO volta a isto)
+const progress = Object.assign({}, PROG_DEF, store.get('nacar3.progress', {}));
 function saveProgress(){ store.set('nacar3.progress', progress); }
 /* DESTRAVAR TUDO (TEMP-TESTE, 9.2.72) só existe com o modo DEV ligado e NÃO apaga o save: antes de liberar guarda o progresso de verdade em progress.real.
    Desligar o DEV (ou abrir o jogo com ele desligado) devolve fase, treino e transformação do jogador como estavam: sem passar pela transformação na história, volta sem ela. */
@@ -16322,7 +16317,7 @@ function drawTouch(g){
 /* =====================================================================
    MENU · DADO (limpeza L6, 9.2.69): estado do menu e a forma dos itens. Layout em menu_layout.js, desenho em menu_desenho.js, toque em menu_toque.js.
    Item = { label, sub?, act, kind?, nav?, grp?, go?, dim?, x?, y?, glyph?, dir? }
-     kind (o TIPO do item; ausente = 'item'): 'item' linha normal · 'small' texto pequeno com seta · 'icon' botão redondo (+glyph) ·
+     kind (o TIPO do item; ausente = 'item'): 'danger' link vermelho das OPÇÕES (ZERAR PROGRESSO) · 'item' linha normal · 'small' texto pequeno com seta · 'icon' botão redondo (+glyph) ·
        'foot' VOLTAR fixo no rodapé da lista de configurações · 'back' ◀ VOLTAR do DEV (a tela desenha) · 'page' seta de página (+dir -1|1) ·
        'hidden' item que a própria tela desenha (só entra na ordem de seleção e no toque)
      nav:false = só toque (o ↑/↓ pula); grp/go/dim/sub = conteúdo da linha (grupo, abre submenu, apagado, valor à direita); x/y = posição fixa
@@ -16401,6 +16396,12 @@ function menuLayoutSettings(g, x, y, opts){
       row.rule = flush(); gTop = null;
       row.x = x; row.fy = fy;
       menu.rects.push({ x:x - 10, y:fy - 8, w:190, h:54 });
+      rows.push(row);
+      continue;
+    }
+    if (kind === 'danger'){                          // ZERAR PROGRESSO: link vermelho fixo no pé da página, à direita, fora do fluxo da lista
+      row.tw = fitW(g, it.label, { size:18, w:'700', sp:2 }); row.x = x + w - row.tw; row.fy = fy + 30;
+      menu.rects.push({ x:row.x - 10, y:row.fy - 26, w:row.tw + 20, h:40 });
       rows.push(row);
       continue;
     }
@@ -16536,13 +16537,21 @@ function menuPaintSetting(g, r){                   // linha de configuração: r
   if (it.go) chevron(g, xx + w - 12, yy - 8, 1, sel ? INK : '#9A948A', 0.4);
   g.restore();
 }
+function menuPaintDanger(g, r){                    // link vermelho do fim das OPÇÕES (ZERAR PROGRESSO): texto em BLOOD, sublinhado, sem valor
+  const it = r.it, x = r.x, fy = r.fy;
+  g.save(); g.globalAlpha = r.appear;
+  if (r.sel){ para(g, x - 8, fy - 24, 6, 29, 8, BLOOD); }
+  T(g, it.label, x, fy, { size:18, w:'700', sp:2, col:BLOOD });
+  g.fillStyle = BLOOD; g.fillRect(x, fy + 6, r.tw, 2);
+  g.restore();
+}
 function menuPaintRule(g, k){ g.fillStyle = '#4B4A53'; g.fillRect(k.x, k.y, k.w, k.h); }
 function drawSettingsList(g, x, y, opts){
   const L = menuLayoutSettings(g, x, y, opts);
   for (const r of L.rows){
     if (!r) continue;
     if (r.rule) menuPaintRule(g, r.rule);
-    (r.kind === 'foot' ? menuPaintFoot : menuPaintSetting)(g, r);
+    (r.kind === 'foot' ? menuPaintFoot : r.kind === 'danger' ? menuPaintDanger : menuPaintSetting)(g, r);
   }
   if (L.tail) menuPaintRule(g, L.tail);
 }
@@ -17052,6 +17061,7 @@ function openOptions(){
   const mk = () => [
     { grp:'SOM', label:'MÚSICA',   sub: settings.music ? 'LIGADA' : 'DESLIGADA', act:()=>{ settings.music = !settings.music; saveSettings(); AU.apply(); refresh(); } },
     { label:'EFEITOS',  sub: settings.sfx ? 'LIGADOS' : 'DESLIGADOS', act:()=>{ settings.sfx = !settings.sfx; saveSettings(); AU.apply(); refresh(); } },
+    { label:'VOLUME', sub: settings.vol ? settings.vol + '%' : 'DESLIGADO', act:()=>{ const nx = VOL_STEPS.find(v => v > settings.vol); settings.vol = nx === undefined ? 0 : nx; saveSettings(); AU.apply(); AU.play('ui'); refresh(); } },
     { label:'VIBRAÇÃO', sub: settings.vib ? 'LIGADA' : 'DESLIGADA', act:()=>{ settings.vib = !settings.vib; saveSettings(); vibrate(40); refresh(); } },
     { grp:'TELA', label:'TELA CHEIA', sub: document.fullscreenElement ? 'SIM' : 'NÃO', act:()=>{
         if (document.fullscreenElement){ try{ document.exitFullscreen(); }catch(e){} setTimeout(refresh, 400); }
@@ -17067,10 +17077,30 @@ function openOptions(){
         const i = DIFF_ORDER.indexOf(diffAtual().key);
         setDiff(DIFF_ORDER[(i+1) % DIFF_ORDER.length]); saveSettings(); refresh();
       } },
+    { label:'ZERAR PROGRESSO', kind:'danger', act:()=>openZerar() },
     { label:'VOLTAR', kind:'foot', act:()=>closeOptions() }
   ];
   const refresh = ()=>{ const s = menu.sel; menu.items = mk(); menu.sel = s; };
   setMenu(mk(), ()=>closeOptions());
+}
+/* volume geral (OPÇÕES → SOM): passos da volta; o ganho do AU usa settings.vol */
+const VOL_STEPS = [0, 25, 50, 70, 100];
+/* ZERAR PROGRESSO: confirmação antes de apagar o save (fases, ranks, treino, Arena, transformação). As opções ficam. */
+function openZerar(){
+  G.state = 'options';
+  const back = ()=>openOptions();
+  setMenu([
+    { label:'APAGAR O SAVE?', sub:'as opções ficam', dim:true, nav:false, act:()=>{} },
+    { label:'SIM, APAGAR', act:()=>zerarProgresso() },
+    { label:'NÃO, VOLTAR', kind:'foot', act:back }
+  ], back);
+  menu.sel = 1;
+}
+function zerarProgresso(){
+  for (const k of Object.keys(progress)) delete progress[k];      // apaga também progress.real (save guardado pelo DESTRAVAR TUDO)
+  Object.assign(progress, JSON.parse(JSON.stringify(PROG_DEF)));
+  saveProgress(); AU.play('ui'); vibrate(40);
+  openOptions();
 }
 /* tela do controle: mostra o modo detectado e deixa remapear cada botão (aperte o botão desejado) */
 function openPadCfg(){
@@ -17118,7 +17148,7 @@ function drawOptions(g, dt){
   else drawTitleBG(g, dt, true);
   T(g, 'OPÇÕES', 70, 92, { size:56, f:FD, sp:5, col:BONE });
   g.fillStyle = BLOOD; g.fillRect(72, 104, 60, 4);
-  drawSettingsList(g, 70, 150, { w:400 });
+  drawSettingsList(g, 70, 144, { w:400, gap:30, gg:14 });
   if (DIFF_LOCKED){
     G.diffNote = Math.max(0, (G.diffNote||0) - dt);
     g.save(); g.globalAlpha = 0.5 + Math.min(1, G.diffNote)*0.5;
@@ -17338,71 +17368,73 @@ function openCredits(){
 /* histórico para o jogador: uma linha por versão, 10 por página (3 páginas), sem jargão (o BUILD_LOG técnico continua em nucleo.js).
    A cada rodada entregue: acrescentar a versão nova NO TOPO (regra no CLAUDE.md). */
 const HIST_JOGO = [
-  ['9.2.72', 'o atalho DESTRAVAR TUDO do mapa só aparece com o modo DEV ligado, libera também a transformação e, ao desligar o DEV, o mapa volta ao seu save'],
-  ['9.2.71', 'tela cheia sem o chuvisco piscando; histórico sem texto encavalado'],
-  ['9.2.70', 'o som para quando você sai do jogo e a música não engasga nem atropela na troca de tela; tela perdida em segundo plano recarrega'],
-  ['9.2.69', 'limpeza interna: menus separados por partes; jogo igual'],
-  ['9.2.68', 'limpeza interna: arquivos do jogo com nomes que dizem o que fazem; jogo igual'],
-  ['9.2.67', 'limpeza interna: o laço do jogo dividido em módulos menores; jogo igual'],
-  ['9.2.66', 'limpeza interna: build avisa se uma tela nova ficar sem registro; jogo igual'],
-  ['9.2.65', 'limpeza interna: o jogo em si também registrado com as telas; jogo igual'],
-  ['9.2.64', 'limpeza interna: cenas de história registradas num lugar só; jogo igual'],
-  ['9.2.63', 'limpeza interna: telas registradas num lugar só; jogo igual'],
-  ['9.2.62', 'memória do projeto indexada; jogo igual'],
+  ['9.2.74', 'volume nas opções; zerar progresso; aviso ESQUIVA'],
+  ['9.2.73', 'limpeza interna: saiu o código morto da tela "gire o celular"; o jogo igual'],
+  ['9.2.72', 'DESTRAVAR TUDO só com o modo DEV ligado; libera a transformação'],
+  ['9.2.71', 'tela cheia sem chuvisco; histórico sem texto encavalado'],
+  ['9.2.70', 'som para ao sair do jogo; música sem engasgo'],
+  ['9.2.69', 'limpeza interna dos menus; jogo igual'],
+  ['9.2.68', 'limpeza interna de nomes de arquivo; jogo igual'],
+  ['9.2.67', 'limpeza interna do laço do jogo; jogo igual'],
+  ['9.2.66', 'limpeza interna: tela sem registro avisa no build; jogo igual'],
+  ['9.2.65', 'limpeza interna das telas; jogo igual'],
+  ['9.2.64', 'limpeza interna das cenas de história; jogo igual'],
+  ['9.2.63', 'limpeza interna das telas; jogo igual'],
+  ['9.2.62', 'memória do projeto organizada; jogo igual'],
   ['9.2.61', 'chefes numa tabela só; jogo igual'],
-  ['9.2.60', 'arte: utilitários compartilhados; jogo igual'],
+  ['9.2.60', 'arte com utilitários comuns; jogo igual'],
   ['9.2.59', 'código morto removido; jogo igual'],
   ['9.2.58', 'mapa da limpeza de código; jogo igual'],
-  ['9.2.57', 'ferramentas de teste (rede de segurança); jogo igual'],
-  ['9.2.56', 'Arena sempre no difícil; recorde de ondas no menu'],
+  ['9.2.57', 'ferramentas de teste; jogo igual'],
+  ['9.2.56', 'Arena sempre no difícil; recorde no menu'],
   ['9.2.55', 'bench de combate v2'],
-  ['9.2.54', 'menos custo nos respingos de tinta; bench de combate'],
+  ['9.2.54', 'menos custo nos respingos; bench de combate'],
   ['9.2.53', 'ECO volta ao normal quando o fps segura'],
-  ['9.2.52', 'Canvas desynchronized: mais fps no celular'],
-  ['9.2.51', 'Teste ?desync e bench com % de quadros perdidos'],
-  ['9.2.49', 'Bench do piso do quadro'],
-  ['9.2.48', 'ECO só fica se melhora o fps (escada verifica)'],
-  ['9.2.47', 'Atlas do herói revertido (piorava); bench rápido'],
-  ['9.2.45', 'Bench v7 (custo por operação do canvas)'],
-  ['9.2.44', 'Bench v6 da fase I (A/B alternado)'],
-  ['9.2.43', 'Desempenho: cache do HUD revertido (piorava)'],
-  ['9.2.41', 'Bench v5 da fase I (custo por bloco)'],
-  ['9.2.40', 'Bench v4 do menu (barras laterais e música)'],
-  ['9.2.39', 'Bench v3 do menu (ImageBitmap e telas reais)'],
-  ['9.2.38', 'Bench v2 do menu (texturas e atlas)'],
-  ['9.2.37', 'Bench de desempenho do menu (?bench) para medir no celular'],
-  ['9.2.36', 'GOLPES: prévia de esquiva, ombrada, cabeçada, botes, agarrão, vazio e levantar'],
-  ['9.2.35', 'GOLPES: prévia dos golpes de ar (corte, mergulho, queda)'],
-  ['9.2.34', 'VOLTAR do GOLPES conserta; histórico e FPS em todas as telas'],
-  ['9.2.33', 'Corrigida a tela preta no modo ECO (celular)'],
-  ['9.2.32', 'Prévia dos golpes acerta inimigos de verdade'],
-  ['9.2.31', 'Menu GOLPES: ▶ VER mostra o golpe em loop'],
-  ['9.2.30', 'Menus: título espaçado e OPÇÕES agrupadas'],
-  ['9.2.29', 'ECO: HUD e botões nítidos numa camada própria'],
-  ['9.2.28', 'HUD no celular: rótulos sem sair da placa'],
-  ['9.2.27', 'Pausa no celular: comandos curtos e legíveis'],
-  ['9.2.26', 'HUD no celular: textos maiores, pausa visível'],
-  ['9.2.25', 'A coluna escura não cobre mais as lutas'],
-  ['9.2.24', 'Telas largas: faixas laterais com eco do jogo'],
-  ['9.2.23', 'Histórico enxuto: uma linha por versão'],
-  ['9.2.22', 'Menus: o VOLTAR sempre aparece na tela'],
-  ['9.2.21', 'Cenas do menu DEV agora têm saída'],
-  ['9.2.20', 'Pose ritual na morte do chefe; dica de controles'],
-  ['9.2.19', 'Cartão do chefe, fim do Cap. II e HUD mais legível'],
-  ['9.2.18', 'Dificuldade padrão NORMAL; chefes escalam com ela'],
-  ['9.2.17', 'Queda e morte do Nácar sem ficar de ponta-cabeça'],
-  ['9.2.16', 'Nácar invencível sem piscar; contorno sobre o chefe'],
-  ['9.2.15', 'Arena com área segura; bichos fora dos botões'],
-  ['9.2.14', 'Opção REDUZIR TREMOR/FLASH; game over espera você'],
-  ['9.2.13', 'Vitória destransforma antes da pose ritual'],
-  ['9.2.12', 'Lore dos cartões I e II; fim do Cap. II com a culpa'],
-  ['9.2.11', 'Escadaria dos Mil Votos e Rio Branco com cenário novo'],
-  ['9.2.10', 'Tronco do primeiro plano translúcido na luta'],
-  ['9.2.9', 'Morte do chefe sem pilha de combo na tela'],
-  ['9.2.8', 'Vazio escurece a tela; flash escuro no cenário claro'],
-  ['9.2.7', 'Perda de vida com véu; ÚLTIMA VIDA no HUD'],
-  ['9.2.6', 'Vitória: a câmera desliza até o Nácar'],
-  ['9.2.5', 'Troca de fase do chefe com sinal único']
+  ['9.2.52', 'mais fps no celular (canvas sem atraso)'],
+  ['9.2.51', 'teste de desync e bench com quadros perdidos'],
+  ['9.2.49', 'bench do piso do quadro'],
+  ['9.2.48', 'ECO só fica se melhora o fps'],
+  ['9.2.47', 'atlas do herói revertido; bench rápido'],
+  ['9.2.45', 'bench v7 do canvas'],
+  ['9.2.44', 'bench v6 da fase I'],
+  ['9.2.43', 'cache do HUD revertido'],
+  ['9.2.41', 'bench v5 da fase I'],
+  ['9.2.40', 'bench v4 do menu'],
+  ['9.2.39', 'bench v3 do menu'],
+  ['9.2.38', 'bench v2 do menu'],
+  ['9.2.37', 'bench de desempenho do menu'],
+  ['9.2.36', 'GOLPES: prévias de esquiva, ombrada, botes e levantar'],
+  ['9.2.35', 'GOLPES: prévias dos golpes de ar'],
+  ['9.2.34', 'VOLTAR do GOLPES funciona; FPS em todas as telas'],
+  ['9.2.33', 'tela preta no ECO corrigida'],
+  ['9.2.32', 'prévia dos golpes acerta inimigos de verdade'],
+  ['9.2.31', 'GOLPES: ▶ VER mostra o golpe em loop'],
+  ['9.2.30', 'menus: título espaçado; OPÇÕES agrupadas'],
+  ['9.2.29', 'ECO: HUD e botões nítidos'],
+  ['9.2.28', 'HUD no celular: rótulos dentro da placa'],
+  ['9.2.27', 'pausa no celular: comandos curtos'],
+  ['9.2.26', 'HUD no celular: textos maiores'],
+  ['9.2.25', 'coluna escura não cobre mais as lutas'],
+  ['9.2.24', 'telas largas: faixas laterais com eco'],
+  ['9.2.23', 'histórico enxuto: uma linha por versão'],
+  ['9.2.22', 'VOLTAR sempre na tela'],
+  ['9.2.21', 'cenas do menu DEV com saída'],
+  ['9.2.20', 'pose ritual na morte do chefe; dica de controles'],
+  ['9.2.19', 'cartão do chefe; fim do Cap. II; HUD mais legível'],
+  ['9.2.18', 'dificuldade padrão NORMAL; chefes escalam'],
+  ['9.2.17', 'queda e morte do Nácar sem ponta-cabeça'],
+  ['9.2.16', 'Nácar invencível sem piscar'],
+  ['9.2.15', 'Arena com área segura'],
+  ['9.2.14', 'REDUZIR TREMOR/FLASH; game over espera'],
+  ['9.2.13', 'vitória destransforma antes da pose ritual'],
+  ['9.2.12', 'lore dos cartões I e II; fim do Cap. II'],
+  ['9.2.11', 'Escadaria e Rio Branco com cenário novo'],
+  ['9.2.10', 'tronco do primeiro plano translúcido'],
+  ['9.2.9', 'morte do chefe sem pilha de combo'],
+  ['9.2.8', 'Vazio escurece a tela; flash no cenário claro'],
+  ['9.2.7', 'perda de vida com véu; ÚLTIMA VIDA no HUD'],
+  ['9.2.6', 'vitória: câmera desliza até o Nácar'],
+  ['9.2.5', 'troca de fase do chefe com sinal único']
 ];
 const HIST_PER_PAGE = 8;
 function historyMenu(){
