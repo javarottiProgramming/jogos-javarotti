@@ -70,8 +70,7 @@ const hc = document.getElementById('hc'), hx = hc.getContext('2d');   // camada 
 const bgc = document.getElementById('bgc'), bgx = bgc.getContext('2d');
 let BARS = false;     // tela mais larga que 16:9: as faixas laterais ganham um eco escurecido do jogo (frame() desenha em 96×54)
 let forcedRotate = false, SCALE = 1, DPR = 1, DPRH = 1, HUDX = false;
-/* escada de qualidade: 0 cheio, 1 sem rastros, 2 resolução menor, 3 mínimo.
-   Sobe sozinha quando o quadro afunda e desce quando estabiliza. */
+/* qualidade: 0 cheio, 1 sem rastros, 2 resolução menor, 3 mínimo. Só muda por settings.gfx (aplicaGfx, escada_qualidade.js): nunca sozinha. */
 const QUAL_RES = [1, 1, 0.82, 0.66];
 let QUAL = 0;
 
@@ -134,7 +133,8 @@ const store = {
   get(k,d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({ music:true, sfx:true, vib:true, hard:false, diff:'normal', fps:false, calm:false, dev:false, vol:70 }, store.get('nacar3.settings', {}));   // vol: volume geral em % (OPÇÕES → SOM), padrão 70
+const settings = Object.assign({ music:true, sfx:true, vib:true, hard:false, diff:'normal', fps:false, calm:false, dev:false, vol:70, gfx:'alto' }, store.get('nacar3.settings', {}));   // vol: volume geral em % (OPÇÕES → SOM), padrão 70 · gfx: nível gráfico leve|medio|alto (OPÇÕES → TELA), padrão alto
+if (settings.gfx !== 'leve' && settings.gfx !== 'medio') settings.gfx = 'alto';   // save antigo (sem a chave) ou valor inválido: ALTO, nada baixa sozinho
 /* Dificuldade: tudo que muda entre os níveis passa por aqui.
    dmgIn  = dano que o Nácar sofre      dmgOut = dano que ele causa
    hpMul  = vida dos inimigos           tokens = quantos podem atacar ao mesmo tempo
@@ -162,7 +162,7 @@ function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function rnd(a,b){ return a + Math.random()*(b-a); }
 function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function sgn(v){ return v<0?-1:1; }
-const BUILD = '9.2.74';
+const BUILD = '9.2.75';
 const BUILD_LOG = [
   ['1 e 2',  'Nácar em formas geométricas — rejeitado'],
   ['3 (1ª)', 'marionete recortada do desenho original'],
@@ -308,6 +308,7 @@ const BUILD_LOG = [
   ['9.2.33', 'URGENTE: tela preta no ECO (QUAL 2–3, desde 9.2.29): a camada #hc do HUD herdava o fundo escuro do canvas e cobria o jogo inteiro — agora é transparente'],
   ['9.2.34', 'VOLTAR do menu GOLPES voltou a funcionar (o item ▶ VER escondido espremia o espaçamento da lista e a área de toque ficava com altura 0); HISTÓRICO atualizado até a 9.2.34 e de volta a 3 páginas (30 versões, uma linha cada); medidor de FPS aparece em todas as telas, menus inclusive; tools/voltar_check.mjs confere o VOLTAR de todas as telas com toque de verdade'],
   ['9.2.35', 'prévia dos golpes, bloco 2 (ar): CORTE AÉREO e CORTE REVERSO no Olho Pendente, MERGULHO na Boca-de-Chão (brota com aviso, bote e mordida) e QUEDA GIRATÓRIA no Fôlego, com salto, ar e pouso pelas regras do 08_hero.js (gravidades, câmera lenta, tremor e hitstop do pouso); rubrica R17 (altura e pouso); golpes_check cobre as 10 prévias'],
+  ['9.2.75', 'GRÁFICOS nas OPÇÕES → TELA: LEVE · MÉDIO · ALTO (settings.gfx, padrão ALTO, também para saves antigos); SEM escada automática — o jogo nunca baixa a qualidade sozinho (saíram qualStep, QCAP, sondas e G.qualCool; escada_qualidade.js virou o mapeamento nível → QUAL: ALTO = QUAL 0, MÉDIO = QUAL 1, LEVE = QUAL 3; o QUAL 2 fica sem uso). Medido com tools/perf.mjs (headless por software, fase I, 6 inimigos, ms/quadro desktop · mobile 844×390): QUAL 0 = 8,7 · 17,9; QUAL 1 = 6,9 (−21%) · 16,6 (−7%); QUAL 2 = 6,2 · 11,3; QUAL 3 = 4,0 (−54%) · 7,2 (−60%). MÉDIO corta o desenho de inimigo (−40%) e herói (−35%), rastros e halos; LEVE corta também resolução 0,66×, primeiro plano, névoa e grão. No aparelho real a resolução não pesa (BENCH_DESEMPENHO.md): conferir no moto g35. OPÇÕES: lista com 10 linhas (gap 29, VOLTAR em y 460) sem o VOLTAR cobrir a DIFICULDADE; medidor de FPS mostra o nível; tools: perf.mjs --enemies N, play.mjs --gfx'],
   ['9.2.74', 'opções: VOLUME (padrão 70%) em SOM; ZERAR PROGRESSO em vermelho no fim das OPÇÕES, com confirmação (apaga o save, mantém as opções); ESQUIVA escreve o aviso quando o golpe passa; HISTÓRICO com textos mais curtos; HIST_JOGO 9.2.74'],
   ['9.2.73', 'limpeza: sai o código morto da tela "gire o celular" (já não aparecia desde a 8.3.3; o giro por CSS segue igual); jogo igual, sem mudança visível; HIST_JOGO 9.2.73'],
   ['9.2.72', 'DESTRAVAR TUDO segue o modo DEV: o botão do mapa só aparece/recebe toque com settings.dev; libera também a transformação (progress.trans) e guarda o save de verdade em progress.real; desligar o DEV (5 toques nos créditos) ou abrir o jogo com ele desligado chama devRestaurar() e o mapa volta à fase, ao treino e à transformação do save (sem transformação na história, volta sem ela); HIST_JOGO 9.2.72'],
@@ -14828,7 +14829,7 @@ return { get, warm, warmStep, ready, memEdge, nacGeo, RS_N, RS_A, RS_H, MEM_RS, 
 const G = { state:'boot', t:0, camX:0, lock:null, len:3000, enemies:[], projectiles:[], pickups:[], fx:[], decals:[],
   stage:0, bg:null, score:0, kills:0, maxCombo:0, hitStop:0, shake:0, zoomKick:0, kickX:0, kickY:0,
   style:{ pts:0, letter:0, t:9, pop:0, last:'', prev:'' }, styleSum:0, styleTime:0,
-  frameMs:16.7, fps:60, lowT:0, lowFx:false, qual:0, qualCool:0, diffNote:0, btnFade:0, grainSkip:false, histPage:0, lockNote:0, redFlash:0, whiteFlash:0, slowmo:0,
+  frameMs:16.7, fps:60, lowFx:false, qual:0, diffNote:0, btnFade:0, grainSkip:false, histPage:0, lockNote:0, redFlash:0, whiteFlash:0, slowmo:0,
   deathT:0, hard:false, tokens:0, waveIdx:0, spawnQ:[], pending:0, goArrow:0, time:0, lastEnemy:null, lastEnemyT:0,
   boss:null, bossCard:0, clearT:0, def:null, training:false, hint:null, hintT:0, grabMark:null };
 const TUT = { moved:0, crawl:0, combo:0, dive:0, lunge:0, special:0, launch:0, dash:0, headbutt:0, grab:0, tossed:0,
@@ -15953,7 +15954,7 @@ function hudFios(g, layer, x, y, sc, rot){                    // fiapos do Vazio
 function drawFps(g){
   if (!settings.fps) return;
   const f = Math.round(G.fps);
-  T(g, f + ' FPS' + (QUAL ? '  ·  ECO ' + QUAL : '') + (QCAP < 3 ? '  ·  ECO máx ' + QCAP : ''), VW/2, 24,
+  T(g, f + ' FPS  ·  ' + gfxAtual().nome, VW/2, 24,
     { size:13, w:'700', sp:2, align:'center', col: f >= 50 ? '#B9B2A5' : (f >= 35 ? '#E8C25A' : '#E0583C'), stroke:4, sc:INK });
 }
 function drawHUD(g, dt){
@@ -17067,6 +17068,7 @@ function openOptions(){
         if (document.fullscreenElement){ try{ document.exitFullscreen(); }catch(e){} setTimeout(refresh, 400); }
         else goLandscape().then(refresh);
       } },
+    { label:'GRÁFICOS', sub: gfxAtual().nome, act:()=>{ setGfx(gfxProximo()); AU.play('ui'); refresh(); } },    /* LEVE · MÉDIO · ALTO (escada_qualidade.js); nunca muda sozinho */
     { label:'REDUZIR TREMOR/FLASH', sub: settings.calm ? 'SIM' : 'NÃO', act:()=>{ settings.calm = !settings.calm; saveSettings(); refresh(); } },
     { label:'MOSTRAR FPS', sub: settings.fps ? 'SIM' : 'NÃO', act:()=>{ settings.fps = !settings.fps; saveSettings(); refresh(); } },
     { grp:'JOGO', label:'CONTROLE', sub: pad.on ? pad.tipo : 'NENHUM', go:true, act:()=>openPadCfg() },
@@ -17148,7 +17150,7 @@ function drawOptions(g, dt){
   else drawTitleBG(g, dt, true);
   T(g, 'OPÇÕES', 70, 92, { size:56, f:FD, sp:5, col:BONE });
   g.fillStyle = BLOOD; g.fillRect(72, 104, 60, 4);
-  drawSettingsList(g, 70, 144, { w:400, gap:30, gg:14 });
+  drawSettingsList(g, 70, 138, { w:400, gap:29, gg:12, fy:460 });   /* 10 linhas no fluxo (9.2.75: +GRÁFICOS): VOLTAR desce para não cobrir a DIFICULDADE */
   if (DIFF_LOCKED){
     G.diffNote = Math.max(0, (G.diffNote||0) - dt);
     g.save(); g.globalAlpha = 0.5 + Math.min(1, G.diffNote)*0.5;
@@ -17368,6 +17370,7 @@ function openCredits(){
 /* histórico para o jogador: uma linha por versão, 10 por página (3 páginas), sem jargão (o BUILD_LOG técnico continua em nucleo.js).
    A cada rodada entregue: acrescentar a versão nova NO TOPO (regra no CLAUDE.md). */
 const HIST_JOGO = [
+  ['9.2.75', 'gráficos LEVE, MÉDIO e ALTO nas opções; o jogo não baixa a qualidade sozinho'],
   ['9.2.74', 'volume nas opções; zerar progresso; aviso ESQUIVA'],
   ['9.2.73', 'limpeza interna: saiu o código morto da tela "gire o celular"; o jogo igual'],
   ['9.2.72', 'DESTRAVAR TUDO só com o modo DEV ligado; libera a transformação'],
@@ -20130,49 +20133,27 @@ function render(dt){
   drawTransition(ctx);
 }
 /* =====================================================================
-   ESCADA DE QUALIDADE ECO (limpeza L10, 9.2.67): qualStep, QCAP e as sondas de subida/descida
+   NÍVEL GRÁFICO (9.2.75): OPÇÕES → TELA → GRÁFICOS (LEVE · MÉDIO · ALTO). Substitui a escada automática ECO (limpeza L10, 9.2.67):
+   o jogo NUNCA muda a qualidade sozinho, só o jogador (settings.gfx). Padrão ALTO (QUAL 0), inclusive para saves antigos.
+   O nome do arquivo ficou por histórico; as sondas de subida/descida (qualStep, QCAP) foram removidas — ver BUILD_LOG 9.2.75.
    ===================================================================== */
-/* Escada de qualidade (ECO). 9.2.48: SOBE E VERIFICA. No Moto G35 o ECO 3 (0,66×) quase não melhorou o fps (gargalo não é resolução): o jogo
-   descia ao ECO 3 e ficava feio sem ganhar nada. Agora, depois de subir um nível, compara o tempo de quadro ~2 s depois; se não melhorou pelo menos
-   8%, desfaz e passa a limitar o ECO a esse nível (QCAP) pelo resto da sessão. Só lentidão grave (> 30 ms) volta a ignorar o teto. */
-/* DESCIDA (9.2.53): a 60 fps o quadro fica no vsync (16,7 ms) e nunca < 15,5 ms, então a escada antiga nunca descia: ficava no ECO 1 para sempre. Agora, com ~8 s estáveis (< 17,4 ms), tenta UM nível abaixo por 3 s; se o quadro passar de 18,5 ms desfaz e espera o dobro para tentar de novo. */
-let QOKT = 0, QDPROBE = null, QDCOOL = 20, QDWAIT = 0;
-let QCAP = 3, QPROBE = null, QFAILT = -999, QWAIT = 45;   /* QWAIT: espera (s) antes de tentar de novo sob lentidão grave; dobra a cada falha */
-function qualStep(dt){
-  if (G.state !== 'play'){ QPROBE = null; QDPROBE = null; QOKT = 0; return; }
-  if (QPROBE){                                          // verificando se o último ECO ajudou
-    QPROBE.t -= dt;
-    if (QPROBE.t <= 0){
-      const p = QPROBE; QPROBE = null;
-      if (G.frameMs > p.ms*0.92){                       // não ajudou: volta e trava o teto
-        const q = QUAL; QUAL = p.from; QCAP = p.from; G.qualCool = 4; G.lowT = 0; QFAILT = G.t; QWAIT *= 2;
-        if (q >= 2 || QUAL >= 2) layout();
-        G.lowFx = QUAL >= 1; G.qual = QUAL;
-      }
-    }
-  }
-  if (QDPROBE){                                          // verificando se o nível mais baixo segura o fps
-    QDPROBE.t -= dt;
-    if (QDPROBE.t <= 0){
-      const p = QDPROBE; QDPROBE = null;
-      if (G.frameMs > 18.5){ const q = QUAL; QUAL = p.from; QDCOOL = Math.min(QDCOOL*2, 320); QDWAIT = QDCOOL; G.qualCool = 3; G.lowT = 0; if (q >= 2 || QUAL >= 2) layout(); G.lowFx = QUAL >= 1; G.qual = QUAL; }
-      else QDWAIT = 6;
-    }
-  }
-  if (G.qualCool > 0 || QPROBE || QDPROBE) return;
-  if (QUAL > 0 && G.frameMs < 17.4){ QOKT += dt; QDWAIT -= dt;
-    if (QOKT > 8 && QDWAIT <= 0){ QDPROBE = { from:QUAL, t:3 }; const q = QUAL--; QOKT = 0; G.qualCool = 0.5; if (q >= 2) layout(); G.lowFx = QUAL >= 1; G.qual = QUAL; return; } }
-  else QOKT = 0;               // sem subir de novo enquanto a verificação do último nível não termina
-  if (G.frameMs > 18.5) G.lowT += dt;                     // abaixo de ~54 fps: reage em ~0,6 s (meta: 60 liso)
-  else if (G.frameMs < 15.5) G.lowT -= dt*0.4;
-  else G.lowT *= 0.98;
-  const cap = (G.frameMs > 30 && G.t - QFAILT > QWAIT/2) ? 3 : QCAP;     // lentidão grave (> 30 ms) volta a tentar, mas espaçado
-  if (G.lowT > 0.6 && QUAL < cap){ QPROBE = { from:QUAL, ms:G.frameMs, t:2.2 }; QUAL++; G.lowT = 0; G.qualCool = 1.5; if (QUAL >= 2) layout(); hero.ghosts.length = 0; }
-  else if (G.lowT < -2.5 && QUAL > 0){ const q = QUAL--; G.lowT = 0; G.qualCool = 2.5; QPROBE = null; if (q >= 2) layout(); }
-  G.lowT = clamp(G.lowT, -4, 1.2);
-  G.lowFx = QUAL >= 1;
-  G.qual = QUAL;
+/* cada nível aponta para um QUAL (nucleo.js): ALTO = 0 cheio · MÉDIO = 1 (sem rastros, halos e contornos duplos, 24 motes) · LEVE = 3 (+ resolução 0,66×, sem primeiro plano, névoa nem grão).
+   O QUAL 2 (0,82×) não é usado: no aparelho real a resolução não é o gargalo (docs/BENCH_DESEMPENHO.md). Números medidos (perf.mjs): BUILD_LOG 9.2.75. */
+const GFX_NIVEIS = [
+  { key:'leve',  nome:'LEVE',  qual:3 },
+  { key:'medio', nome:'MÉDIO', qual:1 },
+  { key:'alto',  nome:'ALTO',  qual:0 }
+];
+function gfxAtual(){ return GFX_NIVEIS.find(n => n.key === settings.gfx) || GFX_NIVEIS[2]; }
+/* liga o nível escolhido: QUAL, efeitos baratos e tamanho do canvas (layout() só mexe no que mudou) */
+function aplicaGfx(){
+  const q = gfxAtual().qual, mudou = q !== QUAL;
+  QUAL = q; G.lowFx = QUAL >= 1; G.qual = QUAL;
+  if (mudou){ layout(); if (QUAL > 0) hero.ghosts.length = 0; }
 }
+function setGfx(key){ settings.gfx = key; saveSettings(); aplicaGfx(); }
+/* próximo nível na ordem LEVE → MÉDIO → ALTO → LEVE */
+function gfxProximo(){ const i = GFX_NIVEIS.indexOf(gfxAtual()); return GFX_NIVEIS[(i + 1) % GFX_NIVEIS.length].key; }
 /* =====================================================================
    MAIN (limpeza L10, 9.2.67): laço do navegador (frame), visibilidade, botão voltar do Android e boot()
    ===================================================================== */
@@ -20182,15 +20163,13 @@ function frame(now){
   const t = now/1000;
   let dt = lastT ? Math.min(0.05, t - lastT) : 0.016;
   lastT = t;
-  // média móvel do tempo de quadro; se afundar, corta enfeite sozinho
-  // pico isolado (sprite nascendo, GC) não conta para a escada de qualidade: só lentidão que se repete
+  // média móvel do tempo de quadro (medidor de FPS e bench); a qualidade gráfica não depende dela: só o jogador muda (settings.gfx)
+  // pico isolado (sprite nascendo, GC) não entra na média: só lentidão que se repete
   const ms = dt*1000, spike = ms > Math.max(34, G.frameMs*2.2);
   G.spikeN = spike ? (G.spikeN || 0) + 1 : 0;
   if (!spike || G.spikeN > 3) G.frameMs += (ms - G.frameMs)*0.08;
   G.fps = 1000/Math.max(1, G.frameMs);
-  G.qualCool = Math.max(0, (G.qualCool||0) - dt);
   G.lockNote = Math.max(0, (G.lockNote||0) - dt);
-  qualStep(dt);
   update(dt);
   render(dt);
   if (BARS && ((G.barF = (G.barF|0) + 1) & 3) === 0){ try{ bgx.filter = BENCH.nb ? 'none' : 'blur(2.5px)'; }catch(e){} bgx.drawImage(cv, 0, 0, 96, 54); bgx.fillStyle = 'rgba(8,8,10,0.72)'; bgx.fillRect(0, 0, 96, 54); }   // eco do jogo nas faixas, a cada 4 quadros
@@ -20221,7 +20200,7 @@ addEventListener('popstate', function(){
 });
 function boot(){
   if (isTouch) trapBack();
-  layout();
+  aplicaGfx(); layout();
   let fontsReady = Promise.resolve();
   try{
     if (document.fonts && document.fonts.load){
