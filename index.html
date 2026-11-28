@@ -295,12 +295,13 @@
       <article class="game pedrada">
         <button class="poster" type="button" data-play="pedrada" aria-label="Jogar Pedrada de Palito">
           <img src="assets/pedrada.jpg" width="960" height="540" alt="Tela inicial do Pedrada de Palito: título em marcador sobre folha de caderno quadriculado, com bonecos de palito ao redor do botão Jogar">
-          <span class="ver" aria-hidden="true">v1.1.7</span>
+          <span class="ver" aria-hidden="true">v1.2.0</span>
         </button>
         <h2>Pedrada de Palito</h2>
-        <p>Tiro em primeira pessoa no estilo Doom. A arma base é um estilingue: puxe o elástico, solte e derrube a turma de palitos de papel recortado. Pegue armas e poderes pelo cenário. São 10 fases, com chefes nas fases 3, 6, 9 e 10.</p>
+        <p>Tiro em primeira pessoa no estilo Doom. A arma base é um estilingue: puxe o elástico, solte e derrube a turma de palitos de papel recortado. Pegue armas e poderes pelo cenário. São 10 fases, com chefes nas fases 3, 6, 9 e 10. E agora dá para jogar contra um amigo pela internet.</p>
         <dl class="ficha">
           <dt>Controles</dt><dd>WASD anda, mouse mira, segure o clique para puxar e solte para atirar. No celular, analógico à esquerda e o lado direito da tela é o estilingue: segure para puxar, arraste para mirar, solte para atirar.</dd>
+          <dt>Multiplayer</dt><dd>Mata-mata 1 contra 1 online: crie uma sala e mande o código ou o link para um amigo.</dd>
           <dt>Feito por</dt><dd>Gerente Sonnet (esforço alto) e 11 agentes Sonnet (esforço médio), com QA.</dd>
           <dt>Salva</dt><dd>Estrelas e recordes, neste navegador.</dd>
         </dl>
@@ -450,7 +451,7 @@
     <button type="button" id="fs" aria-label="Tela cheia">⛶ <span class="lbl">Tela cheia</span></button>
     <a id="solo" href="#" aria-label="Abrir o jogo em página própria"><span class="lbl">Página própria</span> ↗</a>
   </div>
-  <iframe id="frame" title="Jogo" allow="fullscreen; gamepad; autoplay; accelerometer; gyroscope" allowfullscreen></iframe>
+  <iframe id="frame" title="Jogo" allow="fullscreen; gamepad; autoplay; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen></iframe>
 </section>
 
 <script>
@@ -460,7 +461,7 @@
 const GAMES = {
   nacar:   { title: 'Nácar',                   path: 'jogos/nacar/', v: '9.2.76' },
   'cacos-de-sol': { title: 'Cacos de Sol',     path: 'jogos/cacos-de-sol/', v: '1.4.2' },
-  pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/', v: '1.1.7' },
+  pedrada: { title: 'Pedrada de Palito',       path: 'jogos/pedrada/', v: '1.2.0' },
   sinuca:  { title: 'Sinuca Intergaláctica',   path: 'jogos/sinuca/', v: '0.4.1' },
   kuku:    { title: 'Kuku e a Semente do Sol', path: 'jogos/kuku/', v: '2.10' },
   'javas-brick':  { title: "Java's Brick",      path: 'jogos/javas-brick/', v: '1.0.21' }
@@ -515,6 +516,7 @@ const HIST = {
     ['1.0', null, 'Primeira versão completa: plataforma 2D em um único arquivo, jogável no celular e no computador.']
   ],
   pedrada: [
+    ['1.2.0', '2026-11-26T12:54', 'Multiplayer: mata-mata 1 contra 1 pela internet, em sala privada por código ou link.'],
     ['1.1.7', '2026-11-17T01:05', 'Todos os palitos, chefes inclusos, com a mesma altura e o mesmo traço de desenho.'],
     ['1.1.6', '2026-11-17T00:59', 'Palitos nítidos de longe, com contorno liso, no Médio e no Alto.'],
     ['1.1.5', '2026-11-15T10:11', 'O som não some mais na tela cheia e o minimapa mostra os itens por cor.'],

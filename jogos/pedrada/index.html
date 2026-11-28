@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.1.7</title>
+<title>Pedrada de Palito 1.2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { version: '1.1.7', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { id: 'pedrada' /* 1.2.0: identidade do jogo (sala online, save) */, version: '1.2.0', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -60,6 +60,12 @@ K.qLabel = () => 'Gráficos: ' + (SAVE.opt.qa ? 'automático' : ['leves', 'médi
 K.qCycle = () => { const o = SAVE.opt; if (o.qa) { o.qa = 0; o.q = 0; } else if (o.q < 2) o.q++; else { o.qa = 1; K.qRun = 1; } if (typeof resize === 'function') resize(); K.persist(); };
 K.persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) {} };
 K.resetSave = () => { SAVE.done = {}; SAVE.seen = {}; SAVE.arms = {}; SAVE.intro = 0; SAVE.end = 0; K.persist(); };
+/* 1.2.0 (lição 37 do JGK): migração ÚNICA e versionada das opções. `Object.assign(padrões, salvo)` só acrescenta chave nova;
+ * quando um padrão EXISTENTE mudar, suba OPT_V e escreva a migração em OPT_MIGR[v] (roda uma vez em quem tem save antigo; depois a escolha manual volta a ser sagrada, regra h).
+ * K.optMigrate(opt, migr, alvo, temSave) é pura (o teste usa migrações falsas). Devolve true se mexeu. */
+const OPT_V = 1, OPT_MIGR = { 1: () => {} /* 1.2.0: só marca o save; nenhum padrão mudou */ };
+K.optMigrate = (o, M, V, had) => { const v0 = o.optV || 0; if (v0 >= V) return false; if (had) for (let v = v0 + 1; v <= V; v++) if (M[v]) M[v](o); o.optV = V; return true; };
+{ let had = false; try { had = !!localStorage.getItem(SAVE_KEY); } catch (e) {} if (K.optMigrate(SAVE.opt, OPT_MIGR, OPT_V, had)) K.persist(); }
 
 /* ------------------------------------------------------------------ canvas / viewport */
 const cv = $('cv'), ctx = cv.getContext('2d', { alpha: false }), wrap = $('wrap');
@@ -85,6 +91,30 @@ function resize() {
   if (K.scene && K.scene.resize) K.scene.resize();
 }
 window.addEventListener('resize', resize); window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+/* 1.2.0 (lições 47 + 75 do JGK): voltar de segundo plano nunca mostra tela quebrada, e nunca joga fora o que o jogador estava fazendo.
+ * - Tempo fora NÃO recarrega (lição 75: recarregar depois de 8 s no WhatsApp jogaria fora a fase ou derrubaria a sala). Voltar de >= K.bg.min ms só REFAZ
+ *   (K.refresh: caches de K.blit, quadros altos dos bots, tamanho). Os dados das texturas/sprites vivem em Uint32Array e não se perdem.
+ * - Recarrega só quando a tela foi perdida DE FATO e se puder (K.canReload: fora de fase e sem sala online): `pageshow` vindo do cache do navegador, ou
+ *   `contextlost` que não volta em 3 s. Trava contra laço: no máximo uma recarga a cada 15 s. `contextrestored` só refaz.
+ * - Layout escuta ResizeObserver (janela que nasce com tamanho 0 dentro de iframe). */
+K.bg = { at: 0, min: 8000, refreshes: 0 };
+K.refresh = why => {
+  K.bg.refreshes++;
+  const drop = o => { if (o) for (const k in o) { const f = o[k]; if (f) f._cn = null; } };
+  drop(K.sprites); drop(K.tex);
+  if (K.looks) for (const id in K.looks) for (const an in K.looks[id].frames) for (const f of K.looks[id].frames[an]) f._cn = null;
+  if (K.dropHi) K.dropHi(); resize();
+};
+K.canReload = () => K.sceneName !== 'play' && !(K.net && K.net.active);
+K.reload = why => { try { const last = +sessionStorage.getItem('jgk.reloadT') || 0; if (Date.now() - last < 15000) { K.refresh('trava: ' + why); return false; } sessionStorage.setItem('jgk.reloadT', String(Date.now())); } catch (e) {} try { console.warn('[JGK] recarregando: ' + why); location.reload(); } catch (e) {} return true; };
+const bgHide = () => { if (!K.bg.at) K.bg.at = Date.now(); };
+const bgShow = () => { const at = K.bg.at; K.bg.at = 0; if (!at) return; if (Date.now() - at >= K.bg.min) K.refresh('segundo plano'); else resize(); };
+document.addEventListener('visibilitychange', () => { if (document.hidden) bgHide(); else bgShow(); });
+window.addEventListener('pagehide', bgHide);
+window.addEventListener('pageshow', e => { if (e.persisted && K.canReload()) K.reload('pageshow do cache'); else if (e.persisted) K.refresh('pageshow do cache'); else bgShow(); });
+cv.addEventListener('contextlost', e => { e.preventDefault(); K.bg.lost = 1; clearTimeout(K.bg.lostT); K.bg.lostT = setTimeout(() => { if (K.bg.lost && K.canReload()) K.reload('contexto do canvas perdido'); }, 3000); });
+cv.addEventListener('contextrestored', () => { K.bg.lost = 0; clearTimeout(K.bg.lostT); K.refresh('contextrestored'); });
+try { new ResizeObserver(() => resize()).observe(document.documentElement); } catch (e) {}
 /* ponto de tela -> coordenadas lógicas do jogo (considera rotação em retrato) */
 function toLogical(e) {
   const r = cv.getBoundingClientRect(); let x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2);
@@ -135,7 +165,7 @@ K.loadingDraw = c => { K.text(c, 'Afiando o estilingue' + '.'.repeat(1 + (K.time
 /* ------------------------------------------------------------------ loop */
 K.time = 0; K.frame = 0; K.speed = 1; K.fps = 60; let _last = 0, _acc = 0, _fa = 16.7, _slow = 0;
 function tick(ts) {
-  requestAnimationFrame(tick);
+  requestAnimationFrame(tick); K.rafT = performance.now();
   let el = (ts - _last) / 1000; _last = ts; if (!(el > 0)) el = 0; if (el > .1) el = .1;
   _fa += (el * 1000 - _fa) * .05; K.fps = 1000 / _fa;
   // qualidade automática: se o aparelho não acompanha, reduz a resolução do 3D (só em memória)
@@ -145,6 +175,8 @@ function tick(ts) {
   if (n >= 16) _acc = 0;
   render();
 }
+/* 1.2.0 (JGK-NET): avança a simulação SEM desenhar (aba escondida durante sessão online: o requestAnimationFrame para, o relógio em Worker chama isto) */
+K.pump = el => { _acc += el * K.speed; let n = 0; while (_acc >= DT && n < 40) { step(DT); _acc -= DT; n++; } if (n >= 40) _acc = 0; _last = performance.now(); };
 function step(dt) {
   K.time += dt; K.frame++;
   K.input.poll(); K.audio.tick();
@@ -807,7 +839,9 @@ R3.project = (cam, wx, wy, wz) => {
 
 /*==ENGINE:game==  mundo, fases, jogador (estilingue), bots (IA por registro), projéteis, itens, portal, HUD, cena 'play'.
  * REGISTROS (conteúdo): K.defWorld · K.defLevel · K.defBot · K.defPickup · K.defProp · K.defSong/K.defSfx (áudio) · K.defStory (história)
- * AJUDANTES para IA/chefes: K.ai.* (ver mais abaixo) · estado vivo em K.G (G.pl = jogador, G.bots = bots vivos+mortos) */
+ * AJUDANTES para IA/chefes: K.ai.* (ver mais abaixo) · estado vivo em K.G (G.pl = jogador, G.bots = bots vivos+mortos) 
+ * 1.2.0 (JGK, N jogadores): G.players[] = todos os jogadores (id, slot, team, local...); G.pl aponta SEMPRE para o jogador LOCAL (câmera, HUD, som).
+ *   Toda função de jogador recebe o jogador (pl); sem ele vale o "ator" (G.actor, quem está pegando um item agora) ou o local. No solo, players = [G.pl] e nada muda. */
 K.worlds = {}; K.levels = []; K.botDefs = {}; K.pickupDefs = {}; K.propDefs = {}; K.hud = {}; K.menus = {}; K.weapons = {}; K.powerDefs = {};
 /* K.defWorld('caderno', {nome, wall:{1:'tex',2:'tex'...}, floor:'tex', ceil:'tex', fog:[r,g,b], fogDist:14, light:1, music:'caderno', cor:'#2D6CDF', base:'caderno' (1.1.0: HERDA todos os campos do mundo base e só sobrescreve o que você passar; `wall` é mesclado tipo a tipo)}) */
 K.defWorld = (id, o) => { const b = o.base && K.worlds[o.base]; K.worlds[id] = Object.assign({ fog: [20, 20, 43], fogDist: 14, light: 1, cor: PAL.blue }, b || {}, o, { id, wall: Object.assign({}, b ? b.wall : {}, o.wall || {}) }); };
@@ -818,7 +852,7 @@ K.levelById = id => K.levels.find(l => l.id === String(id));
 K.defBot = (id, o) => { K.botDefs[id] = Object.assign({ id, hp: 3, speed: 1.4, radius: .28, scale: 1, score: 10, sight: 9 }, o); };
 /* K.defPickup('curativo', {spr:'curativo', r:.45, take(G, pl, e) → true se consumiu}) · K.defProp('mesa', {spr:'mesa', solid:true, r:.35}) */
 /* 1.1.0: defPickup aceita atalhos — {weapon:'id', ammo:n} dá a arma; {power:'id'} dá o poder (a mensagem na tela já é automática). Opcional: col:[r,g,b] (cor das partículas), beam/aura (sprites de destaque) */
-K.defPickup = (id, o) => { if (o.weapon && !o.take) o.take = () => K.giveWeapon(o.weapon, o.ammo); if (o.power && !o.take) o.take = () => K.givePower(o.power); K.pickupDefs[id] = o; }; K.defProp = (id, o) => { K.propDefs[id] = o; };
+K.defPickup = (id, o) => { if (o.weapon && !o.take) o.take = (G, pl) => K.giveWeapon(o.weapon, o.ammo, pl); if (o.power && !o.take) o.take = (G, pl) => K.givePower(o.power, pl); K.pickupDefs[id] = o; }; K.defProp = (id, o) => { K.propDefs[id] = o; };
 
 /* ------------------------------------------------------------------ 1.1.0 · dificuldade crescente
  * Cada fase recebe multiplicadores pela posição na lista (n = 0 na fase 1): vida, velocidade, dano e cadência (cd menor = ataca mais) dos bots e dos chefes.
@@ -834,22 +868,23 @@ K.tuneFor = L => { const n = Math.max(0, K.levels.indexOf(L)), d = K.defaultTune
  *   proj:'sprite da pedra', sfx:'shoot', msg:'dica curta ao pegar', hud:(c,S)=>{} (desenho em 1ª pessoa; padrão = estilingue; S igual ao de K.hud.weapon) }) */
 K.defWeapon = (id, o) => { K.weapons[id] = Object.assign({ id, nome: id, sigla: id.slice(0, 3).toUpperCase(), n: 1, spread: 0, cd: .34, charge: .72, auto: false, dmg: [1, 3], speed: [8.5, 17], grav: [1.7, .8], life: 3, pierce: 0, bounce: 0, explode: null, ammo: 0, order: 50 }, o); };
 K.defWeapon('estilingue', { nome: 'Estilingue', sigla: 'EST', order: 0, icon: 'icone_estilingue' });
-const curW = () => K.weapons[G.pl.w] || K.weapons.estilingue;
-const usableW = id => { const W = K.weapons[id]; return !!W && (!W.ammo || (G.pl.ammo[id] || 0) > 0); };
-function setWeapon(id) { const pl = G.pl; if (id === pl.w || !usableW(id) || !pl.arms.includes(id)) return; pl.w = id; pl.pulling = false; pl.charge = 0; pl.cd = Math.max(pl.cd, .15); sfx2('weapon_swap', 'ui'); G.wswT = 1.8; }
-function cycleWeapon(dir) { const pl = G.pl, l = pl.arms.filter(usableW); if (l.length < 2) return; setWeapon(l[(l.indexOf(pl.w) + dir + l.length) % l.length]); }
-/* dá a arma ao jogador agora (e a deixa salva em SAVE.arms: volta em toda fase). Munição soma até o máximo. */
-K.giveWeapon = (id, ammo) => { const W = K.weapons[id]; if (!W || !G) return false; const pl = G.pl; SAVE.arms[id] = 1; K.persist(); if (!pl.arms.includes(id)) { pl.arms.push(id); pl.arms.sort((a, b) => K.weapons[a].order - K.weapons[b].order); }
-  if (W.ammo) pl.ammo[id] = Math.min(W.ammo, (pl.ammo[id] || 0) + (ammo || W.ammoPick || Math.ceil(W.ammo * .5))); pl.w = id; pl.pulling = false; pl.charge = 0; G.wswT = 2.4; K.ai.say('ARMA NOVA: ' + W.nome + '!' + (W.msg ? ' ' + W.msg : ''), 3.4); return true; };
+const actor = () => (G && G.actor) || G.pl;   /* 1.2.0: jogador "da vez" (quem pega o item) — padrão das funções de jogador chamadas pelo conteúdo */
+const curW = pl => K.weapons[(pl || G.pl).w] || K.weapons.estilingue;
+const usableW = (id, pl) => { const W = K.weapons[id]; pl = pl || G.pl; return !!W && (!W.ammo || (pl.ammo[id] || 0) > 0); };
+function setWeapon(id, pl) { pl = pl || G.pl; if (id === pl.w || !usableW(id, pl) || !pl.arms.includes(id)) return; pl.w = id; pl.pulling = false; pl.charge = 0; pl.cd = Math.max(pl.cd, .15); if (pl.local) { sfx2('weapon_swap', 'ui'); G.wswT = 1.8; } }
+function cycleWeapon(dir, pl) { pl = pl || G.pl; const l = pl.arms.filter(id => usableW(id, pl)); if (l.length < 2) return; setWeapon(l[(l.indexOf(pl.w) + dir + l.length) % l.length], pl); }
+/* dá a arma ao jogador agora (no solo a deixa salva em SAVE.arms: volta em toda fase; no multiplayer NÃO grava). Munição soma até o máximo. pl = jogador (padrão: o ator/local) */
+K.giveWeapon = (id, ammo, pl) => { const W = K.weapons[id]; if (!W || !G) return false; pl = pl || actor(); if (!G.mp) { SAVE.arms[id] = 1; K.persist(); } if (!pl.arms.includes(id)) { pl.arms.push(id); pl.arms.sort((a, b) => K.weapons[a].order - K.weapons[b].order); }
+  if (W.ammo) pl.ammo[id] = Math.min(W.ammo, (pl.ammo[id] || 0) + (ammo || W.ammoPick || Math.ceil(W.ammo * .5))); pl.w = id; pl.pulling = false; pl.charge = 0; if (pl.local) { G.wswT = 2.4; K.ai.say('ARMA NOVA: ' + W.nome + '!' + (W.msg ? ' ' + W.msg : ''), 3.4); } return true; };
 /* recarrega a munição de todas as armas com munição (n = fração do máximo, padrão .5); false se nada precisava (pickup fica no chão) */
-K.refillAmmo = f => { const pl = G.pl; let ok = false; for (const id of pl.arms) { const W = K.weapons[id]; if (W && W.ammo && (pl.ammo[id] || 0) < W.ammo) { pl.ammo[id] = Math.min(W.ammo, (pl.ammo[id] || 0) + Math.ceil(W.ammo * (f || .5))); ok = true; } } return ok; };
+K.refillAmmo = (f, pl) => { pl = pl || actor(); let ok = false; for (const id of pl.arms) { const W = K.weapons[id]; if (W && W.ammo && (pl.ammo[id] || 0) < W.ammo) { pl.ammo[id] = Math.min(W.ammo, (pl.ammo[id] || 0) + Math.ceil(W.ammo * (f || .5))); ok = true; } } return ok; };
 
 /* ------------------------------------------------------------------ 1.1.0 · poderes (upgrades temporários ou da fase toda)
  * K.defPower('forca', { nome:'Elástico Forte', icon:'sprite', dur:30 (s; 0 = até o fim da fase), mod:{spd:1.25, charge:1.5 (puxa mais rápido), dmg:1.5}, start(pl,G), end(pl,G), msg:'texto' })
  * Estado do jogador: pl.pw {id: segundos restantes}, pl.mod {spd, charge, dmg} (produto dos poderes ativos), pl.shield (pontos de escudo que absorvem dano antes da vida). */
 K.defPower = (id, o) => { K.powerDefs[id] = Object.assign({ id, nome: id, dur: 0 }, o); };
-K.givePower = id => { const d = K.powerDefs[id]; if (!d || !G) return false; const pl = G.pl; if (!(id in pl.pw) && d.start) d.start(pl, G); pl.pw[id] = d.dur > 0 ? d.dur : 1e9; K.ai.say(d.msg || (d.nome + '!'), 2.8); return true; };
-function updatePowers(dt) { const pl = G.pl; pl.mod = { spd: 1, charge: 1, dmg: 1 }; for (const id in pl.pw) { const d = K.powerDefs[id]; pl.pw[id] -= dt; if (pl.pw[id] <= 0) { if (d && d.end) d.end(pl, G); delete pl.pw[id]; continue; } if (d && d.mod) for (const k in d.mod) pl.mod[k] = (pl.mod[k] === undefined ? 1 : pl.mod[k]) * d.mod[k]; } }
+K.givePower = (id, pl) => { const d = K.powerDefs[id]; if (!d || !G) return false; pl = pl || actor(); if (!(id in pl.pw) && d.start) d.start(pl, G); pl.pw[id] = d.dur > 0 ? d.dur : 1e9; if (pl.local) K.ai.say(d.msg || (d.nome + '!'), 2.8); return true; };
+function updatePowers(pl, dt) { pl.mod = { spd: 1, charge: 1, dmg: 1 }; for (const id in pl.pw) { const d = K.powerDefs[id]; pl.pw[id] -= dt; if (pl.pw[id] <= 0) { if (d && d.end) d.end(pl, G); delete pl.pw[id]; continue; } if (d && d.mod) for (const k in d.mod) pl.mod[k] = (pl.mod[k] === undefined ? 1 : pl.mod[k]) * d.mod[k]; } }
 /* 1.1.0: efeito sonoro com reserva — toca `n` se o Som já definiu, senão `fb` (assim o jogo nunca fica mudo enquanto o Som trabalha) */
 const sfx2 = (n, fb) => K.sfx(K.audio.sfx[n] ? n : fb);
 const DEFLEG = { p: { bot: 'palito' }, c: { bot: 'corredor' }, g: { bot: 'gordao' }, a: { bot: 'atirador' }, B: { boss: 1 }, '+': { pick: 'curativo' }, '*': { pick: 'ouro' } };
@@ -861,8 +896,9 @@ function propHit(x, y, r) { for (const p of G.props) { const d = K.propDefs[p.id
 function blocked(x, y, r) { return solidCell((x - r) | 0, (y - r) | 0) || solidCell((x + r) | 0, (y - r) | 0) || solidCell((x - r) | 0, (y + r) | 0) || solidCell((x + r) | 0, (y + r) | 0) || propHit(x, y, r); }
 function moveE(e, dx, dy, r) { if (!blocked(e.x + dx, e.y, r)) e.x += dx; if (!blocked(e.x, e.y + dy, r)) e.y += dy; }
 K.los = (x0, y0, x1, y1) => { const d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / .2); for (let i = 1; i < n; i++) { const t = i / n; if (solidCell((x0 + (x1 - x0) * t) | 0, (y0 + (y1 - y0) * t) | 0)) return false; } return true; };
-function flowBuild() {
-  const pl = G.pl, cx = pl.x | 0, cy = pl.y | 0, key = cx + cy * 1000; if (G.flowKey === key) return; G.flowKey = key; const w = G.w, h = G.h, d = G.flow; d.fill(-1);
+/* campo de fluxo (BFS) até um jogador. 1.2.0: um por jogador (pl.flow); o do jogador local é o mesmo array de G.flow (guia do portal, retorno de bots) */
+function flowBuild(pl) {
+  pl = pl || G.pl; if (!pl.flow) pl.flow = pl === G.pl ? G.flow : new Int16Array(G.w * G.h); const cx = pl.x | 0, cy = pl.y | 0, key = cx + cy * 1000; if (pl.flowKey === key && (pl !== G.pl || G.flowKey === key)) return; pl.flowKey = key; if (pl === G.pl) G.flowKey = key; const w = G.w, h = G.h, d = pl.flow; d.fill(-1);
   const q = [cx + cy * w]; d[q[0]] = 0; for (let i = 0; i < q.length; i++) { const c = q[i], x = c % w, y = (c / w) | 0;
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { if (!ox && !oy) continue; const nx = x + ox, ny = y + oy; if (solidCell(nx, ny) && !(nx === G.gate.cx && ny === G.gate.cy)) continue; if (G.propCells.has(ny * w + nx)) continue; /* props sólidos bloqueiam o caminho dos bots */ if (ox && oy && (solidCell(x + ox, y) || solidCell(x, y + oy))) continue; const ni = ny * w + nx; if (d[ni] < 0) { d[ni] = d[c] + 1; q.push(ni); } } }
 }
@@ -881,13 +917,18 @@ function loadLevel(L) {
   }
   for (const e of L.ents || []) spawnLegend(typeof e.t === 'string' ? (K.botDefs[e.t] ? { bot: e.t } : K.pickupDefs[e.t] ? { pick: e.t } : { prop: e.t }) : e, e.x, e.y, L);
   if (G.gate.cx < 0) { G.gate.cx = -2; G.gate.open = true; }
-  G.pl = { x: sx, y: sy, a: ((L.start && L.start.a) || 0) * Math.PI / 180, pitch: 0, hp: 100, maxhp: 100, vx: 0, vy: 0, bob: 0, charge: 0, pulling: false, cd: 0, gold: 0, recoil: 0, step: 0, pullT: 0, fireLock: false, w: 'estilingue', arms: ['estilingue'], ammo: {}, pw: {}, mod: { spd: 1, charge: 1, dmg: 1 }, shield: 0 };
+  G.players = []; G.mp = null; G.pl = K.addPlayer({ x: sx, y: sy, a: ((L.start && L.start.a) || 0) * Math.PI / 180, local: true, name: 'Você' });   // 1.2.0: lista de jogadores; G.pl = o local
   { const pl = G.pl; for (const id in (SAVE.arms || {})) if (K.weapons[id] && id !== 'estilingue') pl.arms.push(id); pl.arms.sort((a, b) => K.weapons[a].order - K.weapons[b].order); for (const id of pl.arms) if (K.weapons[id].ammo) pl.ammo[id] = Math.ceil(K.weapons[id].ammo * .5); }   // 1.1.0: armas já pegas voltam em toda fase (munição pela metade)
   G.propCells = new Set(G.props.filter(p => K.propDefs[p.id] && K.propDefs[p.id].solid).map(p => (p.y | 0) * w + (p.x | 0)));
-  G.total = G.bots.filter(b => !b.def.noCount).length; G.remaining = G.total; flowBuild();
+  G.total = G.bots.filter(b => !b.def.noCount).length; G.remaining = G.total; flowBuild(G.pl);
   /* 1.1.4: corrida até o portal. Fase comum: o portal abre e o jogador tem PORTAL_SECS para chegar; senão ele fecha e metade dos bots originais volta ao mapa. Fase de chefe: sem tempo, só o guia. */
   G.baseIds = G.bots.filter(b => !b.def.noCount && !b.def.boss && b.defId).map(b => b.defId); G.baseTotal = G.total; G.timed = !(L.boss || G.boss) && G.gate.cx >= 0; G.portalT = 0; G.guide = null; return G;
 }
+/* 1.2.0 · jogadores (N, com times). K.addPlayer({x, y, a, id, slot, team, name, look, local}) cria e põe em G.players. O solo tem 1 (local, time 0). */
+K.newPlayer = o => Object.assign({ id: 0, slot: 0, team: 0, name: 'Jogador', look: null, local: false, x: 1.5, y: 1.5, a: 0, pitch: 0, hp: 100, maxhp: 100, vx: 0, vy: 0, bob: 0, charge: 0, pulling: false, cd: 0, gold: 0, recoil: 0, step: 0, pullT: 0, fireLock: false,
+  w: 'estilingue', arms: ['estilingue'], ammo: {}, pw: {}, mod: { spd: 1, charge: 1, dmg: 1 }, shield: 0, alive: true, inv: 0, respawnT: 0, kills: 0, deaths: 0, shots: 0, heads: 0, inp: null, flow: null, flowKey: -1 }, o || {});
+K.addPlayer = o => { const p = K.newPlayer(o); if (o && o.id === undefined) p.id = G.players.length; if (o && o.slot === undefined) p.slot = G.players.length; G.players.push(p); return p; };
+K.playerById = id => G && G.players.find(p => p.id === id);
 function spawnLegend(lg, x, y, L) {
   if (lg.boss) lg = { bot: L.boss || 'chefe' };
   if (lg.bot) { const b = K.spawnBot(lg.bot, x, y); if (b) for (const k in lg) if (k !== 'bot') b[k] = lg[k]; } else if (lg.pick) G.picks.push({ id: lg.pick, x, y, t: Math.random() * 6, taken: false }); else if (lg.prop) G.props.push({ id: lg.prop, x, y });
@@ -902,8 +943,17 @@ K.spawnBot = (id, x, y) => {
 
 /* ------------------------------------------------------------------ ajudantes de IA (também usados pelos chefes em conteúdo) */
 const AI = K.ai = {
-  dist: e => Math.hypot(G.pl.x - e.x, G.pl.y - e.y),
-  sees: e => { const d = AI.dist(e); return d < (e.def.sight || 9) * (e.alert > 0 ? 1.6 : 1) && K.los(e.x, e.y, G.pl.x, G.pl.y); },
+  /* 1.2.0: ALVO do bot entre os jogadores vivos (mais perto, preferindo quem ele enxerga; troca só se o novo estiver bem mais perto). Solo: sempre o único jogador.
+     Use K.ai.target(e) em IA nova em vez de ler K.G.pl (porta da campanha coop). */
+  target(e) {
+    const L = G.players; if (L.length === 1) return (e.tgt = L[0]);
+    let t = e.tgt; if (t && (!t.alive || !L.includes(t))) t = null;
+    if (!t || K.time >= (e.tgtT || 0)) { e.tgtT = K.time + .5; let best = t, bd = t ? Math.hypot(t.x - e.x, t.y - e.y) * (K.los(e.x, e.y, t.x, t.y) ? .7 : 1) : 1e9;
+      for (const p of L) { if (!p.alive || p === t) continue; const d = Math.hypot(p.x - e.x, p.y - e.y) * (K.los(e.x, e.y, p.x, p.y) ? 1 : 1.6); if (d < bd) { bd = d; best = p; } } t = best || L[0]; }
+    return (e.tgt = t);
+  },
+  dist: e => { const p = AI.target(e); return Math.hypot(p.x - e.x, p.y - e.y); },
+  sees: e => { const p = AI.target(e), d = AI.dist(e); return d < (e.def.sight || 9) * (e.alert > 0 ? 1.6 : 1) && K.los(e.x, e.y, p.x, p.y); },
   /* anda em direção a (tx,ty) com colisão e separação de outros bots */
   step(e, tx, ty, sp, dt) {
     let dx = tx - e.x, dy = ty - e.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
@@ -912,34 +962,35 @@ const AI = K.ai = {
   },
   /* persegue pelo mapa (campo de fluxo) ou direto se enxerga o jogador */
   chase(e, sp, dt) {
-    const pl = G.pl;
+    const pl = AI.target(e); flowBuild(pl); const F = pl.flow;
     if (K.los(e.x, e.y, pl.x, pl.y) && AI.dist(e) < 12) { AI.step(e, pl.x, pl.y, sp, dt); return; }
-    const cx = e.x | 0, cy = e.y | 0; let best = G.flow[cy * G.w + cx], bx = cx, by = cy; if (best < 0) best = 1e9;
-    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { if (!ox && !oy) continue; const nx = cx + ox, ny = cy + oy; if (nx < 0 || ny < 0 || nx >= G.w || ny >= G.h) continue; const v = G.flow[ny * G.w + nx]; if (v >= 0 && v < best && !(ox && oy && (solidCell(cx + ox, cy) || solidCell(cx, cy + oy)))) { best = v; bx = nx; by = ny; } }
+    const cx = e.x | 0, cy = e.y | 0; let best = F[cy * G.w + cx], bx = cx, by = cy; if (best < 0) best = 1e9;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { if (!ox && !oy) continue; const nx = cx + ox, ny = cy + oy; if (nx < 0 || ny < 0 || nx >= G.w || ny >= G.h) continue; const v = F[ny * G.w + nx]; if (v >= 0 && v < best && !(ox && oy && (solidCell(cx + ox, cy) || solidCell(cx, cy + oy)))) { best = v; bx = nx; by = ny; } }
     AI.step(e, bx + .5, by + .5, sp, dt);
   },
   /* dispara projétil inimigo na direção do jogador (c = {speed,dmg,spr,n,spread}) */
   shoot(e, c, aimAhead) {
-    const pl = G.pl, n = c.n || 1; let tx = pl.x, ty = pl.y; if (aimAhead) { tx += pl.vx * aimAhead; ty += pl.vy * aimAhead; }
+    const pl = AI.target(e), n = c.n || 1; let tx = pl.x, ty = pl.y; if (aimAhead) { tx += pl.vx * aimAhead; ty += pl.vy * aimAhead; }
     const base = Math.atan2(ty - e.y, tx - e.x), d = Math.hypot(tx - e.x, ty - e.y);
-    for (let i = 0; i < n; i++) { const a = base + (n > 1 ? (i - (n - 1) / 2) * (c.spread || .15) : 0), sp = c.speed || 4.2, z0 = e.def.hgt || (e.look ? e.look.hgt : .8); G.eproj.push({ x: e.x + Math.cos(a) * .35, y: e.y + Math.sin(a) * .35, z: z0 * .55, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: (.42 - z0 * .55) / Math.max(.2, d / sp), dmg: c.dmg || 10, spr: c.spr || 'pedra_inimiga', life: 6, r: c.r || .22 }); }
+    for (let i = 0; i < n; i++) { const a = base + (n > 1 ? (i - (n - 1) / 2) * (c.spread || .15) : 0), sp = c.speed || 4.2, z0 = e.def.hgt || (e.look ? e.look.hgt : .8); G.eproj.push({ x: e.x + Math.cos(a) * .35, y: e.y + Math.sin(a) * .35, z: z0 * .55, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: (.42 - z0 * .55) / Math.max(.2, d / sp), dmg: c.dmg || 10, spr: c.spr || 'pedra_inimiga', life: 6, r: c.r || .22, tgt: pl.id }); }
     K.sfx('enemy_shoot');
   },
   /* 1.0.3 — golpes especiais de chefe */
   /* um projétil reto, no ângulo a (rad), à altura do peito. c={speed,dmg,spr,r,life,home} */
-  fire(e, a, c) { const sp = c.speed || 3.6; G.eproj.push({ x: e.x + Math.cos(a) * .5, y: e.y + Math.sin(a) * .5, z: c.z === undefined ? .45 : c.z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: 0, dmg: c.dmg || 9, spr: c.spr || 'pedra_inimiga', life: c.life || 6, r: c.r || .22, home: c.home || 0 }); },
+  fire(e, a, c) { const sp = c.speed || 3.6; G.eproj.push({ x: e.x + Math.cos(a) * .5, y: e.y + Math.sin(a) * .5, z: c.z === undefined ? .45 : c.z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: 0, dmg: c.dmg || 9, spr: c.spr || 'pedra_inimiga', life: c.life || 6, r: c.r || .22, home: c.home || 0, tgt: AI.target(e).id }); },
   /* anel de n projéteis em todas as direções (rot = giro inicial) */
   ring(e, n, rot, c) { for (let i = 0; i < n; i++) AI.fire(e, rot + i * TAU / n, c); K.sfx('boss_roar'); },
   /* teleporte: reaparece a 5–8 unidades do jogador, com visão livre */
-  blink(e) { const pl = G.pl; K.fx.burst(e.x, e.y, .6, 14, [255, 255, 255]); for (let k = 0; k < 24; k++) { const a = Math.random() * TAU, d = R(5, 8), x = pl.x + Math.cos(a) * d, y = pl.y + Math.sin(a) * d; if (!blocked(x, y, .5) && K.los(x, y, pl.x, pl.y)) { e.x = x; e.y = y; break; } } K.fx.burst(e.x, e.y, .6, 14, [255, 255, 255]); K.sfx('portal'); },
+  blink(e) { const pl = AI.target(e); K.fx.burst(e.x, e.y, .6, 14, [255, 255, 255]); for (let k = 0; k < 24; k++) { const a = Math.random() * TAU, d = R(5, 8), x = pl.x + Math.cos(a) * d, y = pl.y + Math.sin(a) * d; if (!blocked(x, y, .5) && K.los(x, y, pl.x, pl.y)) { e.x = x; e.y = y; break; } } K.fx.burst(e.x, e.y, .6, 14, [255, 255, 255]); K.sfx('portal'); },
   /* bomba arremessada para (tx,ty): voa fly s, pousa e explode depois de fuse s, num raio r (a parede protege) */
-  bomb(e, tx, ty, o) { o = o || {}; if (blocked(tx, ty, .3)) { tx = G.pl.x; ty = G.pl.y; } G.bombs.push({ x0: e.x, y0: e.y, x: e.x, y: e.y, tx, ty, t: 0, fly: o.fly || .9, fuse: o.fuse || 3.2, r: o.r || 2.6, dmg: o.dmg || 45, st: 'fly', z: .8, tk: 0 }); K.sfx('enemy_shoot'); return G.bombs[G.bombs.length - 1]; },   // 1.1.0: devolve a bomba criada
+  bomb(e, tx, ty, o) { o = o || {}; if (blocked(tx, ty, .3)) { const t = AI.target(e); tx = t.x; ty = t.y; } G.bombs.push({ x0: e.x, y0: e.y, x: e.x, y: e.y, tx, ty, t: 0, fly: o.fly || .9, fuse: o.fuse || 3.2, r: o.r || 2.6, dmg: o.dmg || 45, st: 'fly', z: .8, tk: 0 }); K.sfx('enemy_shoot'); return G.bombs[G.bombs.length - 1]; },   // 1.1.0: devolve a bomba criada
   say(txt, t) { G.msg = txt; G.msgT = t || 2.4; },
   summon(ids, around) { for (const id of ids) { for (let k = 0; k < 12; k++) { const a = Math.random() * TAU, d = R(1.2, 3), x = around.x + Math.cos(a) * d, y = around.y + Math.sin(a) * d; if (!blocked(x, y, .3)) { const b = K.spawnBot(id, x, y); if (b) { b.st = 'chase'; b.alert = 20; K.fx.burst(x, y, .5, 8); } break; } } } },
-  hurtPlayer: (n, fx, fy) => hurtPlayer(n, fx, fy),
+  /* compatível com o conteúdo antigo: fere o jogador vivo mais perto de (fx,fy) (no solo, o único). IA nova: K.hurtPlayer(jogador, n, fx, fy, fonte) */
+  hurtPlayer: (n, fx, fy) => hurtPlayer(fx === undefined ? G.pl : nearestPlayer(fx, fy), n, fx, fy),
   /* IA padrão: lê e.cfg (velocidade, melee, shoot, keep) — chefes/bots especiais podem chamar ou trocar por def.think */
   base(e, dt) {
-    const c = e.cfg, pl = G.pl, d = AI.dist(e), sees = AI.sees(e);
+    const c = e.cfg, pl = AI.target(e), d = AI.dist(e), sees = AI.sees(e);
     if (e.st === 'idle') { if (sees || e.alert > 0) { e.st = 'chase'; e.t = 0; K.ai.wake(e); } return; }
     if (e.st === 'chase') {
       let sp = c.speed; const keep = c.keep;
@@ -950,7 +1001,7 @@ const AI = K.ai = {
     }
     if (e.st === 'windup') {
       const w = (e.kind === 'melee' ? c.melee.windup : c.shoot.windup); e.facing = true;
-      if (e.t >= w) { e.st = 'strike'; e.t = 0; if (e.kind === 'melee') { if (AI.dist(e) < c.melee.range * 1.25) hurtPlayer(c.melee.dmg, e.x, e.y); K.sfx('hit'); } else AI.shoot(e, c.shoot, c.shoot.lead); }
+      if (e.t >= w) { e.st = 'strike'; e.t = 0; if (e.kind === 'melee') { if (AI.dist(e) < c.melee.range * 1.25) hurtPlayer(AI.target(e), c.melee.dmg, e.x, e.y, e); K.sfx('hit'); } else AI.shoot(e, c.shoot, c.shoot.lead); }
       return;
     }
     if (e.st === 'strike') { if (e.t >= .28) { e.st = 'chase'; e.t = 0; e.cd = e.kind === 'melee' ? c.melee.cd : c.shoot.cd; } return; }
@@ -965,17 +1016,25 @@ K.fx = {
 };
 
 /* ------------------------------------------------------------------ jogador */
-function hurtPlayer(n, fx, fy) {
-  if (G.st !== 'play') return; if (G.god) { G.flash = .2; return; } const pl = G.pl;
-  if (pl.shield > 0) { const ab = Math.min(pl.shield, n); pl.shield -= ab; n -= ab; G.flash = .25; sfx2('shield_hit', 'hit_wall'); K.fx.burst(pl.x + Math.cos(pl.a) * .5, pl.y + Math.sin(pl.a) * .5, .4, 8, [90, 170, 255]); if (n <= 0) return; }   // 1.1.0: escudo absorve antes da vida
-  pl.hp = Math.max(0, pl.hp - n); G.hurtTot += n; G.dmgT = .5; G.shake = Math.max(G.shake, .5); K.sfx('hurt'); K.buzz(60);
-  if (fx !== undefined) G.dmgDir = Math.atan2(fy - pl.y, fx - pl.x) - pl.a; if (pl.hp <= 0) { G.st = 'dead'; G.endT = 0; K.sfx('over'); }
+const nearestPlayer = (x, y) => { let b = G.pl, bd = 1e9; for (const p of G.players) { if (!p.alive) continue; const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; b = p; } } return b; };
+/* 1.2.0 (lição 14 do JGK): TODO dano em jogador passa por aqui. pl = jogador; (fx,fy) = de onde veio; src = quem causou (bot, jogador ou nada).
+   Efeitos de tela (piscar, tremer, seta de dano, vibração) só no jogador LOCAL. Morte: solo → fim de fase; multiplayer → G.mp.death(pl, src). */
+function hurtPlayer(pl, n, fx, fy, src) {
+  if (G.st !== 'play' || !pl || !pl.alive || pl.inv > 0 || (G.mp && G.mp.guest)) return; const me = pl.local;   /* convidado nunca aplica dano: o anfitrião decide */ if (G.god && me) { G.flash = .2; return; }
+  if (pl.shield > 0) { const ab = Math.min(pl.shield, n); pl.shield -= ab; n -= ab; if (me) { G.flash = .25; sfx2('shield_hit', 'hit_wall'); } K.fx.burst(pl.x + Math.cos(pl.a) * .5, pl.y + Math.sin(pl.a) * .5, .4, 8, [90, 170, 255]); if (n <= 0) return; }   /* 1.1.0: escudo absorve antes da vida */
+  pl.hp = Math.max(0, pl.hp - n); if (me) { G.hurtTot += n; G.dmgT = .5; G.shake = Math.max(G.shake, .5); K.sfx('hurt'); K.buzz(60); if (fx !== undefined) G.dmgDir = Math.atan2(fy - pl.y, fx - pl.x) - pl.a; }
+  if (pl.hp <= 0) { if (G.mp && G.mp.death) G.mp.death(pl, src); else { G.st = 'dead'; G.endT = 0; K.sfx('over'); } }
 }
+K.hurtPlayer = (pl, n, fx, fy, src) => hurtPlayer(pl, n, fx, fy, src);
+/* som de um jogador que não é o local: só toca se estiver por perto (sem volume posicional no sintetizador) */
+const sfxNear = (n, x, y) => { if (Math.hypot(x - G.pl.x, y - G.pl.y) < 11) K.sfx(n); };
 K.HEAD_MULT = 1.5;   // 1.0.6b: dano do tiro na cabeça (era x2; o jogador achou fácil demais)
-function fireWeapon() {   // 1.1.0: era launchStone(); agora dispara a ARMA ATUAL (K.defWeapon): n pedras em leque, perfura, quica, explode, munição
-  const pl = G.pl, W = curW(), ch = W.charge > 0 ? pl.charge : 1, v = lerp(W.speed[0], W.speed[1], ch), g = lerp(W.grav[0], W.grav[1], ch); let a = pl.a, slope = pl.pitch;
+function fireWeapon(pl) {   // 1.1.0: era launchStone(); agora dispara a ARMA ATUAL (K.defWeapon): n pedras em leque, perfura, quica, explode, munição
+  pl = pl || G.pl; if (G.mp && pl.inv > 0 && G.intro <= 0) pl.inv = 0;   /* multiplayer: atirar cancela a proteção de quem acabou de renascer */
+  const W = curW(pl), ch = W.charge > 0 ? pl.charge : 1, v = lerp(W.speed[0], W.speed[1], ch), g = lerp(W.grav[0], W.grav[1], ch); let a = pl.a, slope = pl.pitch;
   const z0 = .5;   // 1.0.6: a pedra sai da ALTURA DO OLHO (antes .42: saía 8 cm abaixo da mira e o tiro na cabeça nunca chegava na cabeça)
-  if (SAVE.opt.assist) {         // mira assistida: puxa o tiro (só para os lados) até 4° para o bot mais perto da mira
+  if (pl.local ? SAVE.opt.assist : pl.assist) {   /* mira assistida: opção de cada jogador; só puxa para BOTS (contra jogador fica desligada — decisão do Pedro na 1.2.0) */
+            // mira assistida: puxa o tiro (só para os lados) até 4° para o bot mais perto da mira
     let best = null, bd = .05; for (const b of G.bots) { if (b.dead || b.st === 'die') continue; const dx = b.x - pl.x, dy = b.y - pl.y, dist = Math.hypot(dx, dy); if (dist > 22 || dist < .6) continue; let da = Math.atan2(dy, dx) - pl.a; da = Math.atan2(Math.sin(da), Math.cos(da)); if (Math.abs(da) < bd && K.los(pl.x, pl.y, b.x, b.y)) { bd = Math.abs(da); best = { da, dist, b }; } }
     if (best) a += best.da * .5;   // 1.0.6: NÃO puxa mais para o meio do corpo (isso tirava toda cabeça do jogador): cabeça ou corpo continua sendo escolha de quem mira
   }
@@ -988,37 +1047,49 @@ function fireWeapon() {   // 1.1.0: era launchStone(); agora dispara a ARMA ATUA
     const t = Math.max(.05, (ta - .3) / v); slope = (zt - z0 + .5 * g * t * t) / t / v;
   }
   const dmg = lerp(W.dmg[0], W.dmg[1], Math.pow(ch, 1.15)) * pl.mod.dmg;
+  const i0 = G.proj.length;   /* 1.2.0: primeiras pedras deste tiro (a rede pode adiantá-las: compensação de atraso) */
   for (let i = 0; i < W.n; i++) {   // leque: pedras espalhadas só para os lados (a altura da mira é a mesma)
     const aa = a + (W.n > 1 ? (i - (W.n - 1) / 2) * W.spread : 0), ddx = Math.cos(aa), ddy = Math.sin(aa);
-    G.proj.push({ x: pl.x + ddx * .3, y: pl.y + ddy * .3, z: z0, vx: ddx * v, vy: ddy * v, vz: slope * v, g, dmg, gold: pl.gold > 0, life: W.life, ch, spr: W.proj, pierce: W.pierce, bounce: W.bounce, explode: W.explode });
+    G.proj.push({ x: pl.x + ddx * .3, y: pl.y + ddy * .3, z: z0, vx: ddx * v, vy: ddy * v, vz: slope * v, g, dmg, gold: pl.gold > 0, life: W.life, ch, spr: W.proj, pierce: W.pierce, bounce: W.bounce, explode: W.explode, owner: pl.id, team: pl.team, seq: pl.shotSeq, pred: !!(G.mp && G.mp.guest) });
   }
-  if (pl.gold > 0) pl.gold--; G.shots++; pl.recoil = W.charge > 0 ? 1 : .45; pl.cd = W.cd; K.sfx(W.sfx || (ch > .7 ? 'shoot_hard' : 'shoot')); K.buzz(15);
-  if (W.ammo) { pl.ammo[W.id] = (pl.ammo[W.id] || 0) - 1; if (pl.ammo[W.id] <= 0) { pl.ammo[W.id] = 0; K.ai.say('SEM MUNIÇÃO: ' + W.nome + ' — de volta ao estilingue', 2.2); pl.w = 'estilingue'; pl.pulling = false; pl.charge = 0; G.wswT = 1.6; } }
+  if (G.mp && G.mp.shot) G.mp.shot(pl, i0);
+  if (pl.gold > 0) pl.gold--; pl.shots++; if (pl.local) G.shots++; pl.recoil = W.charge > 0 ? 1 : .45; pl.cd = W.cd; { const sn = W.sfx || (ch > .7 ? 'shoot_hard' : 'shoot'); if (pl.local) { K.sfx(sn); K.buzz(15); } else sfxNear(sn, pl.x, pl.y); }
+  if (W.ammo) { pl.ammo[W.id] = (pl.ammo[W.id] || 0) - 1; if (pl.ammo[W.id] <= 0) { pl.ammo[W.id] = 0; pl.w = 'estilingue'; pl.pulling = false; pl.charge = 0; if (pl.local) { K.ai.say('SEM MUNIÇÃO: ' + W.nome + ' — de volta ao estilingue', 2.2); G.wswT = 1.6; } } }
 }
-function updatePlayer(dt) {
-  const pl = G.pl, I = K.in, o = SAVE.opt;
-  if (G.st === 'play') {
-    pl.a += I.lx; pl.pitch = clamp(pl.pitch + I.ly * .5, -.32, .32); if (pl.a > TAU) pl.a -= TAU; if (pl.a < 0) pl.a += TAU;
-    updatePowers(dt); if (I.wsel && pl.arms[I.wsel - 1]) setWeapon(pl.arms[I.wsel - 1]); else if (I.wnext) cycleWeapon(1); else if (I.wprev) cycleWeapon(-1); G.wswT = Math.max(0, G.wswT - dt);   // 1.1.0: poderes e troca de arma
-    const sp = 3.3 * pl.mod.spd * (pl.pulling ? .7 : 1), fx = Math.cos(pl.a), fy = Math.sin(pl.a), tvx = (fx * I.mvy - fy * I.mvx) * sp, tvy = (fy * I.mvy + fx * I.mvx) * sp;
-    pl.vx = damp(pl.vx, tvx, 14, dt); pl.vy = damp(pl.vy, tvy, 14, dt); moveE(pl, pl.vx * dt, pl.vy * dt, .22);
-    const spd = Math.hypot(pl.vx, pl.vy); pl.bob += spd * dt * 2.4; pl.step += spd * dt; if (pl.step > 1.1) { pl.step = 0; K.sfx('step'); }
+/* 1.2.0: atualiza UM jogador com a SUA entrada (I tem o formato de K.in; o local usa K.in, remoto/robô usa pl.inp). Entrada remota pode trazer mira ABSOLUTA (I.aa, I.ap). */
+const NOIN = { mvx: 0, mvy: 0, lx: 0, ly: 0, fire: false, firep: false, firer: false, wnext: 0, wprev: 0, wsel: 0 };
+K.noInput = NOIN;
+/* só o movimento (andar com colisão): o mesmo código no jogo e na reconciliação do convidado (reaplica comandos não confirmados) */
+function movePl(pl, I, dt) {
+  const sp = 3.3 * pl.mod.spd * (pl.pulling ? .7 : 1), fx = Math.cos(pl.a), fy = Math.sin(pl.a), tvx = (fx * I.mvy - fy * I.mvx) * sp, tvy = (fy * I.mvy + fx * I.mvx) * sp;
+  pl.vx = damp(pl.vx, tvx, 14, dt); pl.vy = damp(pl.vy, tvy, 14, dt); moveE(pl, pl.vx * dt, pl.vy * dt, .22);
+}
+K.movePl = movePl;
+function updatePlayer(pl, I, dt) {
+  const o = SAVE.opt; I = I || NOIN;
+  if (G.st === 'play' && pl.alive) {
+    if (I.aa !== undefined) { pl.a = I.aa; pl.pitch = clamp(I.ap || 0, -.32, .32); } else { pl.a += I.lx; pl.pitch = clamp(pl.pitch + I.ly * .5, -.32, .32); } if (pl.a > TAU) pl.a -= TAU; if (pl.a < 0) pl.a += TAU;
+    updatePowers(pl, dt); if (I.wsel && pl.arms[I.wsel - 1]) setWeapon(pl.arms[I.wsel - 1], pl); else if (I.wnext) cycleWeapon(1, pl); else if (I.wprev) cycleWeapon(-1, pl);   /* 1.1.0: poderes e troca de arma */
+    movePl(pl, I, dt);
+    const spd = Math.hypot(pl.vx, pl.vy); pl.bob += spd * dt * 2.4; pl.step += spd * dt; if (pl.step > 1.1) { pl.step = 0; if (pl.local) K.sfx('step'); }
     // estilingue: segurar puxa, soltar atira
     pl.cd = Math.max(0, pl.cd - dt); pl.recoil = Math.max(0, pl.recoil - dt * 5);
-    const W = curW();
-    if (W.charge <= 0) { if (I.fire && pl.cd <= 0 && !pl.fireLock && (W.auto || I.firep)) fireWeapon(); }   // 1.1.0: arma de tiro instantâneo (sem puxar); auto = repete segurando
+    const W = curW(pl);
+    if (W.charge <= 0) { if (I.fire && pl.cd <= 0 && !pl.fireLock && (W.auto || I.firep)) fireWeapon(pl); }   // 1.1.0: arma de tiro instantâneo (sem puxar); auto = repete segurando
     else {
       if (I.firep && pl.cd <= 0) { pl.pulling = true; pl.charge = 0; pl.pullT = 0; }
-      if (pl.pulling) { pl.charge = Math.min(1, pl.charge + dt * pl.mod.charge / W.charge); pl.pullT += dt; if (pl.pullT > .11) { pl.pullT = 0; K.sfx('pull'); } if (!I.fire) { pl.pulling = false; fireWeapon(); pl.charge = 0; } }
+      if (pl.pulling) { pl.charge = Math.min(1, pl.charge + dt * pl.mod.charge / W.charge); pl.pullT += dt; if (pl.pullT > .11) { pl.pullT = 0; if (pl.local) K.sfx('pull'); } if (!I.fire) { pl.pulling = false; fireWeapon(pl); pl.charge = 0; } }
       else if (I.fire && pl.cd <= 0 && !pl.fireLock && !I.firep) { pl.pulling = true; pl.charge = 0; }
     }
   }
-  G.shake = Math.max(0, G.shake - dt * 2.5); G.flash = Math.max(0, G.flash - dt * 3); G.dmgT = Math.max(0, G.dmgT - dt); G.hitM = Math.max(0, G.hitM - dt * 5);
-  // itens
+  if (!pl.alive || (G.mp && G.mp.guest)) return;   /* convidado: quem pega item é o anfitrião (chega por evento) */
+  /* itens (pl.local: efeitos de tela e aviso; G.actor = quem pega, para o conteúdo antigo que não recebe o jogador) */
   for (const p of G.picks) { if (p.taken) continue; p.t += dt; if (Math.hypot(p.x - pl.x, p.y - pl.y) < .55) { const d = K.pickupDefs[p.id];
-    if (d && d.take(G, pl, p) !== false) { p.taken = true; const rare = p.id === 'ouro' || d.weapon || d.power; if (d.weapon) sfx2('weapon_get', 'gold'); else if (d.power) sfx2('power_get', 'gold'); else K.sfx(rare ? 'gold' : 'pickup'); G.flash = .25; K.fx.burst(p.x, p.y, .4, rare ? 18 : 12, d.col || (p.id === 'ouro' ? [255, 217, 61] : [47, 179, 106])); if (d.msg) AI.say(d.msg, 2.2); }   // aviso na tela: o jogador sabe o que pegou
-    else if (d && d.full && G.t - (G.fullT || -9) > 2) { G.fullT = G.t; AI.say(d.full, 1.6); } } }
-  // portal
+    G.actor = pl; let took = false; try { took = !!d && d.take(G, pl, p) !== false; } finally { G.actor = null; }
+    if (took) { p.taken = true; if (G.mp && G.mp.taken) G.mp.taken(p, pl); const rare = p.id === 'ouro' || d.weapon || d.power; K.fx.burst(p.x, p.y, .4, rare ? 18 : 12, d.col || (p.id === 'ouro' ? [255, 217, 61] : [47, 179, 106]));
+      if (pl.local) { if (d.weapon) sfx2('weapon_get', 'gold'); else if (d.power) sfx2('power_get', 'gold'); else K.sfx(rare ? 'gold' : 'pickup'); G.flash = .25; if (d.msg) AI.say(d.msg, 2.2); } else sfxNear('pickup', p.x, p.y); }   // aviso na tela: o jogador sabe o que pegou
+    else if (d && d.full && pl.local && G.t - (G.fullT || -9) > 2) { G.fullT = G.t; AI.say(d.full, 1.6); } } }
+  if (G.mp || !pl.local) return;   /* portal: só no solo */
   const gt = G.gate; if (!gt.open && G.remaining <= 0 && G.st === 'play') { gt.open = true; G.portalT = PORTAL_SECS; K.sfx('portal'); AI.say(G.timed ? 'O PORTAL ABRIU! ' + PORTAL_SECS + ' segundos, corra!' : 'O PORTAL ABRIU! Siga as setas!', 3.5); }
   if (gt.open && G.timed && G.st === 'play' && G.intro <= 0) { G.portalT -= dt; if (G.portalT <= 0) portalFail(); }
   if (gt.open && gt.cx >= 0 && G.st === 'play') guideUpdate(); else G.guide = null;
@@ -1076,35 +1147,38 @@ function updateProj(dt) {
     else if (propHit(p.x, p.y, 0) && p.z < ((K.sprites[(K.propDefs[G.props.find(q => Math.abs(q.x - p.x) < .5 && Math.abs(q.y - p.y) < .5 && K.propDefs[q.id] && K.propDefs[q.id].solid)?.id] || {}).spr] || {}).hgt || 0) + .05) { kill = true; K.fx.burst(p.x, p.y, p.z, 4, [230, 230, 240]); K.sfx('hit_wall'); }
     else if (p.z < 0 && p.bounce > 0) { p.z = 0; p.vz = Math.abs(p.vz) * .7 + .6; p.bounce--; K.sfx('hit_wall'); }
     else if (p.z < 0 || p.z > 1.02) { kill = true; K.fx.burst(p.x, p.y, Math.max(0, p.z), 4, [230, 230, 240]); }
+    else if (G.mp && G.mp.hitPlayers && G.mp.hitPlayers(p)) kill = true;   /* 1.2.0: pedra acerta jogador de outro time (ponte do multiplayer) */
     else for (const b of G.bots) {
+      const mine = p.owner === undefined || p.owner === G.pl.id;
       if (b.dead || b.st === 'die' || b.ghost > 0 || (p.hits && p.hits.has(b.id))) continue; const dx = b.x - p.x, dy = b.y - p.y, rr = b.def.radius + .1; if (dx * dx + dy * dy > rr * rr) continue;
       const hs = (b.look ? b.look.hgt : .8) * (b.def.scale || 1), hg = hs * (b.look ? b.look.headHi : .8) + .02; if (p.z < -.05 || p.z > hg) continue;   // 1.0.6: caixa do bot = a do boneco desenhado (topo da cabeça/chapéu)
       /* 1.0.6b: cabeça = altura da cabeça E perto do centro dela (antes valia o cilindro inteiro do bot, de lado a lado) */
-      const vm = Math.hypot(p.vx, p.vy) || 1, lat = Math.abs(-dx * p.vy + dy * p.vx) / vm, head = p.z > hs * (b.look ? b.look.headLo : .62) && lat < hs * (b.look ? b.look.headR : .09) * 1.25 + .02, dmg = p.dmg * (head ? K.HEAD_MULT : 1) * (p.gold ? 2 : 1); const armored = !head && b.def.armor !== undefined && b.def.armor < 1; damageBot(b, dmg, head); if (p.pierce > 0) { p.pierce--; (p.hits || (p.hits = new Set())).add(b.id); } else kill = true; K.fx.burst(p.x, p.y, p.z, head ? 16 : 6, head ? [255, 217, 61] : [255, 255, 255]);
-      if (armored && G.t - (G.armT || -9) > .8) { G.armT = G.t; const pr = G.cam && K.r3.project(G.cam, b.x, b.y, hs * .6); G.pops.push({ x: clamp(pr ? pr.x : VW / 2, 120, VW - 120), y: clamp(pr ? pr.y : VH / 2, 110, VH - 160), t: 0, txt: 'PROTEGIDO! Mire na cabeça' }); }
-      if (head) { G.headT = 1; const mult = +(K.HEAD_MULT * (p.gold ? 2 : 1)).toFixed(1), pr = G.cam && K.r3.project(G.cam, b.x, b.y, hg); G.pops.push({ x: clamp(pr ? pr.x : VW / 2, 120, VW - 120), y: clamp(pr ? pr.y - 6 : VH / 2 - 50, 110, VH - 160), t: 0, txt: (p.gold ? 'CABEÇA DE OURO!' : 'NA CABEÇA!') + '  x' + mult }); }
+      const vm = Math.hypot(p.vx, p.vy) || 1, lat = Math.abs(-dx * p.vy + dy * p.vx) / vm, head = p.z > hs * (b.look ? b.look.headLo : .62) && lat < hs * (b.look ? b.look.headR : .09) * 1.25 + .02, dmg = p.dmg * (head ? K.HEAD_MULT : 1) * (p.gold ? 2 : 1); const armored = !head && b.def.armor !== undefined && b.def.armor < 1; damageBot(b, dmg, head, false, p.owner); if (p.pierce > 0) { p.pierce--; (p.hits || (p.hits = new Set())).add(b.id); } else kill = true; K.fx.burst(p.x, p.y, p.z, head ? 16 : 6, head ? [255, 217, 61] : [255, 255, 255]);
+      if (mine && armored && G.t - (G.armT || -9) > .8) { G.armT = G.t; const pr = G.cam && K.r3.project(G.cam, b.x, b.y, hs * .6); G.pops.push({ x: clamp(pr ? pr.x : VW / 2, 120, VW - 120), y: clamp(pr ? pr.y : VH / 2, 110, VH - 160), t: 0, txt: 'PROTEGIDO! Mire na cabeça' }); }
+      if (head && mine) { G.headT = 1; const mult = +(K.HEAD_MULT * (p.gold ? 2 : 1)).toFixed(1), pr = G.cam && K.r3.project(G.cam, b.x, b.y, hg); G.pops.push({ x: clamp(pr ? pr.x : VW / 2, 120, VW - 120), y: clamp(pr ? pr.y - 6 : VH / 2 - 50, 110, VH - 160), t: 0, txt: (p.gold ? 'CABEÇA DE OURO!' : 'NA CABEÇA!') + '  x' + mult }); }
       break;
     }
     if (kill) { if (p.explode) explodeStone(p); G.proj.splice(i, 1); }
   }
   for (let i = G.eproj.length - 1; i >= 0; i--) {
-    const p = G.eproj[i]; if (p.home && G.st === 'play') { const sp = Math.hypot(p.vx, p.vy), ca = Math.atan2(p.vy, p.vx); let da = Math.atan2(G.pl.y - p.y, G.pl.x - p.x) - ca; da = Math.atan2(Math.sin(da), Math.cos(da)); const na = ca + clamp(da, -p.home * dt, p.home * dt); p.vx = Math.cos(na) * sp; p.vy = Math.sin(na) * sp; p.vz = (.45 - p.z) * 3; }
+    const p = G.eproj[i]; if (p.home && G.st === 'play') { const tp = (p.tgt !== undefined && K.playerById(p.tgt)) || G.pl, sp = Math.hypot(p.vx, p.vy), ca = Math.atan2(p.vy, p.vx); let da = Math.atan2(tp.y - p.y, tp.x - p.x) - ca; da = Math.atan2(Math.sin(da), Math.cos(da)); const na = ca + clamp(da, -p.home * dt, p.home * dt); p.vx = Math.cos(na) * sp; p.vy = Math.sin(na) * sp; p.vz = (.45 - p.z) * 3; }
     p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; let kill = p.life <= 0 || solidCell(p.x | 0, p.y | 0) || p.z < 0 || p.z > 1;
-    const pl = G.pl; if (Math.hypot(pl.x - p.x, pl.y - p.y) < .3 + p.r * .3 && p.z > .05 && p.z < .95 && G.st === 'play') { hurtPlayer(p.dmg, p.x - p.vx, p.y - p.vy); kill = true; }
+    if (!kill && G.st === 'play' && p.z > .05 && p.z < .95) for (const pl of G.players) if (pl.alive && Math.hypot(pl.x - p.x, pl.y - p.y) < .3 + p.r * .3) { hurtPlayer(pl, p.dmg, p.x - p.vx, p.y - p.vy); kill = true; break; }
     if (kill) G.eproj.splice(i, 1);
   }
   for (let i = G.parts.length - 1; i >= 0; i--) { const p = G.parts[i]; p.life -= dt; p.vz -= 5 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.z < 0) { p.z = 0; p.vz *= -.3; p.vx *= .6; p.vy *= .6; } if (p.life <= 0) G.parts.splice(i, 1); }
 }
 /* 1.1.0: pedra explosiva (weapon.explode = {r, dmg}): fere todos os bots no raio (parede no meio protege), ignora armadura, nunca fere o jogador */
 function explodeStone(p) {
-  const ex = p.explode; K.sfx('boom'); G.shake = Math.max(G.shake, .5); for (const [n, z, col] of [[16, .15, [255, 140, 40]], [12, .5, [255, 217, 61]], [8, .9, [255, 255, 255]]]) K.fx.burst(p.x, p.y, z, n, col);
-  for (const b of G.bots) { if (b.dead || b.st === 'die') continue; const d = Math.hypot(b.x - p.x, b.y - p.y); if (d < ex.r + b.def.radius && K.los(p.x, p.y, b.x, b.y)) damageBot(b, ex.dmg * (1 - .45 * d / ex.r) * (p.gold ? 2 : 1), false, true); }
+  const ex = p.explode; if (Math.hypot(p.x - G.pl.x, p.y - G.pl.y) < 11) { K.sfx('boom'); G.shake = Math.max(G.shake, .5); } if (G.mp && G.mp.blast) G.mp.blast(p); for (const [n, z, col] of [[16, .15, [255, 140, 40]], [12, .5, [255, 217, 61]], [8, .9, [255, 255, 255]]]) K.fx.burst(p.x, p.y, z, n, col);
+  for (const b of G.bots) { if (b.dead || b.st === 'die') continue; const d = Math.hypot(b.x - p.x, b.y - p.y); if (d < ex.r + b.def.radius && K.los(p.x, p.y, b.x, b.y)) damageBot(b, ex.dmg * (1 - .45 * d / ex.r) * (p.gold ? 2 : 1), false, true, p.owner); }
 }
-function damageBot(b, dmg, head, blast) {
+function damageBot(b, dmg, head, blast, by) {
+  const byP = by === undefined ? G.pl : K.playerById(by), mine = !byP || byP.local;   /* 1.2.0: quem acertou (id do jogador); marcador de acerto/estatística só para o local */
   if (b.inv > 0) { K.sfx('hit_wall'); return; }   // 1.1.0: invulnerável na transição de fase do chefe
   if (!head && !blast && b.def.armor !== undefined) dmg *= b.def.armor;   // 1.1.0: armadura (escudeiro): corpo leva só uma fração, cabeça ignora
-  b.hp -= dmg; b.flash = 1; G.hitM = 1; G.hitK = head ? 2 : 1; b.alert = 20; if (head) G.heads++; K.sfx(head ? 'hit_head' : 'hit');
-  if (b.hp <= 0) { b.hp = 0; b.st = 'die'; b.t = 0; b.dead = false; G.kills++; if (!b.def.noCount) G.remaining--; G.hitK = 3; K.sfx('botdie'); G.shake = Math.max(G.shake, .25); K.fx.burst(b.x, b.y, .5, 14, [255, 255, 255]);
+  b.hp -= dmg; b.flash = 1; b.alert = 20; if (byP && head) byP.heads++; if (mine) { G.hitM = 1; G.hitK = head ? 2 : 1; if (head) G.heads++; K.sfx(head ? 'hit_head' : 'hit'); }
+  if (b.hp <= 0) { b.hp = 0; b.st = 'die'; b.t = 0; b.dead = false; G.kills++; if (byP) byP.kills++; if (!b.def.noCount) G.remaining--; if (mine) G.hitK = 3; K.sfx('botdie'); G.shake = Math.max(G.shake, .25); K.fx.burst(b.x, b.y, .5, 14, [255, 255, 255]);
     if (b.def.onDie) b.def.onDie(b, G);   // 1.1.0: gancho de morte do bot
     if (b.def.drops) for (const d of b.def.drops) if (Math.random() < d.chance) { G.picks.push({ id: d.id, x: b.x, y: b.y, t: 0, taken: false, drop: 1 }); K.fx.burst(b.x, b.y, .5, 8, [255, 255, 255]); }   // 1.1.0: drops = [{id:'municao', chance:.1}]
     if (b.def.boss && G.L.finale) G.finaleT = 2.6;   // 1.1.0: fase final (L.finale): vence sozinha quando o chefe cai, sem portal
@@ -1120,8 +1194,8 @@ function damageBot(b, dmg, head, blast) {
 }
 function explodeBomb(b) {
   K.sfx('boom'); G.shake = 1; G.flash = .55; for (const [n, z, col] of [[26, .15, [255, 140, 40]], [22, .5, [255, 217, 61]], [16, .9, [255, 255, 255]], [14, .3, [229, 56, 59]]]) K.fx.burst(b.x, b.y, z, n, col);
-  const pl = G.pl, d = Math.hypot(pl.x - b.x, pl.y - b.y);
-  if (d < b.r && G.st === 'play' && K.los(b.x, b.y, pl.x, pl.y)) hurtPlayer(Math.round(lerp(b.dmg, b.dmg * .45, d / b.r)), b.x, b.y);   // mais fraca na borda; parede/pilar no meio protege
+  for (const pl of G.players) { const d = Math.hypot(pl.x - b.x, pl.y - b.y);
+    if (d < b.r && G.st === 'play' && K.los(b.x, b.y, pl.x, pl.y)) hurtPlayer(pl, Math.round(lerp(b.dmg, b.dmg * .45, d / b.r)), b.x, b.y); }   // mais fraca na borda; parede/pilar no meio protege
 }
 function updateBombs(dt) {
   for (let i = G.bombs.length - 1; i >= 0; i--) {
@@ -1145,7 +1219,11 @@ function updateBots(dt) {
 function updateGame(dt) {
   if (G.intro > 0) G.intro -= dt; else if (G.st === 'play') G.t += dt;
   if (G.msgT > 0) { G.msgT -= dt; if (G.msgT <= 0) G.msg = null; }
-  updatePlayer(dt); updateProj(dt); updateBombs(dt); updateBots(dt); if (G.L.onTick) G.L.onTick(G, dt);   // L.onTick(G,dt): gancho para eventos de fase (armadilhas etc.)
+  G.shake = Math.max(0, G.shake - dt * 2.5); G.flash = Math.max(0, G.flash - dt * 3); G.dmgT = Math.max(0, G.dmgT - dt); G.hitM = Math.max(0, G.hitM - dt * 5); if (G.st === 'play') G.wswT = Math.max(0, G.wswT - dt);
+  if (G.mp && G.mp.pre) G.mp.pre(dt);   /* rede: comandos, retratos, interpolação (antes de mover) */
+  for (const p of G.players) if (!p.puppet) updatePlayer(p, p.local && !p.bot && !(G.mp && G.mp.guest) ? (K.scene && K.scene.paused ? NOIN : K.in) : p.inp, dt);   /* puppet = jogador remoto no convidado (posição vem interpolada) */   /* p.bot: robô-jogador (testes), mesmo sendo o local */   /* 1.2.0: local = K.in; remoto/robô = p.inp (rede ou K.autoplay) */
+  if (G.mp && G.mp.tick) G.mp.tick(dt);
+  updateProj(dt); updateBombs(dt); updateBots(dt); if (G.L.onTick) G.L.onTick(G, dt);   // L.onTick(G,dt): gancho para eventos de fase (armadilhas etc.)
   if (G.finaleT > 0 && G.st === 'play') { G.finaleT -= dt; if (G.finaleT <= 0) winLevel(); }
   G.headT = Math.max(0, G.headT - dt * 2.2); for (let i = G.pops.length - 1; i >= 0; i--) { G.pops[i].t += dt; if (G.pops[i].t > 1.1) G.pops.splice(i, 1); }
   if (G.st !== 'play') { G.endT += dt; }
@@ -1162,9 +1240,10 @@ function botSprite(e) {
 function buildSprites() {
   const out = [], S = K.sprites;
   for (const e of G.bots) { const s = botSprite(e); if (s) out.push(s); }
+  if (G.mp && G.mp.sprites) G.mp.sprites(out);   /* 1.2.0: os outros jogadores (palitos do time) */
   for (const p of G.picks) if (!p.taken) {   // 1.0.2: coletáveis com DESTAQUE: halo pulsante atrás (cor do tipo), ignoram a névoa, item pulsa e quica; largados por bots "pulam" ao cair
     const d = K.pickupDefs[p.id], f = d && S[d.spr]; if (!f) continue; const pu = 1 + Math.sin(p.t * 4) * .09, hop = p.drop && p.t < .7 ? Math.sin(p.t / .7 * Math.PI) * .45 : 0, z = .1 + Math.sin(p.t * 3) * .05 + hop, hg = f.hgt * 1.25 * pu;
-    const bm = S[d.beam || (p.id === 'ouro' ? 'feixe_ouro' : 'feixe_cura')];
+    const bm = S[d.beam || (p.id === 'ouro' ? 'feixe_ouro' : 'feixe_cura')];   /* (itens que reaparecem no multiplayer usam o mesmo destaque: regra d) */
     if (bm) { const dx = p.x - G.pl.x, dy = p.y - G.pl.y, dd = Math.hypot(dx, dy) || 1; out.push({ x: p.x + dx / dd * .07, y: p.y + dy / dd * .07, f: bm, hgt: bm.hgt * (.92 + Math.sin(p.t * 3.5) * .08), z: 0, glow: true }); }   // feixe: visível por cima do estilingue e de longe
     const au = S[d.aura || (p.id === 'ouro' ? 'aura_ouro' : 'aura_cura')];
     if (au) { const dx = p.x - G.pl.x, dy = p.y - G.pl.y, dd = Math.hypot(dx, dy) || 1, ah = au.hgt * (1 + Math.sin(p.t * 5) * .14); out.push({ x: p.x + dx / dd * .04, y: p.y + dy / dd * .04, f: au, hgt: ah, z: z + hg / 2 - ah / 2, glow: true }); }
@@ -1195,7 +1274,7 @@ function buildSprites() {
 function guidePoints() { const g = G.guide, pl = G.pl; return [{ x: pl.x, y: pl.y }].concat(g.pts.slice(1)); }
 function camera() {
   const pl = G.pl, sh = SAVE.opt.shake ? G.shake : 0, jt = sh * sh * .02;
-  return { x: pl.x, y: pl.y, a: pl.a + (Math.random() - .5) * jt * 2, pitch: pl.pitch + Math.sin(pl.bob) * .0035 * Math.min(1, Math.hypot(pl.vx, pl.vy)) + (Math.random() - .5) * jt, fov: (SAVE.opt.fov || 1) * (1 - G.pl.charge * .06) };
+  return { x: pl.x + (pl.ox || 0), y: pl.y + (pl.oy || 0), a: pl.a + (Math.random() - .5) * jt * 2, pitch: pl.pitch + Math.sin(pl.bob) * .0035 * Math.min(1, Math.hypot(pl.vx, pl.vy)) + (Math.random() - .5) * jt, fov: (SAVE.opt.fov || 1) * (1 - G.pl.charge * .06) };
 }
 function drawGame(c) {
   const cam = camera(); K.r3.render(c, cam, { w: G.w, h: G.h, cells: G.cells, walls: G.W.wall || {}, floor: G.W.floor, ceil: G.W.ceil, fog: G.W.fog, fogDist: G.W.fogDist, light: G.W.light }, buildSprites());
@@ -1252,6 +1331,7 @@ K.hud.status = (c, S) => {
 K.pickupMapColor = id => { const d = K.pickupDefs[id] || {}; if (id === 'ouro') return PAL.yellow; if (d.weapon || id === 'municao') return PAL.blue; if (d.power && id !== 'poder_coracao' && d.power !== 'coracao') return '#9B5DE5'; return PAL.green; };
 K.hud.minimap = (c, S) => {
   const sz = 8, w = S.w, h = S.h, mw = Math.min(110, w * sz), cs = mw / Math.max(w, h), x0 = VW - VIEW.safeR - 72 - mw, y0 = VIEW.safeT + 14;
+  K.hud._mm = { x0, y0, cs, w: w * cs, h: h * cs };   /* 1.2.0: geometria do minimapa (o multiplayer desenha os jogadores por cima) */
   c.save(); c.globalAlpha = .82; c.fillStyle = PAL.paper; c.fillRect(x0 - 3, y0 - 3, w * cs + 6, h * cs + 6); c.strokeStyle = PAL.ink; c.lineWidth = 3; c.strokeRect(x0 - 3, y0 - 3, w * cs + 6, h * cs + 6);
   c.fillStyle = PAL.ink2; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (S.cells[y * w + x]) c.fillRect(x0 + x * cs, y0 + y * cs, cs + .5, cs + .5);
   c.fillStyle = PAL.red; for (const b of S.bots) if (!b.dead && b.st !== 'die') c.fillRect(x0 + b.x * cs - 1.5, y0 + b.y * cs - 1.5, 3, 3);
@@ -1298,7 +1378,7 @@ K.hud.guide = (c, S) => {
 };
 function drawHud(c) {
   const S = Object.assign(G, { charge: G.pl.charge, recoil: G.pl.recoil, bob: G.pl.bob, gold: G.pl.gold > 0, cd: G.pl.cd });
-  (curW().hud || K.hud.weapon)(c, S); K.hud.crosshair(c, S); K.hud.arms(c, S); K.hud.vignette(c, S); K.hud.status(c, S); if (G.showMap !== false) K.hud.minimap(c, S); K.hud.msg(c, S); K.hud.pops(c, S); K.hud.bombs(c, S); K.hud.guide(c, S);
+  if (G.pl.alive) { (curW().hud || K.hud.weapon)(c, S); K.hud.crosshair(c, S); } K.hud.arms(c, S); K.hud.vignette(c, S); if (G.mp && K.hud.mp) K.hud.mp(c, S); else K.hud.status(c, S); if (G.showMap !== false) K.hud.minimap(c, S); if (!(G.mp && (G.intro > 0 || !G.pl.alive || G.mp.st === 'fim'))) K.hud.msg(c, S); K.hud.pops(c, S); K.hud.bombs(c, S); K.hud.guide(c, S);
   K.input.drawTouch(c, G.pl.charge);
   if (G.st !== 'play') { const k = clamp(G.endT / 1.2, 0, 1); c.fillStyle = G.st === 'win' ? 'rgba(255,217,61,' + k * .35 + ')' : 'rgba(20,20,43,' + k * .6 + ')'; c.fillRect(0, 0, VW, VH); }
   const T = K.touchLayout();
@@ -1309,28 +1389,28 @@ function drawHud(c) {
 K.defScene('play', {
   fps: true, paused: false,
   enter(args) {
-    args = args || {}; const L = K.levelById(args.level || '1'); this.paused = false; if (K.dropHi) K.dropHi(); loadLevel(L);   // 1.1.6: solta os quadros em alta resolução da fase anterior
+    args = args || {}; const L = K.levelById(args.level || '1'); this.paused = false; if (K.dropHi) K.dropHi(); loadLevel(L); if (args.mp && K.mp) K.mp.setup(G, args.mp);   /* 1.2.0: partida multiplayer */   // 1.1.6: solta os quadros em alta resolução da fase anterior
     K.music(K.audio.songs[G.W.music] ? G.W.music : (K.audio.songs[G.W.base] ? G.W.base : 'caderno'));   // 1.1.0: mundo sem música própria (ainda) usa a do mundo base K.input.enabled = true;
     K.input.lock();   // 1.1.4: o clique/tecla que abriu a fase ainda vale como gesto: já entra com o mouse mirando
     return K.preload ? K.preload() : null;
   },
-  exit() { K.input.unlock(); },
-  pause() { if (G.st !== 'play') return; this.paused = true; K.input.unlock(); K.ui.reset(); },
+  exit() { K.input.unlock(); if (G && G.mp && !['mpresult', 'mplobby', 'play'].includes(TR.next)) { if (G.mp.net) { K.net.sync.stop(); K.net.leave(); } TR.next = G.mp.net ? 'mpmenu' : 'title'; TR.args = null; } },   /* 1.2.0: sair de uma partida multiplayer pela pausa = sair da sala (nunca deixa a sala aberta nem cai na seleção de fases) */
+  pause() { if (G.st !== 'play' && !G.mp) return; this.paused = true; K.input.unlock(); K.ui.reset(); },
   resume() { this.paused = false; K.ui.reset(); if (!VIEW.touch) K.input.lock(); },
   onBlur() { if (this.fps && G && G.st === 'play' && !this.paused && K.sceneName === 'play') this.pause(); },
   update(dt) {
     if (!G) return; const I = K.in;
-    if (this.paused) { if (I.pause) this.resume(); return; }
-    if (I.pause) { this.pause(); return; }
+    if (this.paused) { if (I.pause) this.resume(); if (!G.mp) return; }
+    else if (I.pause) { this.pause(); return; }
     if (K.in.any && G.st !== 'play' && G.endT > 1.3) { this.finish(); return; }
     updateGame(dt); if (G.st !== 'play' && G.endT > 2.4 && !this._fin) this.finish();
     if (K.debug.autoFinish === false) this._fin = true;
   },
-  finish() { if (this._fin) return; this._fin = true; setTimeout(() => { this._fin = false; }, 800); const r = G.result || { win: false, stars: 0, time: G.t, kills: G.kills, total: G.total, hp: 0, heads: G.heads, shots: G.shots }; K.go('result', { level: G.L.id, r }, { kind: 'bars' }); },
+  finish() { if (this._fin) return; this._fin = true; setTimeout(() => { this._fin = false; }, 800); if (G.mp) { G.mp.finish(); return; } const r = G.result || { win: false, stars: 0, time: G.t, kills: G.kills, total: G.total, hp: 0, heads: G.heads, shots: G.shots }; K.go('result', { level: G.L.id, r }, { kind: 'bars' }); },
   draw(c) { if (!G) return; drawGame(c); if (this.paused) K.menus.pause(c, this); }
 });
 K.G_ = () => G;
-K.damageBot = (b, d, head, blast) => damageBot(b, d, head, blast);   // 1.1.0: exposto para o K.debug.bossPhase e testes
+K.damageBot = (b, d, head, blast, by) => damageBot(b, d, head, blast, by);   // 1.1.0: exposto para o K.debug.bossPhase e testes
 
 /*==ENGINE:scenes==  cenas básicas funcionais (o Designer de Menus pode SUBSTITUIR qualquer uma em src/content/60-menus.js com K.defScene de mesmo nome):
  * title · select · options · result · story · credits · e o menu de pausa (K.menus.pause). Tudo desenhado em canvas, com foco por teclado/gamepad e toque. */
@@ -1367,7 +1447,8 @@ K.defScene('title', {
     K.ui.button(c, 'jogar', x, y, bw, bh, 'JOGAR', () => { if (!SAVE.intro) { SAVE.intro = 1; K.persist(); K.playStory('intro', () => K.go('select')); } else K.go('select'); }, { def: true, size: 34 });
     K.ui.button(c, 'opc', x, y + 78, bw / 2 - 6, 50, 'Opções', () => K.go('options'), { kind: 'blue', size: 21 });
     K.ui.button(c, 'cred', x + bw / 2 + 6, y + 78, bw / 2 - 6, 50, 'Créditos', () => K.go('credits'), { kind: 'blue', size: 21 });
-    if (!document.fullscreenElement) K.ui.button(c, 'fs', x, y + 140, bw, 44, 'Tela cheia', () => K.fullscreen(), { kind: 'ghost', size: 20 });
+    if (K.scenes.mpmenu) K.ui.button(c, 'multi', x, y + 140, document.fullscreenElement ? bw : bw / 2 - 6, 44, 'Multiplayer', () => K.go('mpmenu'), { kind: 'green', size: 20 });   /* 1.2.0: JGK-NET */
+    if (!document.fullscreenElement) K.ui.button(c, 'fs', K.scenes.mpmenu ? x + bw / 2 + 6 : x, y + 140, K.scenes.mpmenu ? bw / 2 - 6 : bw, 44, 'Tela cheia', () => K.fullscreen(), { kind: 'ghost', size: 20 });
     K.text(c, 'v' + K.version, VW - VIEW.safeR - 14, VH - VIEW.safeB - 12, { size: 16, align: 'right', color: PAL.ink, font: 'hand', sw: 0 });
     K.text(c, VIEW.touch ? 'Lado direito: toque atira · segure puxa · arraste mira' : 'WASD anda · mouse mira · segure o clique para puxar, solte para atirar', cx, VH - VIEW.safeB - 12, { size: 17, align: 'center', color: PAL.ink2, font: 'hand', sw: 0 });
   }
@@ -1533,6 +1614,723 @@ K.defScene('gallery', {
     }
   }
 });
+
+/*==ENGINE:net-core==  JGK-NET · camada 1 (genérica, serve a qualquer jogo): conexão P2P.
+ * - Signaling: cliente MÍNIMO do protocolo do PeerJS (sem embutir a biblioteca). Produção: 0.peerjs.com (grátis, sem garantia). Testes: tools/sinal.js (mesmo protocolo).
+ *   Trocar o servidor: K.net.cfg.server, ou na URL ?sinal=ws://127.0.0.1:9000
+ * - Link = RTCPeerConnection com DOIS canais negociados: 'rel' (confiável, em ordem: sala, eventos, ping) e 'fast' (sem reenvio: comandos e retratos).
+ * - STUN do Google; SEM TURN: se o ICE não fecha em cfg.iceTimeout, o link falha com motivo 'rede' (o jogo avisa o jogador).
+ * - Simulador: K.net.sim = {lat (ms), jit (ms), loss (0..1, só no 'fast')} aplicado no ENVIO (testes de latência/perda).
+ * - Relógio em Worker: com a aba escondida o requestAnimationFrame para; durante uma sessão online o motor continua simulando (sem desenhar) — senão o anfitrião congelaria a partida de todos.
+ * Nada aqui sabe de jogo. Ver docs/NET_API.md. */
+const NET = K.net = K.net || {};
+NET.cfg = {
+  server: { host: '0.peerjs.com', port: 443, path: '/', secure: true, key: 'peerjs' },
+  ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+  iceTimeout: 12000, joinTimeout: 15000, heartbeat: 5000
+};
+try { const q = new URLSearchParams(location.search), s = q.get('sinal'); if (s) { const u = new URL(s); NET.cfg.server = { host: u.hostname, port: +u.port || (u.protocol === 'wss:' ? 443 : 80), path: '/', secure: u.protocol === 'wss:', key: 'peerjs' }; } } catch (e) {}
+NET.sim = { lat: 0, jit: 0, loss: 0 };
+NET.active = false;   /* true enquanto há sala/partida online (K.canReload olha isto: nunca recarregar com sala aberta) */
+NET.stats = { sent: 0, recv: 0, bytesOut: 0, bytesIn: 0, dropped: 0 };
+NET.log = (...a) => { if (K.debug.netlog) console.log('[net]', ...a); };
+/* eventos simples: K.net.on('room', fn) · K.net.emit('room', dados) · K.net.off('room', fn) */
+const _nl = {};
+NET.on = (ev, fn) => { (_nl[ev] || (_nl[ev] = [])).push(fn); return fn; };
+NET.off = (ev, fn) => { if (_nl[ev]) _nl[ev] = _nl[ev].filter(f => f !== fn); };
+NET.emit = (ev, ...a) => { for (const f of (_nl[ev] || []).slice()) { try { f(...a); } catch (e) { console.error(e); } } };
+NET.rid = n => { let s = ''; const A = 'abcdefghijkmnpqrstuvwxyz23456789'; for (let i = 0; i < (n || 10); i++) s += A[(Math.random() * A.length) | 0]; return s; };
+
+/* ---------------------------------------------------------------- signaling (protocolo PeerJS) */
+/* NET.signal(id) → Promise<S> com S.send(type, dst, payload), S.on(fn({type, src, payload})), S.close(). Rejeita com {why:'id'|'sinal'} */
+NET.signal = id => new Promise((res, rej) => {
+  const c = NET.cfg.server, url = (c.secure ? 'wss' : 'ws') + '://' + c.host + ':' + c.port + c.path + 'peerjs?key=' + c.key + '&id=' + encodeURIComponent(id) + '&token=' + NET.rid(12) + '&version=1.5.4';
+  let ws, done = false, hb = 0; const subs = [];
+  const S = { id, open: false, send(type, dst, payload) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type, dst, payload })); }, on(fn) { subs.push(fn); }, close() { clearInterval(hb); S.open = false; try { ws.close(); } catch (e) {} } };
+  try { ws = new WebSocket(url); } catch (e) { rej({ why: 'sinal', msg: String(e) }); return; }
+  const to = setTimeout(() => { if (!done) { done = true; try { ws.close(); } catch (e) {} rej({ why: 'sinal', msg: 'sem resposta do servidor de sala' }); } }, 10000);
+  ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === 'OPEN') { if (!done) { done = true; clearTimeout(to); S.open = true; hb = setInterval(() => { if (ws.readyState === 1) ws.send('{"type":"HEARTBEAT"}'); }, NET.cfg.heartbeat); res(S); } return; }
+    if (m.type === 'ID-TAKEN') { if (!done) { done = true; clearTimeout(to); rej({ why: 'id' }); } return; }
+    if (m.type === 'ERROR' && !done) { done = true; clearTimeout(to); rej({ why: 'sinal', msg: m.payload && m.payload.msg }); return; }
+    for (const f of subs) f(m); };
+  ws.onerror = () => { if (!done) { done = true; clearTimeout(to); rej({ why: 'sinal', msg: 'não conectou ao servidor de sala' }); } };
+  ws.onclose = () => { clearInterval(hb); S.open = false; for (const f of subs) f({ type: 'CLOSED' }); };
+});
+
+/* ---------------------------------------------------------------- link P2P (2 canais) */
+/* NET.link(S, peerId, initiator) → L. L.send(obj, rel) · L.onmsg = (obj, rel) => {} · L.onopen · L.onclose(why) · L.close() · L.rtt (ms) */
+NET.link = (S, peer, initiator) => {
+  const pc = new RTCPeerConnection({ iceServers: NET.cfg.ice }), cid = initiator ? 'c' + NET.rid(8) : null;
+  const L = { peer, pc, cid, open: false, closed: false, rtt: 0, onmsg: null, onopen: null, onclose: null, pend: [] };
+  const rel = pc.createDataChannel('rel', { negotiated: true, id: 0, ordered: true }), fast = pc.createDataChannel('fast', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
+  L.ch = { rel, fast }; let nOpen = 0;
+  const opened = () => { if (++nOpen === 2 && !L.open) { L.open = true; clearTimeout(L.to); NET.log('link aberto', peer); if (L.onopen) L.onopen(); } };
+  for (const ch of [rel, fast]) { ch.onopen = opened; ch.onclose = () => L.close('fechou'); ch.onmessage = ev => { NET.stats.recv++; NET.stats.bytesIn += ev.data.length || 0; let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === 'ping') { L.send({ t: 'pong', k: m.k }, true); return; } if (m.t === 'pong') { L.rtt = L.rtt ? L.rtt * .7 + (performance.now() - m.k) * .3 : performance.now() - m.k; return; } if (L.onmsg) L.onmsg(m, ch === rel); }; }
+  pc.onicecandidate = ev => { if (ev.candidate) S.send('CANDIDATE', peer, { candidate: ev.candidate.toJSON ? ev.candidate.toJSON() : ev.candidate, connectionId: L.cid }); };
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') L.close('rede'); else if (pc.connectionState === 'disconnected') { L.dT = setTimeout(() => { if (pc.connectionState !== 'connected') L.close('caiu'); }, 4000); } else if (pc.connectionState === 'connected') clearTimeout(L.dT); };
+  L.to = setTimeout(() => { if (!L.open) L.close('rede'); }, NET.cfg.iceTimeout);
+  L.sendNow = (obj, r) => { const ch = r ? rel : fast; if (ch.readyState !== 'open') return; const s = JSON.stringify(obj); try { ch.send(s); NET.stats.sent++; NET.stats.bytesOut += s.length; } catch (e) {} };
+  L.send = (obj, r) => { const sm = NET.sim; if (!r && sm.loss && Math.random() < sm.loss) { NET.stats.dropped++; return; }
+    if (sm.lat || sm.jit) { const s = JSON.stringify(obj), d = Math.max(0, sm.lat + (Math.random() * 2 - 1) * sm.jit); /* 'rel' em ordem mesmo com jitter */ if (r) { L.relT = Math.max(L.relT || 0, performance.now() + d); setTimeout(() => L.sendNow(JSON.parse(s), true), L.relT - performance.now()); } else setTimeout(() => L.sendNow(JSON.parse(s), false), d); return; }
+    L.sendNow(obj, r); };
+  L.ping = () => L.send({ t: 'ping', k: performance.now() }, true);   /* pelo envio normal: o simulador de atraso também vale para o ping */
+  L.close = why => { if (L.closed) return; L.closed = true; L.open = false; clearTimeout(L.to); clearTimeout(L.dT); try { rel.close(); fast.close(); pc.close(); } catch (e) {} NET.log('link fechado', peer, why); if (L.onclose) L.onclose(why || 'fechou'); };
+  /* troca de SDP/ICE pelo signaling */
+  L.signal = async m => {
+    try {
+      if (m.type === 'OFFER') { L.cid = m.payload.connectionId; await pc.setRemoteDescription(m.payload.sdp); const a = await pc.createAnswer(); await pc.setLocalDescription(a); S.send('ANSWER', peer, { sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, connectionId: L.cid }); for (const c of L.pend) await pc.addIceCandidate(c).catch(() => {}); L.pend = []; }
+      else if (m.type === 'ANSWER') { await pc.setRemoteDescription(m.payload.sdp); for (const c of L.pend) await pc.addIceCandidate(c).catch(() => {}); L.pend = []; }
+      else if (m.type === 'CANDIDATE') { const c = m.payload.candidate; if (pc.remoteDescription) await pc.addIceCandidate(c).catch(() => {}); else L.pend.push(c); }
+      else if (m.type === 'LEAVE') L.close('saiu');
+    } catch (e) { NET.log('erro de signaling', e); L.close('rede'); }
+  };
+  if (initiator) (async () => { try { const o = await pc.createOffer(); await pc.setLocalDescription(o); S.send('OFFER', peer, { sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, connectionId: cid, type: 'data' }); } catch (e) { L.close('rede'); } })();
+  return L;
+};
+NET.supported = () => typeof RTCPeerConnection === 'function' && typeof WebSocket === 'function';
+
+/* ---------------------------------------------------------------- relógio de fundo (aba escondida durante sessão online) */
+NET.bgClock = (() => {
+  let w = null, iv = 0, last = 0;
+  const tickBg = () => { const now = performance.now(), el = Math.min(.25, (now - last) / 1000); last = now; NET.bgTicks = (NET.bgTicks || 0) + 1; if (document.hidden && NET.active && K.pump && now - (K.rafT || 0) > 120) K.pump(el); };   /* só avança se o requestAnimationFrame parou de verdade (nunca em dobro) */
+  const start = () => { if (w || iv) return; last = performance.now();
+    try { const src = 'let i=setInterval(()=>postMessage(0),33);onmessage=()=>{clearInterval(i);close()}'; w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' }))); w.onmessage = tickBg; }
+    catch (e) { w = null; iv = setInterval(tickBg, 33); } };
+  const stop = () => { if (w) { try { w.postMessage(0); w.terminate(); } catch (e) {} w = null; } if (iv) { clearInterval(iv); iv = 0; } };
+  document.addEventListener('visibilitychange', () => { if (document.hidden && NET.active) start(); else stop(); });
+  return { start, stop, running: () => !!(w || iv) };
+})();
+
+/*==ENGINE:net-room==  JGK-NET · camada 2 (genérica, serve a qualquer jogo): modos, times e sala.
+ * Não sabe nada de FPS: só jogadores, vagas, times e prontos. A ponte de cada jogo (ex.: 11-mp-fps.js) decide o que é uma "partida".
+ * MODOS: K.net.MODES[id] = {nome, teams (nº de times), per (jogadores por time), on (aparece no menu nesta versão)}.
+ *   'ffa4' = 4 times de 1 (cada um por si). O 1x1 é só "2 times de 1": o 2x2 usa EXATAMENTE o mesmo caminho de código.
+ * TIMES: K.net.TEAMS[i] = {nome, cor} (cor do placar, do minimapa e da roupa do palito). */
+K.net = K.net || {};
+K.net.MAX_PLAYERS = 8;
+K.net.MODES = {
+  '1x1': { nome: '1 contra 1', teams: 2, per: 1, on: true },
+  '2x2': { nome: '2 contra 2', teams: 2, per: 2, on: false },
+  '3x3': { nome: '3 contra 3', teams: 2, per: 3, on: false },
+  '4x4': { nome: '4 contra 4', teams: 2, per: 4, on: false, bigMap: true },
+  'ffa4': { nome: 'Cada um por si (4)', teams: 4, per: 1, on: false }
+};
+K.net.TEAMS = [{ nome: 'Azul', cor: '#2D6CDF' }, { nome: 'Vermelho', cor: '#E5383B' }, { nome: 'Verde', cor: '#2FB36A' }, { nome: 'Amarelo', cor: '#FFD93D' }];
+K.net.modeMax = m => { const M = K.net.MODES[m]; return M ? Math.min(K.net.MAX_PLAYERS, M.teams * M.per) : 2; };
+/* distribui vagas e times: jogador i vai para o time com menos gente (empate: o de menor índice). Devolve a lista nova (não muda a entrada). */
+K.net.assignTeams = (players, mode) => {
+  const M = K.net.MODES[mode] || K.net.MODES['1x1'], cnt = new Array(M.teams).fill(0), out = [];
+  for (const p of players) { const q = Object.assign({}, p); if (q.team === undefined || q.team >= M.teams || cnt[q.team] >= M.per) { let t = 0; for (let i = 1; i < M.teams; i++) if (cnt[i] < cnt[t]) t = i; q.team = t; } cnt[q.team]++; out.push(q); }
+  out.forEach((q, i) => { q.slot = i; }); return out;
+};
+
+/* ---------------------------------------------------------------- SALA (anfitrião autoritativo, estrela)
+ * K.net.app = {id:'pedrada', v:K.version, proto:1}: o id da sala no signaling é app.id + versão (maior+menor) + '-' + CÓDIGO (ex.: 'pedrada12-K7QX'),
+ *   então versões diferentes nem se encontram; o 'hello' confere de novo (versão e protocolo).
+ * Anfitrião: await K.net.host({name, mode, level, goal}) → sala com código. Convidado: await K.net.join('K7QX', nome).
+ * Eventos (K.net.on): 'room' (sala mudou) · 'join'(p) · 'left'(id, motivo) · 'start'(msg) · 'msg'(m, deId, rel) · 'hostLeft'(motivo) · 'error'(e)
+ * Envio: K.net.send(paraId, obj, rel) · K.net.broadcast(obj, rel) (anfitrião) · K.net.toHost(obj, rel) (convidado). Jogadores: id 0 = anfitrião. */
+NET.app = { id: K.id || 'jgk', v: K.version, proto: 1 };
+NET.CODE_A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   /* sem 0/O/1/I/L */
+NET.newCode = () => { let s = ''; for (let i = 0; i < 4; i++) s += NET.CODE_A[(Math.random() * NET.CODE_A.length) | 0]; return s; };
+NET.cleanCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1').split('').filter(ch => NET.CODE_A.includes(ch)).join('').slice(0, 4);
+NET.peerId = code => NET.app.id + String(NET.app.v).split('.').slice(0, 2).join('') + '-' + code;
+NET.room = null; NET.role = null; NET.me = -1;
+const NR = { S: null, links: {}, host: null, nextId: 1, pingT: 0 };
+const roomPub = () => JSON.parse(JSON.stringify(NET.room));
+NET.broadcast = (obj, rel, except) => { for (const k in NR.links) { const L = NR.links[k]; if (L.open && L.pid !== undefined && L.pid !== except) L.send(obj, rel); } };
+NET.send = (id, obj, rel) => { if (NET.role === 'guest') { if (NR.host && NR.host.open) NR.host.send(obj, rel); return; } for (const k in NR.links) { const L = NR.links[k]; if (L.pid === id && L.open) { L.send(obj, rel); return; } } };
+NET.toHost = (obj, rel) => { if (NR.host && NR.host.open) NR.host.send(obj, rel); };
+NET.rtt = id => { if (NET.role === 'guest') return NR.host ? NR.host.rtt : 0; for (const k in NR.links) if (NR.links[k].pid === id) return NR.links[k].rtt; return 0; };
+const roomChanged = () => { if (NET.role !== 'host') return; NET.room.players = K.net.assignTeams(NET.room.players, NET.room.mode); NET.broadcast({ t: 'room', room: roomPub() }, true); NET.emit('room', NET.room); };
+NET.host = async o => {
+  NET.leave(true); o = o || {}; let S = null, code = null;
+  for (let i = 0; i < 6 && !S; i++) { code = NET.newCode(); try { S = await NET.signal(NET.peerId(code)); } catch (e) { if (e.why !== 'id') throw e; } }
+  if (!S) throw { why: 'sinal', msg: 'não achei código livre' };
+  NR.S = S; NR.links = {}; NR.nextId = 1; NET.role = 'host'; NET.me = 0; NET.active = true;
+  NET.room = { code, mode: o.mode || '1x1', max: NET.modeMax(o.mode || '1x1'), level: o.level || 'sorteio', goal: o.goal || 10, st: 'lobby', players: [{ id: 0, name: o.name || 'Anfitrião', ready: true, host: true }] };
+  NET.room.players = NET.assignTeams(NET.room.players, NET.room.mode);
+  S.on(m => {
+    if (m.type === 'CLOSED') { NET.emit('error', { why: 'sinal', msg: 'conexão com o servidor de sala caiu' }); return; }
+    if (!m.src) return; let L = NR.links[m.src];
+    if (!L && m.type === 'OFFER') { L = NR.links[m.src] = NET.link(S, m.src, false); L.onmsg = (msg, rel) => hostMsg(L, msg, rel); L.onclose = why => { delete NR.links[m.src]; if (L.pid !== undefined) { NET.room.players = NET.room.players.filter(p => p.id !== L.pid); roomChanged(); NET.emit('left', L.pid, why); } }; }
+    if (L) L.signal(m);
+  });
+  NET.emit('room', NET.room); return NET.room;
+};
+function hostMsg(L, m, rel) {
+  if (m.t === 'hello') {
+    const R = NET.room, deny = why => { L.sendNow({ t: 'deny', why }, true); setTimeout(() => L.close('recusado'), 300); };
+    if (m.app !== NET.app.id || m.v !== NET.app.v || m.proto !== NET.app.proto) return deny('versao');
+    if (R.st !== 'lobby') return deny('em_jogo'); if (R.players.length >= R.max) return deny('cheia');
+    L.pid = NR.nextId++; const p = { id: L.pid, name: String(m.name || 'Convidado').slice(0, 16), ready: false }; R.players.push(p);
+    R.players = NET.assignTeams(R.players, R.mode); L.send({ t: 'welcome', you: L.pid, room: roomPub() }, true); roomChanged(); NET.emit('join', p); return;
+  }
+  if (L.pid === undefined) return;
+  if (m.t === 'ready') { const p = NET.room.players.find(q => q.id === L.pid); if (p) { p.ready = !!m.on; roomChanged(); } return; }
+  if (m.t === 'bye') { L.close('saiu'); return; }
+  NET.emit('msg', m, L.pid, rel);
+}
+NET.join = (code, name) => new Promise(async (res, rej) => {
+  NET.leave(true); code = NET.cleanCode(code); if (code.length !== 4) { rej({ why: 'codigo' }); return; }
+  let S; try { S = await NET.signal('g' + NET.rid(12)); } catch (e) { rej(e); return; }
+  const peer = NET.peerId(code), L = NET.link(S, peer, true); NR.S = S; NR.host = L; NET.role = 'guest'; NET.active = true; let done = false;
+  const fail = e => { if (done) return; done = true; clearTimeout(to); NET.leave(true); rej(e); };
+  const to = setTimeout(() => fail({ why: L.open ? 'sem_resposta' : 'rede' }), NET.cfg.joinTimeout);
+  S.on(m => { if (m.type === 'EXPIRE' && m.src === peer && !L.open) fail({ why: 'sala' }); else if (m.src === peer) L.signal(m); });
+  L.onopen = () => L.send({ t: 'hello', app: NET.app.id, v: NET.app.v, proto: NET.app.proto, name: name || 'Convidado' }, true);
+  L.onclose = why => { if (!done) fail({ why: why === 'rede' ? 'rede' : 'sala' }); else { NET.emit('hostLeft', why); } };
+  L.onmsg = (m, rel) => {
+    if (m.t === 'welcome') { done = true; clearTimeout(to); NET.me = m.you; NET.room = m.room; try { S.close(); } catch (e) {} NET.emit('room', NET.room); res(NET.room); return; }
+    if (m.t === 'deny') { fail({ why: m.why }); return; }
+    if (m.t === 'room') { NET.room = m.room; NET.emit('room', NET.room); return; }
+    if (m.t === 'start') { NET.room = m.room || NET.room; NET.emit('start', m); return; }
+    if (m.t === 'lobby') { NET.room = m.room || NET.room; NET.emit('lobby', m); NET.emit('room', NET.room); return; }
+    NET.emit('msg', m, 0, rel);
+  };
+});
+NET.setReady = on => { if (NET.role === 'guest') NET.toHost({ t: 'ready', on: !!on }, true); else if (NET.room) { NET.room.players[0].ready = true; roomChanged(); } };
+NET.setRoom = patch => { if (NET.role !== 'host' || !NET.room) return; Object.assign(NET.room, patch); if (patch.mode) NET.room.max = NET.modeMax(patch.mode); roomChanged(); };
+NET.allReady = () => !!NET.room && NET.room.players.length >= 2 && NET.room.players.every(p => p.ready);
+NET.startGame = extra => { if (NET.role !== 'host') return; NET.room.st = 'game'; const m = Object.assign({ t: 'start', room: roomPub() }, extra || {}); NET.broadcast(m, true); NET.emit('start', m); };
+NET.backToLobby = () => { if (NET.role !== 'host' || !NET.room) return; NET.room.st = 'lobby'; for (const p of NET.room.players) p.ready = !!p.host; NET.broadcast({ t: 'lobby', room: roomPub() }, true); roomChanged(); };
+/* sair: avisa, fecha links e o signaling. quiet = sem eventos (usado ao entrar/criar de novo) */
+NET.leave = quiet => {
+  if (NET.role === 'guest' && NR.host) { NR.host.sendNow({ t: 'bye' }, true); }
+  if (NET.role === 'host') NET.broadcast({ t: 'bye' }, true);
+  const ls = Object.values(NR.links).concat(NR.host ? [NR.host] : []); NR.links = {}; NR.host = null; for (const L of ls) { L.onclose = null; setTimeout(() => L.close('saiu'), 150); }
+  if (NR.S) { NR.S.close(); NR.S = null; } const had = NET.role; NET.room = null; NET.role = null; NET.me = -1; NET.active = false; if (K.net.bgClock) K.net.bgClock.stop(); if (had && !quiet) NET.emit('closed');
+};
+/* ping de todos os links 1×/s (rtt em L.rtt) — chamado pelo laço do jogo via K.net.tick */
+NET.tick = dt => { if (!NET.active) return; NR.pingT -= dt; if (NR.pingT > 0) return; NR.pingT = 1; for (const k in NR.links) if (NR.links[k].open) NR.links[k].ping(); if (NR.host && NR.host.open) NR.host.ping(); };
+window.addEventListener('pagehide', () => { if (NET.active) NET.leave(true); });
+
+/*==ENGINE:net-sync==  JGK-NET · camada 3 (genérica, serve a qualquer jogo): sincronia com ANFITRIÃO AUTORITATIVO.
+ * O jogo entrega um ADAPTADOR (K.net.sync.start(A)) e chama K.net.sync.step(dt) uma vez por passo de simulação, ANTES de mover os jogadores:
+ *   A.readCmd()            → comando local (array curto de números: o que o jogador quer neste instante; ex. FPS: [mvx, mvy, mira, pitch, botões])
+ *   A.applyCmd(id, cmd, first)  anfitrião: aplica o comando do jogador `id` (first = 1º passo desse comando; bordas como "acabou de apertar" só nele)
+ *   A.predictCmd(cmd, first)    convidado: aplica o comando no próprio jogador (previsão: o controle responde na hora)
+ *   A.snapshot(id)         anfitrião: retrato do estado para o jogador `id` (o motor acrescenta tick e ack)
+ *   A.applySnap(s, pend)   convidado: aplica o retrato; `pend` = comandos ainda não confirmados (reaplicar = reconciliação)
+ *   A.onEvent(e)           convidado: evento confiável do anfitrião (abate, item, fim...)
+ *   A.onLeft(id, why) · A.onHostLeft(why)
+ * Comandos: amostrados a cada `cmdEvery` passos (60 Hz), enviados a cada `sendEvery` passos (30 Hz) com os `redund` últimos (perda de pacote não perde comando).
+ *   O anfitrião aplica um comando por `cmdEvery` passos, em ORDEM de seq; com fila acima de `catchQ` aplica um por passo (recupera sem DESCARTAR: jogar comando fora perde o "soltou o elástico"); sem comando novo, repete o último.
+ * Retratos: `rate` por segundo (20 Hz) no canal rápido, com `ack` = último seq aplicado daquele jogador.
+ * Interpolação: K.net.sync.push(id, t, estado) e K.net.sync.sample(id, mix) — estado dos OUTROS desenhado `delay` ms no passado, no relógio do anfitrião. */
+const SY = NET.sync = { cmdEvery: 2, sendEvery: 4, redund: 4, rate: 20, delay: 0.1, catchQ: 3, maxQ: 40, A: null, on: false };
+SY.start = A => {
+  SY.A = A; SY.on = true; SY.k = 0; SY.seq = 0; SY.hist = []; SY.q = {}; SY.last = {}; SY.ack = {}; SY.lastK = -1; SY.snapT = 0; SY.off = null; SY.buf = {}; SY.first = false;
+  if (!SY._wired) { SY._wired = true;
+    NET.on('msg', (m, from, rel) => { if (!SY.on) return;
+      if (m.t === 'in' && NET.role === 'host') { const Q = SY.q[from] || (SY.q[from] = []), a = SY.ack[from] || 0, top = Q.length ? Q[Q.length - 1][0] : a; for (const c of m.s) if (c[0] > top) Q.push(c); while (Q.length > SY.maxQ) Q.shift(); }
+      else if (m.t === 's' && NET.role === 'guest') { if (m.k <= SY.lastK) return; SY.lastK = m.k; const ht = m.k * DT, o = ht - performance.now() / 1000; SY.off = SY.off === null || o > SY.off ? o : SY.off + (o - SY.off) * .02;
+        SY.hist = SY.hist.filter(h => h[0] > (m.ack || 0)); SY.A.applySnap(m, SY.hist); }
+      else if (m.t === 'ev' && NET.role === 'guest') { for (const e of m.e) SY.A.onEvent(e); } });
+    NET.on('left', (id, why) => { if (SY.on && SY.A.onLeft) SY.A.onLeft(id, why); });
+    NET.on('hostLeft', why => { if (SY.on && SY.A.onHostLeft) SY.A.onHostLeft(why); });
+  }
+};
+SY.stop = () => { SY.on = false; SY.A = null; };
+SY.step = dt => {
+  if (!SY.on || !NET.active) return; NET.tick(dt); const A = SY.A; SY.k++;   /* ping 1×/s incluso: o jogo não precisa lembrar */ const edge = SY.k % SY.cmdEvery === 0;
+  if (NET.role === 'host') {
+    for (const p of NET.room ? NET.room.players : []) { if (p.id === NET.me) continue; const Q = SY.q[p.id] || [];
+      if (edge || Q.length > SY.catchQ) { const c = Q.shift() || null; if (c) { SY.last[p.id] = c; SY.ack[p.id] = c[0]; A.applyCmd(p.id, c.slice(1), true); } else if (SY.last[p.id]) A.applyCmd(p.id, SY.last[p.id].slice(1), false); }
+      else if (SY.last[p.id]) A.applyCmd(p.id, SY.last[p.id].slice(1), false); }
+    SY.snapT -= dt; if (SY.snapT <= 0) { SY.snapT += 1 / SY.rate; for (const p of NET.room ? NET.room.players : []) { if (p.id === NET.me) continue; const s = A.snapshot(p.id); s.t = 's'; s.k = SY.k; s.ack = SY.ack[p.id] || 0; NET.send(p.id, s, false); } }
+  } else if (NET.role === 'guest') {
+    if (edge) { const c = A.readCmd(); SY.seq++; SY.hist.push([SY.seq].concat(c)); if (SY.hist.length > 120) SY.hist.shift(); A.predictCmd(c, true); SY.cur = c; }
+    else if (SY.cur) A.predictCmd(SY.cur, false);
+    if (SY.k % SY.sendEvery === 0 && SY.hist.length) NET.toHost({ t: 'in', s: SY.hist.slice(-SY.redund) }, false);
+  }
+};
+/* evento confiável do anfitrião para todos (abates, itens, fim) */
+SY.event = e => { if (SY.on && NET.role === 'host') NET.broadcast({ t: 'ev', e: [e] }, true); };
+/* ---- interpolação (convidado): guarda estados com o tempo do anfitrião; sample devolve o estado `delay` atrás */
+SY.hostNow = () => (SY.off === null ? 0 : performance.now() / 1000 + SY.off);
+SY.push = (id, t, st) => { const b = SY.buf[id] || (SY.buf[id] = []); b.push({ t, st }); while (b.length > 30) b.shift(); };
+SY.sample = (id, mix) => { const b = SY.buf[id]; if (!b || !b.length) return null; const rt = SY.hostNow() - SY.delay;
+  if (rt <= b[0].t) return b[0].st; for (let i = b.length - 1; i > 0; i--) if (b[i - 1].t <= rt) { const a = b[i - 1], c = b[i]; if (rt >= c.t) return c.st; const u = (rt - a.t) / ((c.t - a.t) || 1); return mix(a.st, c.st, u); }
+  return b[b.length - 1].st; };
+SY.lerpAng = (a, b, u) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + d * u; };
+
+/*==ENGINE:mp-fps==  JGK-FPS · ponte do multiplayer: mata-mata por TIMES sobre o raycaster (N jogadores; 1.2.0 liga o 1x1).
+ * O que é genérico (conexão, sala, sincronia) vive em 08/09/10-net-*.js e serve a qualquer jogo. Aqui fica só o que é deste gênero:
+ *   K.mp.setup(G, cfg)  monta a partida em cima da fase carregada (tira bots/portal, põe renascimentos e itens que voltam, cria os jogadores)
+ *   G.mp.death/hitPlayers/blast/taken/tick/sprites/finish  ganchos que o 05-game.js chama quando G.mp existe
+ *   K.mp.botInput(p)    robô-jogador (testes e, no futuro, vaga preenchida por bot)
+ *   K.hud.mp(c, S)      HUD da partida (vida, placar, abates, renascimento, nomes) — substituível pelo conteúdo
+ * cfg = { level:'4', mode:'1x1', goal:10, roster:[{id, name, team, slot, local, bot}] }.
+ * DADO DE FASE (opcional): L.mp = { spawns:[[x,y,angGraus]...], picks:[{t:'arma_triplo', x, y}...] }  (sem ele o motor escolhe pelos bots do mapa)
+ *   L.mp === false tira a fase do sorteio. Fases com chefe ficam fora do sorteio (1.2.0). */
+const MP = K.mp = {
+  PVP_DMG: 12,          /* pedra (dmg 1..3 da arma) × 12 = 12..36 de vida; cabeça ×K.HEAD_MULT; ouro ×2 */
+  RESPAWN: 3, INV: 2, GOAL: 10, FEED: 5,
+  BACK: { weapon: 20, power: 30, curativo: 15, ouro: 25, municao: 15 },   /* segundos até o item reaparecer */
+  SPREAD: 6,             /* armas + poderes por mapa quando a fase não traz L.mp.picks */
+  PICKS: ['arma_triplo', 'arma_rajada', 'arma_shotgun', 'arma_bomba', 'poder_forca', 'poder_botas', 'poder_escudo', 'municao'],
+  levels: () => K.levels.filter(L => !L.boss && !L.finale && L.mp !== false),
+  randomLevel: () => { const l = MP.levels(); return l.length ? l[(Math.random() * l.length) | 0].id : '1'; },
+  /* look do palito de cada time: o conteúdo pode registrar 'jogador_t0'...'jogador_t3'; senão o motor deriva do 'palitinho' com a roupa na cor do time */
+  teamLook(t) {
+    const id = 'jogador_t' + t; if (K.looks[id]) return K.looks[id];
+    const base = _D.look.palitinho || Object.values(_D.look)[0], col = (K.net.TEAMS[t] || K.net.TEAMS[0]).cor; if (!base) return null;
+    K.defLook(id, Object.assign({}, base, { shirt: col, accCol: col, sleeve: col })); return K.looks[id];
+  },
+  start(cfg, o) { K.go('play', { level: String(cfg.level), mp: cfg }, o || { kind: 'iris' }); }
+};
+
+/* ---------------------------------------------------------------- montar a partida */
+MP.setup = (G, cfg) => {
+  const L = G.L, M = K.net.MODES[cfg.mode] || K.net.MODES['1x1'], w = G.w;
+  const pts = [[G.pl.x, G.pl.y]].concat(G.bots.map(b => [b.x, b.y]));
+  G.bots.length = 0; G.boss = null; G.total = G.remaining = 0; G.baseIds = []; G.gate.cx = -2; G.gate.open = true; G.timed = false; G.guide = null; G.eproj.length = 0;
+  const free = (x, y) => !blocked(x, y, .35);
+  const lookDir = (x, y) => { let best = 0, bd = -1; for (let k = 0; k < 8; k++) { const a = k * TAU / 8; let d = 0; while (d < 14 && K.los(x, y, x + Math.cos(a) * (d + .5), y + Math.sin(a) * (d + .5))) d += .5; if (d > bd) { bd = d; best = a; } } return best; };
+  let spawns = L.mp && L.mp.spawns ? L.mp.spawns.map(([x, y, a]) => ({ x, y, a: a === undefined ? lookDir(x, y) : a * Math.PI / 180 })) : [];
+  if (!spawns.length) { for (const [x, y] of pts) if (free(x, y) && spawns.every(s => Math.hypot(s.x - x, s.y - y) > 2.5)) spawns.push({ x, y, a: lookDir(x, y) }); }
+  if (spawns.length < 2) spawns.push({ x: G.pl.x, y: G.pl.y, a: G.pl.a });
+  /* itens: os do mapa (curativo, ouro) continuam; armas/poderes do L.mp.picks ou espalhados pelos pontos dos bots (os mais afastados entre si e dos renascimentos) */
+  let add = L.mp && L.mp.picks ? L.mp.picks.map(o => ({ id: o.t, x: o.x, y: o.y })) : [];
+  if (!add.length) {   /* automático: completa até MP.SPREAD armas/poderes (contando os do mapa), nas células de chão alcançáveis mais longe dos renascimentos e entre si */
+    const onMap = new Set(G.picks.map(p => p.id)), has = G.picks.filter(p => { const d = K.pickupDefs[p.id] || {}; return d.weapon || d.power; }).length;
+    const ids = MP.PICKS.filter(id => K.pickupDefs[id] && !onMap.has(id)), want = Math.max(0, Math.min(ids.length, MP.SPREAD - has)), cand = [], chosen = [];
+    for (let y = 0; y < G.h; y++) for (let x = 0; x < G.w; x++) { const cx = x + .5, cy = y + .5; if (free(cx, cy) && G.flow[y * w + x] >= 0) cand.push({ x: cx, y: cy }); }
+    const far = c => Math.min(99, ...spawns.map(s => Math.hypot(s.x - c.x, s.y - c.y)), ...G.picks.map(q => Math.hypot(q.x - c.x, q.y - c.y)), ...chosen.map(q => Math.hypot(q.x - c.x, q.y - c.y)));
+    while (chosen.length < want && cand.length) { let bi = 0, bv = -1; for (let i = 0; i < cand.length; i++) { const v = far(cand[i]); if (v > bv) { bv = v; bi = i; } } if (bv < 1.5) break; chosen.push(cand.splice(bi, 1)[0]); }
+    add = chosen.map((c, i) => ({ id: ids[i], x: c.x, y: c.y }));
+  }
+  for (const a of add) if (K.pickupDefs[a.id]) G.picks.push({ id: a.id, x: a.x, y: a.y, t: Math.random() * 6, taken: false });
+  /* jogadores */
+  const roster = K.net.assignTeams(cfg.roster && cfg.roster.length ? cfg.roster : [{ id: 0, name: 'Você', local: true }], cfg.mode);
+  G.players = []; let local = null;
+  for (const r of roster) { const p = K.addPlayer({ id: r.id, slot: r.slot, team: r.team, name: r.name || ('Palito ' + (r.slot + 1)), local: !!r.local, bot: !!r.bot, assist: 0, alive: false, look: r.look || null });
+    p.lk = (p.look && K.looks[p.look]) || MP.teamLook(p.team); p.inp = Object.assign({}, K.noInput, { aa: 0, ap: 0 }); if (p.local) local = p; }
+  G.pl = local || G.players[0]; G.pl.flow = G.flow; G.flowKey = -1;
+  const st = G.mp = Object.assign(Object.create(MPG), { cfg, mode: cfg.mode, M, goal: cfg.goal || MP.GOAL, score: new Array(M.teams).fill(0), st: 'luta', winner: -1, feed: [], spawns, t: 0, nid: 0,
+    net: !!cfg.net, host: !!cfg.net && K.net.role === 'host', guest: !!cfg.net && K.net.role === 'guest' });
+  for (const p of G.players) { st.respawn(p, true); p.inv = MP.INV; }   /* a proteção só começa a contar depois da contagem inicial */
+  if (st.guest) for (const p of G.players) if (!p.local) p.puppet = true;   /* convidado: os outros vêm interpolados dos retratos */
+  if (st.net) { st.aimA = G.pl.a; st.aimP = 0; st.pend = { sel: 0, dir: 0 }; st.mySeen = {}; K.net.sync.start(MP.netAdapter); }
+  G.intro = 3; G.showMap = true;
+  return st;
+};
+
+/* ---------------------------------------------------------------- regras (protótipo de G.mp) */
+const MPG = {
+  emit(...e) { if (this.host) K.net.sync.event(e); if (this.onEvent) this.onEvent(e); },   /* anfitrião: replica para os convidados (canal confiável); onEvent = gancho de teste */
+  /* morte: crédito ao atirador de outro time, placar, fim da partida */
+  death(pl, src) {
+    if (!pl.alive) return; pl.alive = false; pl.hp = 0; pl.deaths++; pl.respawnT = MP.RESPAWN; pl.deadT = 0; pl.pulling = false; pl.charge = 0; pl.inv = 0;
+    for (const id in pl.pw) { const d = K.powerDefs[id]; if (d && d.end) d.end(pl, G); } pl.pw = {}; pl.mod = { spd: 1, charge: 1, dmg: 1 }; pl.shield = 0; pl.maxhp = 100; pl.gold = 0; pl.arms = ['estilingue']; pl.ammo = {}; pl.w = 'estilingue';
+    const k = src && G.players.includes(src) && src !== pl && src.team !== pl.team ? src : null;
+    if (k) { k.kills++; this.score[k.team]++; }
+    this.feed.push({ t: this.t, k: k ? k.name : null, kt: k ? k.team : -1, v: pl.name, vt: pl.team, head: !!pl.lastHead });
+    K.fx.burst(pl.x, pl.y, .5, 16, [255, 255, 255]); sfxNear('botdie', pl.x, pl.y);
+    if (pl.local) { G.shake = 1; G.flash = .4; K.sfx('over'); K.buzz(120); }
+    if (k && k.local) { G.hitK = 3; G.hitM = 1; this.toast = { txt: 'DERRUBOU ' + pl.name + '!', t: 1.8 }; }
+    this.emit('kill', k ? k.id : -1, pl.id, pl.lastHead ? 1 : 0);
+    if (k && this.score[k.team] >= this.goal) this.end(k.team);
+  },
+  end(team) {
+    if (this.st === 'fim') return; this.st = 'fim'; this.winner = team; G.st = 'end'; G.endT = 0;
+    K.sfx(G.pl.team === team ? 'win' : 'over'); this.emit('end', team);
+  },
+  /* renascimento: o ponto mais longe dos inimigos pelo CAMINHO (campo de fluxo de cada inimigo), evitando ficar na mira de alguém */
+  pickSpawn(p) {
+    const en = G.players.filter(q => q !== p && q.alive && q.team !== p.team);
+    if (!en.length) return this.spawns[(Math.random() * this.spawns.length) | 0];
+    for (const q of en) flowBuild(q);
+    const sc = this.spawns.map(s => { let d = 1e9; for (const q of en) { const v = q.flow[(s.y | 0) * G.w + (s.x | 0)]; let dd = v < 0 ? 40 : v; if (K.los(s.x, s.y, q.x, q.y) && Math.hypot(s.x - q.x, s.y - q.y) < 12) dd *= .5; d = Math.min(d, dd); } return { s, d }; });
+    sc.sort((a, b) => b.d - a.d); const top = sc.filter(o => o.d >= sc[0].d * .8 && o.s !== p.lastSpawn);
+    return (top.length ? top[(Math.random() * top.length) | 0] : sc[0]).s;
+  },
+  respawn(p, first) {
+    const s = this.pickSpawn(p); p.lastSpawn = s; Object.assign(p, { x: s.x, y: s.y, a: s.a, pitch: 0, vx: 0, vy: 0, hp: 100, maxhp: 100, alive: true, inv: MP.INV, cd: .3, deadT: 0, lastHead: 0 });
+    p.spawnN = (p.spawnN || 0) + 1; if (p.inp) { p.inp.aa = s.a; p.inp.ap = 0; }
+    if (!first) { K.fx.burst(p.x, p.y, .6, 14, [255, 255, 255]); if (p.local) { G.flash = .3; K.sfx('portal'); } else sfxNear('portal', p.x, p.y); this.emit('spawn', p.id); }
+  },
+  taken(it, pl) { const d = K.pickupDefs[it.id] || {}, B = MP.BACK; it.backT = d.weapon ? B.weapon : d.power ? B.power : (B[it.id] || 15); this.emit('pick', G.picks.indexOf(it), pl.id); },
+  tick(dt) {
+    if (G.intro <= 0) this.t += dt;
+    for (const p of G.players) {
+      p.hurtT = Math.max(0, (p.hurtT || 0) - dt); if (this.guest) continue;   /* convidado: vida, morte e renascimento chegam nos retratos */
+      if (!p.alive) { p.deadT += dt; p.respawnT -= dt; if (p.respawnT <= 0 && this.st === 'luta') this.respawn(p); }
+      else if (p.inv > 0 && G.intro <= 0) p.inv = Math.max(0, p.inv - dt);
+      if (p.bot && !(this.net && !p.local)) p.inp = MP.botInput(p, p.inp);
+    }
+    if (!this.guest) for (const it of G.picks) if (it.taken && it.backT !== undefined) { it.backT -= dt; if (it.backT <= 0) { it.taken = false; it.backT = undefined; it.t = 0; it.drop = 1; K.fx.burst(it.x, it.y, .4, 12, [255, 255, 255]); sfxNear('pickup', it.x, it.y); this.emit('back', G.picks.indexOf(it)); } }
+    while (this.feed.length && this.t - this.feed[0].t > MP.FEED) this.feed.shift(); if (this.toast && (this.toast.t -= dt) <= 0) this.toast = null;
+  },
+  /* pedra × jogadores de OUTRO time (mesma caixa do boneco desenhado: cabeça = headLo..headHi e perto do centro). true = a pedra some */
+  hitPlayers(s) {
+    for (const q of G.players) {
+      if (!q.alive || q.id === s.owner || q.team === s.team || (s.hits && s.hits.has('p' + q.id))) continue;
+      const dx = q.x - s.x, dy = q.y - s.y, rr = .3; if (dx * dx + dy * dy > rr * rr) continue;
+      const lk = q.lk, hs = lk ? lk.hgt : .85, hg = hs * (lk ? lk.headHi : .8) + .02; if (s.z < -.05 || s.z > hg) continue;
+      const vm = Math.hypot(s.vx, s.vy) || 1, lat = Math.abs(-dx * s.vy + dy * s.vx) / vm, head = s.z > hs * (lk ? lk.headLo : .62) && lat < hs * (lk ? lk.headR : .09) * 1.25 + .02;
+      const by = K.playerById(s.owner), mine = by && by.local;
+      if (this.guest) { K.fx.burst(s.x, s.y, s.z, 6, [255, 255, 255]); return s.pierce <= 0; }   /* convidado: só o efeito; o dano vem do anfitrião */
+      if (q.inv > 0) { K.fx.burst(s.x, s.y, s.z, 6, [140, 200, 255]); if (mine) K.sfx('hit_wall'); return true; }
+      q.lastHead = head ? 1 : 0; q.hurtT = .3; if (by) by.hitsP = (by.hitsP || 0) + 1; this.emit('hit', by ? by.id : -1, q.id, head ? 1 : 0, +(s.x - s.vx * .1).toFixed(2), +(s.y - s.vy * .1).toFixed(2));
+      if (mine) { G.hitM = 1; G.hitK = head ? 2 : 1; K.sfx(head ? 'hit_head' : 'hit'); if (head) { G.headT = 1; const pr = G.cam && K.r3.project(G.cam, q.x, q.y, hg); G.pops.push({ x: clamp(pr ? pr.x : VW / 2, 120, VW - 120), y: clamp(pr ? pr.y - 6 : VH / 2 - 50, 110, VH - 160), t: 0, txt: 'NA CABEÇA!' }); } }
+      else if (!q.local) sfxNear('hit', q.x, q.y);
+      K.fx.burst(s.x, s.y, s.z, head ? 16 : 8, head ? [255, 217, 61] : [255, 255, 255]);
+      hurtPlayer(q, s.dmg * MP.PVP_DMG * (head ? K.HEAD_MULT : 1) * (s.gold ? 2 : 1), s.x - s.vx * .1, s.y - s.vy * .1, by);
+      if (s.pierce > 0) { s.pierce--; (s.hits || (s.hits = new Set())).add('p' + q.id); return false; }
+      return true;
+    }
+    return false;
+  },
+  /* explosão (Bola Explosiva) fere jogadores de outro time no raio; parede protege; nunca fere o dono */
+  /* COMPENSAÇÃO DE ATRASO (anfitrião): a pedra de um convidado nasce atrasada (ele mirou no que via ~ping/2 + interpolação atrás);
+     o anfitrião a adianta por esse tempo (máx. 0,18 s), em passos de física com parede e acerto conferidos em cada passo. */
+  shot(pl, i0) {
+    if (!this.host || pl.local) return; const adv = Math.min(.18, (K.net.rtt(pl.id) || 0) / 2000 + K.net.sync.delay), n = Math.round(adv / DT);
+    for (let i = G.proj.length - 1; i >= i0; i--) { const s = G.proj[i]; for (let k = 0; k < n; k++) { s.vz -= s.g * DT; s.x += s.vx * DT; s.y += s.vy * DT; s.z += s.vz * DT; s.life -= DT;
+      if (solidCell(s.x | 0, s.y | 0) || s.z < 0 || s.z > 1.02) { s.x -= s.vx * DT; s.y -= s.vy * DT; break; } if (this.hitPlayers(s)) { G.proj.splice(i, 1); break; } } }
+  },
+  blast(s) { if (this.guest) return; const ex = s.explode, by = K.playerById(s.owner); for (const q of G.players) { if (!q.alive || q.id === s.owner || q.team === s.team || q.inv > 0) continue; const d = Math.hypot(q.x - s.x, q.y - s.y); if (d < ex.r + .25 && K.los(s.x, s.y, q.x, q.y)) { q.lastHead = 0; hurtPlayer(q, ex.dmg * MP.PVP_DMG * (1 - .45 * d / ex.r) * (s.gold ? 2 : 1), s.x, s.y, by); if (by && by.local) { G.hitM = 1; G.hitK = 1; } } } },
+  /* os outros jogadores como palitos (quadro pelo estado: andando, puxando, soltando, ferido, caindo) */
+  sprites(out) {
+    for (const q of G.players) {
+      if (q === G.pl || !q.lk) continue; if (!q.alive && q.deadT > 2.6) continue;
+      const L = q.lk, fr = L.frames, sp = Math.hypot(q.vx, q.vy); let f;
+      if (!q.alive) f = fr.die[Math.min(fr.die.length - 1, (q.deadT * L.fps.die) | 0)]; else if (q.hurtT > 0) f = fr.hurt[0]; else if (q.pulling) f = fr.attack[0]; else if (q.recoil > .4) f = fr.attack[Math.min(fr.attack.length - 1, 1)];
+      else if (sp > .3) f = fr.walk[((q.bob * .9) | 0) % fr.walk.length]; else f = fr.idle[0];
+      out.push({ x: q.x, y: q.y, f, hgt: L.hgt, z: -L.hgt * 12 / L.def.cell[1], flash: q.inv > 0 && Math.sin(K.time * 24) > 0 ? .45 : (q.hurtT > 0 ? .6 : 0), alpha: q.alive ? 1 : clamp((2.6 - q.deadT) * 2, 0, 1) });
+    }
+  },
+  result() {
+    const rows = G.players.map(p => ({ id: p.id, name: p.name, team: p.team, kills: p.kills, deaths: p.deaths, local: p.local, heads: p.heads })).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+    const r = { mp: true, mode: this.mode, level: G.L.id, goal: this.goal, score: this.score.slice(), winner: this.winner, myTeam: G.pl.team, rows, time: this.t, cfg: this.cfg, wo: !!this.wo, hostGone: !!this.hostGone, net: this.net, host: this.host };
+    if (this.net && this.host && !this.wo) { r.again = () => { K.net.backToLobby(); K.go('mplobby', null, { kind: 'fade' }); }; r.againLabel = 'Revanche'; }
+    else if (!this.net) { const cfg = this.cfg; r.again = () => MP.start(cfg); }
+    return r;
+  },
+  finish() { if (this.net) K.net.sync.stop(); if (this.onFinish) return this.onFinish(this.result()); K.go('mpresult', this.result(), { kind: 'bars' }); }
+};
+
+/* ---------------------------------------------------------------- robô-jogador (testes; mira com limite de giro e erro, puxa e solta, persegue pelo campo de fluxo do inimigo) */
+MP.botInput = (p, I) => {
+  I = I || Object.assign({}, K.noInput, { aa: p.a, ap: 0 }); const dt = DT, was = I.fire;
+  I.mvx = I.mvy = 0; I.fire = false; I.wnext = I.wprev = I.wsel = 0; if (!p.alive || G.st !== 'play') { I.firep = false; I.aa = p.a; return I; }
+  p.bt = p.bt || { stuck: 0, lx: p.x, ly: p.y, noise: 0, nT: 0 }; const B = p.bt;
+  const turn = (a, rate) => { let da = a - p.a; da = Math.atan2(Math.sin(da), Math.cos(da)); I.aa = p.a + clamp(da, -rate * dt, rate * dt); return da; };
+  let t = null, td = 1e9; for (const q of G.players) { if (q === p || !q.alive || q.team === p.team || q.inv > 0) continue; const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < td && d < 18 && K.los(p.x, p.y, q.x, q.y)) { td = d; t = q; } }
+  if (t) {
+    if (K.time > B.nT) { B.nT = K.time + .4; B.noise = R(-.035, .035); }
+    const da = turn(Math.atan2(t.y - p.y, t.x - p.x) + B.noise, 5.5), hg = t.lk ? t.lk.hgt : .85, v = 15, tt = td / v, slope = (hg * .5 - .5 + .5 * .95 * tt * tt) / Math.max(.5, td);
+    I.ap = clamp(slope * 1.6, -.32, .32);
+    if (td > 6) I.mvy = 1; else if (td < 2.5) I.mvy = -.7; I.mvx = Math.sin(K.time * 1.7 + p.id) * .8;
+    const W = curW(p), want = W.charge > 0 ? .75 : 0;
+    if (W.charge > 0) I.fire = !(p.pulling && p.charge >= want && Math.abs(da) < .07); else I.fire = Math.abs(da) < .07;
+  } else {
+    B.skip = B.skip || new Map(); let it = null, id2 = 7; for (const q of G.picks) { if (q.taken || !MP.useful(q, p) || (B.skip.get(q) || 0) > K.time) continue; const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < id2 && K.los(p.x, p.y, q.x, q.y)) { id2 = d; it = q; } }   /* item à vista e perto: vai pegar */
+    if (it !== B.it) { B.it = it; B.itT = 0; } else if (it) { B.itT += dt; if (B.itT > 3) { B.skip.set(it, K.time + 10); B.it = null; it = null; } }   /* móvel no caminho (a linha de visão não vê móveis): desiste em 3 s e ignora o item por 10 s */
+    if (it) { const da = turn(Math.atan2(it.y - p.y, it.x - p.x), 7); I.mvy = Math.abs(da) < .9 ? 1 : .2; I.ap = 0; I.firep = false; I.firer = was; return I; }
+    let goal = null, gd = 1e9; for (const q of G.players) { if (q === p || !q.alive || q.team === p.team) continue; const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < gd) { gd = d; goal = q; } }
+    if (goal) { flowBuild(goal); const F = goal.flow, cx = p.x | 0, cy = p.y | 0; let bv = F[cy * G.w + cx]; if (bv < 0) bv = 1e9; let bx = cx, by = cy;
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { const nx = cx + ox, ny = cy + oy; if (nx < 0 || ny < 0 || nx >= G.w || ny >= G.h) continue; if (ox && oy && (solidCell(cx + ox, cy) || solidCell(cx, cy + oy))) continue; const v = F[ny * G.w + nx]; if (v >= 0 && v < bv) { bv = v; bx = nx; by = ny; } }
+      const da = turn(Math.atan2(by + .5 - p.y, bx + .5 - p.x), 7); I.mvy = Math.abs(da) < .9 ? 1 : .2; I.ap = 0; }
+    else I.aa = p.a;
+  }
+  const mv = Math.hypot(p.x - B.lx, p.y - B.ly); B.lx = p.x; B.ly = p.y; if (mv < .0005 && (I.mvy || I.mvx)) B.stuck += dt; else B.stuck = 0; if (B.stuck > 1) { I.mvx = Math.sin(K.time * 9) > 0 ? 1 : -1; I.aa = p.a + .05; }
+  I.firep = I.fire && !was; I.firer = !I.fire && was; return I;
+};
+
+/* o item serve para este jogador agora? (robô não fica parado em cima de curativo com a vida cheia) */
+MP.useful = (it, p) => { const d = K.pickupDefs[it.id] || {}; if (d.weapon) { const W = K.weapons[d.weapon]; return !p.arms.includes(d.weapon) || (W && W.ammo && (p.ammo[d.weapon] || 0) < W.ammo); }
+  if (d.power) return !(d.power in p.pw); if (it.id === 'curativo') return p.hp < p.maxhp; if (it.id === 'municao') return p.arms.some(id => { const W = K.weapons[id]; return W && W.ammo && (p.ammo[id] || 0) < W.ammo; }); return true; };
+
+/* ---------------------------------------------------------------- HUD da partida (vida, placar, abates, renascer, nomes, contagem) */
+K.hud.mp = (c, S) => {
+  const M = G.mp, pl = G.pl, T = K.net.TEAMS, x0 = VIEW.safeL + 18, y0 = VIEW.safeT + 14;
+  /* vida */
+  K.panel(c, x0, y0, 236, 48, { r: 12, lip: 4 }); const hp = clamp(pl.hp / pl.maxhp, 0, 1), bx = x0 + 52, by = y0 + 12, bw = 166;
+  K.text(c, '♥', x0 + 26, y0 + 26, { size: 30, align: 'center', base: 'middle', color: PAL.red, sw: 0 });
+  K.rr(c, bx, by, bw, 24, 8); c.fillStyle = PAL.paper2; c.fill(); if (hp > 0) { c.save(); K.rr(c, bx, by, bw, 24, 8); c.clip(); c.fillStyle = hp > .35 ? PAL.green : PAL.red; c.fillRect(bx, by, bw * hp, 24); c.restore(); }
+  K.rr(c, bx, by, bw, 24, 8); c.strokeStyle = PAL.ink; c.lineWidth = 3; c.stroke(); K.text(c, Math.ceil(pl.hp) + '', bx + bw / 2, by + 13, { size: 16, align: 'center', base: 'middle', color: '#fff', sw: 4, font: 'hand' });
+  /* placar: um quadro por time, cor do time, meta embaixo */
+  const n = M.score.length, cw = 74, gap = 10, W = n * cw + (n - 1) * gap, sx = VW / 2 - W / 2;
+  for (let i = 0; i < n; i++) { const x = sx + i * (cw + gap), mine = i === pl.team; K.panel(c, x, y0, cw, 48, { r: 12, lip: 4, fill: mine ? PAL.paper : PAL.paper2 });
+    K.rr(c, x + 6, y0 + 6, 10, 36, 4); c.fillStyle = T[i].cor; c.fill(); K.text(c, String(M.score[i]), x + cw / 2 + 6, y0 + 25, { size: 30, align: 'center', base: 'middle', color: PAL.ink, sw: 0 }); }
+  K.text(c, 'até ' + M.goal + ' abates', VW / 2, y0 + 62, { size: 16, align: 'center', color: '#fff', sw: 4, font: 'hand' });
+  /* jogadores no minimapa: colegas sempre; inimigo só quando você o vê */
+  const mm = K.hud._mm; if (mm && G.showMap !== false) for (const q of G.players) { if (q === pl || !q.alive) continue; const see = q.team === pl.team || K.los(pl.x, pl.y, q.x, q.y); if (!see) continue;
+    c.fillStyle = T[q.team].cor; c.strokeStyle = PAL.ink; c.lineWidth = 1.5; c.beginPath(); c.arc(mm.x0 + q.x * mm.cs, mm.y0 + q.y * mm.cs, 3.6, 0, TAU); c.fill(); c.stroke(); }
+  /* nomes sobre os palitos que você enxerga */
+  if (G.cam) for (const q of G.players) { if (q === pl || !q.alive || !q.lk || !K.los(pl.x, pl.y, q.x, q.y)) continue; const pr = K.r3.project(G.cam, q.x, q.y, q.lk.hgt + .12); if (!pr || pr.d > 14) continue;
+    K.text(c, q.name, pr.x, pr.y, { size: clamp(26 - pr.d * 1.2, 13, 22), align: 'center', color: T[q.team].cor, sw: 4, font: 'hand' }); }
+  /* abates recentes (embaixo do minimapa) */
+  let fy = (mm ? mm.y0 + mm.h + 16 : y0 + 130); for (const f of M.feed.slice(-4)) { const txt = (f.k ? f.k + (f.head ? ' ✦ ' : ' → ') : '') + f.v; K.text(c, txt, VW - VIEW.safeR - 20, fy, { size: 17, align: 'right', color: f.kt >= 0 ? T[f.kt].cor : '#fff', sw: 4, font: 'hand', maxW: 300 }); fy += 22; }
+  /* proteção ao renascer */
+  if (pl.alive && pl.inv > 0 && G.intro <= 0) K.text(c, 'PROTEGIDO ' + pl.inv.toFixed(1) + ' s (atirar cancela)', VW / 2, VH * .62, { size: 20, align: 'center', color: '#8CC8FF', sw: 5, font: 'hand' });
+  /* confirmação de abate (abaixo da mira, longe do aviso de queda) */
+  if (M.toast && pl.alive) { c.globalAlpha = clamp(M.toast.t * 2, 0, 1); K.text(c, M.toast.txt, VW / 2, VH * .68, { size: 30, align: 'center', color: PAL.yellow, sw: 7, maxW: VW - 80 }); c.globalAlpha = 1; }
+  /* contagem inicial */
+  if (G.intro > 0) { const k = Math.ceil(G.intro); K.text(c, (G.L.nome || 'Fase ' + G.L.id) + ' · ' + (M.M.nome || M.mode), VW / 2, VH * .27, { size: 24, align: 'center', color: '#fff', sw: 6, font: 'hand', maxW: VW - 80 }); K.text(c, 'PREPARAR...', VW / 2, VH * .27 + 42, { size: 30, align: 'center', color: PAL.yellow, sw: 7 }); K.text(c, String(k), VW / 2, VH * .27 + 106, { size: 70, align: 'center', color: '#fff', sw: 9 }); }
+  /* morto: quem derrubou e o tempo para renascer */
+  if (!pl.alive && M.st === 'luta') { c.fillStyle = 'rgba(20,20,43,.45)'; c.fillRect(0, 0, VW, VH); const f = [...M.feed].reverse().find(e => e.v === pl.name);
+    K.text(c, 'DERRUBADO!', VW / 2, VH * .36, { size: 46, align: 'center', color: PAL.red, sw: 8 }); if (f && f.k) K.text(c, 'por ' + f.k, VW / 2, VH * .36 + 46, { size: 26, align: 'center', color: T[f.kt].cor, sw: 6, font: 'hand' });
+    K.text(c, 'Renasce em ' + Math.max(0, pl.respawnT).toFixed(1) + ' s', VW / 2, VH * .36 + 92, { size: 24, align: 'center', color: '#fff', sw: 6 }); }
+  if (M.st === 'fim') { const w = M.winner, mine = w === pl.team; K.text(c, mine ? 'VITÓRIA!' : 'DERROTA', VW / 2, VH * .36, { size: 60, align: 'center', color: mine ? PAL.yellow : PAL.red, sw: 9 }); K.text(c, 'Time ' + T[w].nome + ' chegou a ' + M.goal, VW / 2, VH * .36 + 56, { size: 26, align: 'center', color: T[w].cor, sw: 6, font: 'hand' }); }
+};
+
+/* ---------------------------------------------------------------- resultado (funcional; o acabamento vem do conteúdo/menus) */
+K.defScene('mpresult', {
+  enter(r) { this.r = r || { rows: [], score: [0, 0], winner: -1 }; this.t = 0; K.music(K.audio.songs.vitoria && this.r.winner === this.r.myTeam ? 'vitoria' : 'titulo'); },
+  update(dt) { this.t += dt; },
+  draw(c) {
+    const r = this.r, T = K.net.TEAMS, mine = r.winner === r.myTeam; K.paperBg(c, this.t);
+    K.text(c, r.winner < 0 ? 'PARTIDA ENCERRADA' : mine ? 'VITÓRIA!' : 'DERROTA', VW / 2, 70, { size: 56, align: 'center', color: r.winner < 0 ? PAL.ink : mine ? PAL.yellow : PAL.red, sw: 8, maxW: VW - 80 });
+    const sub = r.hostGone ? 'O anfitrião saiu da partida.' : r.wo ? 'Vitória por W.O.: o outro jogador saiu.' : r.net && !r.host ? 'Esperando o anfitrião chamar a revanche...' : '';
+    if (sub) K.text(c, sub, VW / 2, VH - 120 - VIEW.safeB, { size: 21, align: 'center', color: PAL.ink2, font: 'hand', sw: 0, maxW: VW - 80 });
+    K.text(c, r.score.map((s, i) => T[i].nome + ' ' + s).join('   ×   '), VW / 2, 124, { size: 28, align: 'center', color: PAL.ink, sw: 0 });
+    const w = Math.min(560, VW - 120), x = VW / 2 - w / 2; K.panel(c, x, 150, w, 40 + r.rows.length * 34, { r: 14 });
+    K.text(c, 'Jogador', x + 24, 176, { size: 18, color: PAL.ink2, sw: 0, font: 'hand' }); K.text(c, 'Abates', x + w - 170, 176, { size: 18, align: 'center', color: PAL.ink2, sw: 0, font: 'hand' }); K.text(c, 'Quedas', x + w - 70, 176, { size: 18, align: 'center', color: PAL.ink2, sw: 0, font: 'hand' });
+    r.rows.forEach((p, i) => { const y = 208 + i * 34; K.rr(c, x + 14, y - 12, 10, 24, 4); c.fillStyle = T[p.team].cor; c.fill(); K.text(c, p.name + (p.local ? ' (você)' : ''), x + 34, y, { size: 22, base: 'middle', color: PAL.ink, sw: 0, maxW: w - 260 });
+      K.text(c, String(p.kills), x + w - 170, y, { size: 24, align: 'center', base: 'middle', color: PAL.ink, sw: 0 }); K.text(c, String(p.deaths), x + w - 70, y, { size: 24, align: 'center', base: 'middle', color: PAL.ink, sw: 0 }); });
+    const bw = 220, by = VH - 100 - VIEW.safeB;
+    if (this.r.again) K.ui.button(c, 'again', VW / 2 - bw - 10, by, bw, 60, this.r.againLabel || 'Jogar de novo', () => this.r.again(), { kind: 'pri', def: true });
+    K.ui.button(c, 'menu', this.r.again ? VW / 2 + 10 : VW / 2 - bw / 2, by, bw, 60, 'Menu', () => { if (K.net.active) K.net.leave(); K.go(this.r.net ? 'mpmenu' : 'title'); }, { kind: 'ghost', back: true, def: !this.r.again });
+  }
+});
+
+/* ---------------------------------------------------------------- depuração: partida local com robôs (sem rede) */
+/* K.debug.mpLocal('2x2', {level:'1', goal:5, me:'bot'|'human'}) — prova o motor N-jogadores com times antes da rede */
+K.debug.mpLocal = (mode, o) => {
+  o = o || {}; mode = mode || '1x1'; const n = K.net.modeMax(mode), roster = [];
+  for (let i = 0; i < n; i++) roster.push({ id: i, name: i === 0 ? 'Você' : 'Robô ' + i, local: i === 0, bot: i > 0 || o.me === 'bot' });
+  const cfg = { level: o.level || MP.randomLevel(), mode, goal: o.goal || MP.GOAL, roster };
+  cfg.again = 1; MP.start(cfg, { dur: .05 }); return cfg;
+};
+K.debug.mpState = () => { const G = K.G, M = G && G.mp; if (!M) return null; return { st: M.st, t: +M.t.toFixed(1), score: M.score.slice(), winner: M.winner, goal: M.goal, players: G.players.map(p => ({ id: p.id, team: p.team, alive: p.alive, hp: Math.round(p.hp), kills: p.kills, deaths: p.deaths, shots: p.shots, hits: p.hitsP || 0, spawnN: p.spawnN, x: +p.x.toFixed(2), y: +p.y.toFixed(2) })), picks: G.picks.filter(p => p.taken).length, picksTot: G.picks.length }; };
+
+/* ---------------------------------------------------------------- REDE: adaptador do JGK-FPS para o K.net.sync (anfitrião autoritativo)
+ * Comando (60 Hz): [mvx×100, mvy×100, mira×1000 (ABSOLUTA), pitch×1000, botões (1 = atirando), arma direta (1–9), troca (+1/−1)].
+ * Retrato (20 Hz, por destinatário): p = jogadores [id, x, y, a, pitch, vida, flags, vx, vy, abates, quedas, proteção, caído há, nº de renascimentos, arma],
+ *   j = pedras em voo [nid, dono, seq, x, y, z, vx, vy, vz, g, ouro, sprite], pk = itens pegos ('0101'), sc = placar, me = parte privada (armas, munição, poderes...). */
+const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
+const cmdInp = (p, c, first) => { const I = p.inp || (p.inp = Object.assign({}, K.noInput)), fire = !!(c[4] & 1);
+  I.mvx = c[0] / 100; I.mvy = c[1] / 100; I.aa = c[2] / 1000; I.ap = c[3] / 1000; I.lx = I.ly = 0;
+  I.firep = first ? fire && !p._pf : false; I.firer = first ? !fire && !!p._pf : false; I.fire = fire; if (first) p._pf = fire;
+  I.wsel = first ? c[5] : 0; I.wnext = first && c[6] > 0 ? 1 : 0; I.wprev = first && c[6] < 0 ? 1 : 0; return I; };
+MP.netAdapter = {
+  readCmd() {
+    const st = G.mp, me = G.pl;
+    if (me.bot) { const I = me.binp = MP.botInput(me, me.binp); return [Math.round(I.mvx * 100), Math.round(I.mvy * 100), Math.round(I.aa * 1000), Math.round((I.ap || 0) * 1000), I.fire ? 1 : 0, I.wsel || 0, I.wnext ? 1 : I.wprev ? -1 : 0]; }
+    const I = K.scene && K.scene.paused ? K.noInput : K.in, c = [Math.round(I.mvx * 100), Math.round(I.mvy * 100), Math.round(st.aimA * 1000), Math.round(st.aimP * 1000), I.fire ? 1 : 0, st.pend.sel, st.pend.dir];
+    st.pend.sel = 0; st.pend.dir = 0; return c;
+  },
+  predictCmd(c, first) { const me = G.pl; if (first) me.shotSeq = K.net.sync.seq; cmdInp(me, c, first); },
+  applyCmd(id, c, first) { const p = K.playerById(id); if (!p) return; if (first) p.shotSeq = K.net.sync.ack[id]; cmdInp(p, c, first); },
+  snapshot(id) {
+    const st = G.mp, p = K.playerById(id) || G.pl;
+    for (const s of G.proj) if (!s.nid) s.nid = ++st.nid;
+    return {
+      p: G.players.map(q => [q.id, r2(q.x), r2(q.y), r3(q.a), r3(q.pitch), Math.ceil(q.hp), (q.alive ? 1 : 0) | (q.pulling ? 2 : 0) | (q.hurtT > 0 ? 4 : 0) | (q.recoil > .4 ? 8 : 0), r2(q.vx), r2(q.vy), q.kills, q.deaths, r2(q.inv), r2(q.deadT || 0), q.spawnN || 0, q.w]),
+      j: G.proj.map(s => [s.nid, s.owner === undefined ? -1 : s.owner, s.seq || 0, r2(s.x), r2(s.y), r2(s.z), r2(s.vx), r2(s.vy), r2(s.vz), r2(s.g || 0), s.gold ? 1 : 0, s.spr || '']),
+      pk: G.picks.map(i => i.taken ? 1 : 0).join(''), sc: st.score, mst: st.st,
+      me: { hp: Math.ceil(p.hp), maxhp: p.maxhp, inv: r2(p.inv), arms: p.arms, ammo: p.ammo, w: p.w, pw: Object.fromEntries(Object.entries(p.pw).map(([k, v]) => [k, Math.round(v)])), shield: Math.ceil(p.shield), gold: p.gold, respawnT: r2(p.respawnT || 0) }
+    };
+  },
+  applySnap(s, pend) {
+    const st = G.mp; if (!st || !st.guest) return; const SY = K.net.sync, ht = s.k * DT;
+    st.score = s.sc;
+    for (const row of s.p) {
+      const q = K.playerById(row[0]); if (!q) continue; q.kills = row[9]; q.deaths = row[10]; q.w = row[14] || q.w;
+      if (q === G.pl) { MP.reconcile(row, s.me, pend); continue; }
+      SY.push(q.id, ht, { x: row[1], y: row[2], a: row[3], pitch: row[4], hp: row[5], f: row[6], vx: row[7], vy: row[8], inv: row[11], deadT: row[12] });
+    }
+    for (let i = 0; i < G.picks.length && i < s.pk.length; i++) { const it = G.picks[i], tk = s.pk[i] === '1'; if (it.taken !== tk) { it.taken = tk; if (!tk) { it.t = 0; it.drop = 1; } } }
+    /* pedras: as dos outros vêm do retrato; as minhas ficam na cópia prevista (sem salto) e somem quando a oficial some (acertou algo) */
+    const seen = new Set(), live = new Set();
+    for (const r of s.j) { const [nid, owner, seq, x, y, z, vx, vy, vz, g, gold, spr] = r; seen.add(nid);
+      if (owner === G.pl.id) { live.add(seq); st.mySeen[seq] = 1; continue; }
+      let o = null; for (const q of G.proj) if (q.nid === nid) { o = q; break; }
+      if (!o) { const ow = K.playerById(owner); G.proj.push({ nid, owner, seq, x, y, z, vx, vy, vz, g, life: 4, gold: !!gold, spr: spr || undefined, team: ow ? ow.team : -1, dmg: 0, pierce: 0, bounce: 0, explode: null }); }
+      else Object.assign(o, { x, y, z, vx, vy, vz }); }
+    G.proj = G.proj.filter(q => q.pred ? !(st.mySeen[q.seq] && !live.has(q.seq)) : seen.has(q.nid));
+  }
+};
+/* reconciliação do próprio jogador: parte da posição oficial e reaplica os comandos ainda não confirmados; a diferença vira um deslocamento de desenho que some em ~100 ms */
+MP.reconcile = (row, me, pend) => {
+  const pl = G.pl, st = G.mp;
+  Object.assign(pl, { hp: me.hp, maxhp: me.maxhp, inv: me.inv, arms: me.arms, ammo: me.ammo, shield: me.shield, gold: me.gold, respawnT: me.respawnT }); pl.pw = me.pw;
+  if (me.w !== pl.w && !pl.pulling && pl.arms.includes(me.w)) pl.w = me.w;
+  const alive = !!(row[6] & 1);
+  if (!alive) { if (pl.alive) { pl.alive = false; pl.deadT = 0; pl.pulling = false; pl.charge = 0; } pl.x = row[1]; pl.y = row[2]; pl.ox = pl.oy = 0; return; }
+  if (!pl.alive || row[13] !== pl.spawnN) { Object.assign(pl, { alive: true, spawnN: row[13], x: row[1], y: row[2], a: row[3], pitch: 0, vx: 0, vy: 0, ox: 0, oy: 0, deadT: 0 }); st.aimA = row[3]; st.aimP = 0; return; }
+  const px = pl.x + (pl.ox || 0), py = pl.y + (pl.oy || 0), pa = pl.a; pl.x = row[1]; pl.y = row[2]; pl.vx = row[7]; pl.vy = row[8];
+  for (const h of pend) { pl.a = h[3] / 1000; for (let k = 0; k < K.net.sync.cmdEvery; k++) movePl(pl, { mvx: h[1] / 100, mvy: h[2] / 100 }, DT); }
+  pl.a = pa; const ex = px - pl.x, ey = py - pl.y;
+  if (Math.hypot(ex, ey) > 1.2) { pl.ox = pl.oy = 0; } else { pl.ox = ex; pl.oy = ey; }
+};
+/* evento do anfitrião (convidado): efeitos, aviso, placar */
+MP.netAdapter.onEvent = e => {
+  const st = G && G.mp; if (!st) return; const me = G.pl.id, P = K.playerById;
+  if (e[0] === 'kill') { const k = P(e[1]), v = P(e[2]); if (v) { v.lastHead = e[3]; st.feed.push({ t: st.t, k: k ? k.name : null, kt: k ? k.team : -1, v: v.name, vt: v.team, head: !!e[3] }); K.fx.burst(v.x, v.y, .5, 16, [255, 255, 255]); }
+    if (e[2] === me) { G.shake = 1; G.flash = .4; K.sfx('over'); K.buzz(120); } else if (v) sfxNear('botdie', v.x, v.y);
+    if (e[1] === me && v) { G.hitK = 3; G.hitM = 1; st.toast = { txt: 'DERRUBOU ' + v.name + '!', t: 1.8 }; } }
+  else if (e[0] === 'hit') { const v = P(e[2]); if (v) v.hurtT = .3;
+    if (e[1] === me) { G.hitM = 1; G.hitK = e[3] ? 2 : 1; K.sfx(e[3] ? 'hit_head' : 'hit'); if (e[3] && v) { G.headT = 1; const pr = G.cam && K.r3.project(G.cam, v.x, v.y, v.lk ? v.lk.hgt : .85); G.pops.push({ x: clamp(pr ? pr.x : VW / 2, 120, VW - 120), y: clamp(pr ? pr.y - 6 : VH / 2 - 50, 110, VH - 160), t: 0, txt: 'NA CABEÇA!' }); } }
+    if (e[2] === me) { G.dmgT = .5; G.shake = Math.max(G.shake, .5); K.sfx('hurt'); K.buzz(60); G.dmgDir = Math.atan2(e[5] - G.pl.y, e[4] - G.pl.x) - G.pl.a; } }
+  else if (e[0] === 'pick') { const it = G.picks[e[1]]; if (it) { it.taken = true; const d = K.pickupDefs[it.id] || {}; K.fx.burst(it.x, it.y, .4, 14, d.col || [47, 179, 106]);
+      if (e[2] === me) { if (d.weapon) { sfx2('weapon_get', 'gold'); G.wswT = 2.4; const W = K.weapons[d.weapon]; AI.say('ARMA NOVA: ' + (W ? W.nome : d.weapon) + '!', 3); } else if (d.power) { sfx2('power_get', 'gold'); const D = K.powerDefs[d.power]; AI.say(D ? (D.msg || D.nome + '!') : 'PODER!', 2.8); } else { K.sfx('pickup'); if (d.msg) AI.say(d.msg, 2.2); } G.flash = .25; } else sfxNear('pickup', it.x, it.y); } }
+  else if (e[0] === 'back') { const it = G.picks[e[1]]; if (it) { it.taken = false; it.t = 0; it.drop = 1; K.fx.burst(it.x, it.y, .4, 12, [255, 255, 255]); sfxNear('pickup', it.x, it.y); } }
+  else if (e[0] === 'spawn') { const q = P(e[1]); if (q) { K.fx.burst(q.x, q.y, .6, 14, [255, 255, 255]); if (q === G.pl) { G.flash = .3; K.sfx('portal'); } } }
+  else if (e[0] === 'end') { if (st.st !== 'fim') { st.st = 'fim'; st.winner = e[1]; G.st = 'end'; G.endT = 0; K.sfx(G.pl.team === e[1] ? 'win' : 'over'); } }
+};
+/* alguém saiu no meio: anfitrião tira o jogador; se um time ficar vazio, o outro vence por W.O. Convidado: anfitrião saiu = fim da partida. */
+MP.netAdapter.onLeft = id => { const st = G && G.mp; if (!st) return; const q = K.playerById(id); if (!q) return; G.players.splice(G.players.indexOf(q), 1); st.feed.push({ t: st.t, k: null, kt: -1, v: q.name + ' saiu', vt: q.team });
+  const alive = new Set(G.players.map(p => p.team)); if (st.st === 'luta' && alive.size <= 1) { st.wo = true; st.end(G.pl.team); } };
+MP.netAdapter.onHostLeft = () => { const st = G && G.mp; if (!st || st.st === 'fim') { st && (st.hostGone = true); return; } st.hostGone = true; st.st = 'fim'; st.winner = -1; G.st = 'end'; G.endT = 0; AI.say('O anfitrião saiu da partida', 4); };
+/* antes de mover os jogadores: mira acumulada do convidado, marionetes interpoladas, ping e o passo da sincronia */
+MPG.pre = function (dt) {
+  if (!this.net) return; const SY = K.net.sync, pl = G.pl;
+  if (this.guest) {
+    if (!(K.scene && K.scene.paused) && !pl.bot && pl.alive) { const I = K.in; this.aimA += I.lx; this.aimP = clamp(this.aimP + I.ly * .5, -.32, .32); if (I.wsel) this.pend.sel = I.wsel; if (I.wnext) this.pend.dir = 1; else if (I.wprev) this.pend.dir = -1; }
+    if (!pl.alive) this.aimA = pl.a;
+    const k = Math.exp(-12 * dt); pl.ox = (pl.ox || 0) * k; pl.oy = (pl.oy || 0) * k;
+    const mix = (a, b, u) => ({ x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), a: SY.lerpAng(a.a, b.a, u), pitch: lerp(a.pitch, b.pitch, u), hp: b.hp, f: u < .5 ? a.f : b.f, vx: lerp(a.vx, b.vx, u), vy: lerp(a.vy, b.vy, u), inv: b.inv, deadT: lerp(a.deadT, b.deadT, u) });
+    for (const q of G.players) { if (!q.puppet) continue; const s = SY.sample(q.id, mix); if (!s) continue;
+      Object.assign(q, { x: s.x, y: s.y, a: s.a, pitch: s.pitch, hp: s.hp, vx: s.vx, vy: s.vy, inv: s.inv, deadT: s.deadT, alive: !!(s.f & 1), pulling: !!(s.f & 2), recoil: s.f & 8 ? 1 : 0 }); if (s.f & 4) q.hurtT = Math.max(q.hurtT || 0, .1); q.bob += Math.hypot(s.vx, s.vy) * dt * 2.4; }
+  }
+  SY.step(dt);
+};
+/* começa a partida online com a sala atual (anfitrião chama K.mp.netHostStart(); o convidado entra sozinho ao receber 'start') */
+MP.rosterFromRoom = R => R.players.map(p => ({ id: p.id, name: p.name, team: p.team, slot: p.slot, local: p.id === K.net.me, bot: p.id === K.net.me && !!K.debug.netBot }));
+MP.netHostStart = () => { const R = K.net.room; if (!R) return; const level = R.level === 'sorteio' || !R.level ? MP.randomLevel() : String(R.level); K.net.startGame({ cfg: { level, mode: R.mode, goal: R.goal } }); };
+K.net.on('start', m => { const R = K.net.room, c = m.cfg || {}; MP.start({ level: c.level, mode: c.mode || R.mode, goal: c.goal || R.goal, roster: MP.rosterFromRoom(R), net: true, again: 1 }); });
+K.debug.netState = () => { const G = K.G, M = G && G.mp; return { role: K.net.role, me: K.net.me, active: K.net.active, room: K.net.room && { code: K.net.room.code, st: K.net.room.st, n: K.net.room.players.length, level: K.net.room.level }, rtt: Math.round(K.net.rtt(K.net.role === 'guest' ? 0 : 1) || 0), stats: K.net.stats, mp: K.debug.mpState() }; };
+
+/*==ENGINE:mp-scenes==  telas do multiplayer (versão funcional do motor; o conteúdo pode substituir registrando a mesma cena):
+ *   'mpmenu'  Criar sala · Entrar com código · seu nome (trocar)          'mpjoin'  código: 4 caixas + teclado de papel + teclado físico + colar
+ *   'mplobby' sala: código, link copiável, jogadores e prontos, fase (ou sorteio) e meta (anfitrião), Começar / Estou pronto, Sair
+ * Link de convite: ?sala=K7QX abre direto a tela de entrar (o jogador toca em "Entrar": o gesto também libera o áudio).
+ * Mensagens de erro em português claro (rede bloqueada sem TURN, sala cheia, versão diferente...). UI de papel + tinta (regra f); nada atrás dos botões (regra c). */
+SAVE.mp = SAVE.mp || {};
+const NICK_A = ['Palito', 'Rabisco', 'Lápis', 'Clipe', 'Grampo', 'Régua', 'Borracha', 'Giz', 'Tampinha', 'Pincel'], NICK_B = ['Veloz', 'Bravo', 'Ligeiro', 'Certeiro', 'Ninja', 'Esperto', 'Valente', 'Maluco', 'Sorrateiro', 'Fera'];
+K.mpNick = () => { if (!SAVE.mp.nick) { SAVE.mp.nick = pick(NICK_A) + ' ' + pick(NICK_B); K.persist(); } return SAVE.mp.nick; };
+K.mpNickNew = () => { let n; do { n = pick(NICK_A) + ' ' + pick(NICK_B); } while (n === SAVE.mp.nick); SAVE.mp.nick = n; K.persist(); return n; };
+const NET_ERR = {
+  sala: 'Sala não encontrada. Confira o código (ou a sala já fechou).', cheia: 'Essa sala já está cheia.', em_jogo: 'A partida dessa sala já começou.',
+  versao: 'Versões diferentes do jogo: os dois precisam da mesma versão (esta é a v' + K.version + ').', codigo: 'O código tem 4 letras.',
+  rede: 'Não deu para conectar direto com o outro jogador. Algumas redes (4G, Wi-Fi de empresa ou de escola) bloqueiam a conexão direta: tente outra rede.',
+  sinal: 'Sem conexão com o servidor de salas. Confira a internet e tente de novo.', sem_resposta: 'O anfitrião não respondeu. Tente de novo.', suporte: 'Este navegador não tem conexão direta (WebRTC).'
+};
+K.net.errMsg = e => (e && NET_ERR[e.why]) || (e && e.msg) || 'Algo deu errado na conexão.';
+K.net.inviteUrl = code => { try { return location.origin + location.pathname + '?sala=' + code; } catch (e) { return '?sala=' + code; } };
+/* copiar com plano B (dentro de iframe sem permissão de área de transferência, o navigator.clipboard falha) */
+K.net.copy = txt => new Promise(res => {
+  const fb = () => { try { const t = document.createElement('textarea'); t.value = txt; t.style.cssText = 'position:fixed;left:-999px;top:0;opacity:0'; document.body.appendChild(t); t.select(); const ok = document.execCommand('copy'); t.remove(); res(ok); } catch (e) { res(false); } };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => res(true), fb); else fb(); } catch (e) { fb(); }
+});
+const mpTitle = (c, s, y) => K.text(c, s, VW / 2, y, { size: 46, align: 'center', color: PAL.red, stroke: PAL.ink, sw: 9, rot: -.02, maxW: VW - 120 });
+const mpNote = (c, s, y, col) => { const L = K.wrapText(c, s, 20, Math.min(620, VW - 120), 'hand'); L.forEach((l, i) => K.text(c, l, VW / 2, y + i * 23, { size: 20, align: 'center', color: col || PAL.ink2, font: 'hand', sw: 0 })); };
+const sT2 = () => VIEW.safeT, sB2 = () => VIEW.safeB;
+
+/* ---------------------------------------------------------------- menu */
+K.defScene('mpmenu', {
+  enter(a) { this.t = 0; this.msg = (a && a.msg) || ''; this.busy = false; K.music('titulo'); K.mpNick(); },
+  update(dt) { this.t += dt; },
+  back() { if (!this.busy) K.go('title'); },
+  draw(c) {
+    K.paperBg(c, this.t); const cx = VW / 2, bw = Math.min(360, VW - 160), x = cx - bw / 2;
+    mpTitle(c, 'MULTIPLAYER', sT2() + 70); K.text(c, 'Mata-mata 1 contra 1 · sala privada', cx, sT2() + 108, { size: 24, align: 'center', color: PAL.ink, font: 'hand', sw: 0 });
+    K.panel(c, x, sT2() + 124, bw, 64, { r: 12, lip: 4 }); K.text(c, 'Seu nome:', x + 16, sT2() + 162, { size: 19, color: PAL.ink2, font: 'hand', sw: 0 });
+    K.text(c, SAVE.mp.nick, x + 108, sT2() + 163, { size: 24, color: PAL.blue2, font: 'hand', sw: 0, maxW: bw - 220 });
+    K.ui.button(c, 'nick', x + bw - 104, sT2() + 130, 92, 52, 'Trocar', () => K.mpNickNew(), { kind: 'ghost', size: 19 });
+    const y0 = sT2() + 206;
+    K.ui.button(c, 'criar', x, y0, bw, 70, this.busy ? 'Criando...' : 'Criar sala', () => this.create(), { def: true, size: 32 });
+    K.ui.button(c, 'entrar', x, y0 + 86, bw, 60, 'Entrar com código', () => { if (!this.busy) K.go('mpjoin', null, { kind: 'fade' }); }, { kind: 'blue', size: 26 });
+    K.ui.button(c, 'voltar', x, y0 + 162, bw, 50, 'Voltar', () => this.back(), { kind: 'ghost', back: true, size: 22 });
+    if (this.msg) mpNote(c, this.msg, y0 + 238, PAL.red2); else mpNote(c, 'Precisa de internet. Vocês jogam conectados direto, sem servidor de jogo.', y0 + 238);
+  },
+  create() {
+    if (this.busy) return; if (!K.net.supported()) { this.msg = NET_ERR.suporte; return; } this.busy = true; this.msg = '';
+    K.net.host({ name: K.mpNick(), mode: '1x1', level: SAVE.mp.level || 'sorteio', goal: SAVE.mp.goal || 10 }).then(() => { this.busy = false; K.go('mplobby', null, { kind: 'fade' }); }, e => { this.busy = false; this.msg = K.net.errMsg(e); });
+  }
+});
+
+/* ---------------------------------------------------------------- entrar com código */
+K.defScene('mpjoin', {
+  enter(a) { this.t = 0; this.code = K.net.cleanCode((a && a.code) || K.net.pendingCode || ''); K.net.pendingCode = null; this.msg = ''; this.busy = false; K.mpNick(); },
+  update(dt) { this.t += dt; },
+  back() { if (this.busy) return; K.go('mpmenu', null, { kind: 'fade' }); },
+  key(ch) { if (this.busy) return; if (ch === '⌫') this.code = this.code.slice(0, -1); else if (this.code.length < 4 && K.net.CODE_A.includes(ch)) this.code += ch; this.msg = ''; },
+  join() {
+    if (this.busy) return; if (this.code.length !== 4) { this.msg = NET_ERR.codigo; return; } if (!K.net.supported()) { this.msg = NET_ERR.suporte; return; }
+    this.busy = true; this.msg = ''; K.net.join(this.code, K.mpNick()).then(() => { this.busy = false; K.go('mplobby', null, { kind: 'fade' }); }, e => { this.busy = false; this.msg = K.net.errMsg(e); });
+  },
+  draw(c) {
+    K.paperBg(c, this.t); const cx = VW / 2; K.text(c, 'ENTRAR NA SALA', cx, sT2() + 46, { size: 38, align: 'center', color: PAL.red, stroke: PAL.ink, sw: 8, rot: -.02, maxW: VW - 120 });
+    const bs = 52, gap = 12, bx = cx - (4 * bs + 3 * gap) / 2, by = sT2() + 60;
+    for (let i = 0; i < 4; i++) { const x = bx + i * (bs + gap), on = i === this.code.length && !this.busy && Math.sin(this.t * 6) > 0; K.panel(c, x, by, bs, bs, { r: 10, lip: 4, fill: on ? '#FFF6C9' : PAL.paper }); if (this.code[i]) K.text(c, this.code[i], x + bs / 2, by + bs / 2 + 3, { size: 38, align: 'center', base: 'middle', color: PAL.ink, sw: 0 }); }
+    /* teclado de papel (31 letras sem as ambíguas + apagar) */
+    const keys = (K.net.CODE_A + '⌫').split(''), cols = 8, kw = Math.min(64, (Math.min(VW - 160, 600) - (cols - 1) * 8) / cols), kh = 56, kx = cx - (cols * kw + (cols - 1) * 8) / 2, ky = by + bs + 14;   /* 56 px lógicos: alvo mínimo de toque */
+    keys.forEach((ch, i) => { const x = kx + (i % cols) * (kw + 8), y = ky + ((i / cols) | 0) * (kh + 6); K.ui.button(c, 'k' + ch, x, y, kw, kh, ch, () => this.key(ch), { kind: ch === '⌫' ? 'red' : 'ghost', size: 24 }); });
+    const yb = ky + 4 * (kh + 6) + 6, bw = Math.min(220, (VW - 160) / 2);
+    K.ui.button(c, 'go', cx - bw - 8, yb, bw, 56, this.busy ? 'Conectando...' : 'Entrar', () => this.join(), { def: this.code.length === 4, size: 28 });
+    K.ui.button(c, 'voltar', cx + 8, yb, bw, 56, 'Voltar', () => this.back(), { kind: 'ghost', back: true, size: 24 });
+    if (this.msg) mpNote(c, this.msg, yb + 78, PAL.red2); else mpNote(c, VIEW.touch ? 'Toque nas letras do código que o seu amigo mandou.' : 'Digite o código (ou cole com Ctrl+V) e aperte Enter.', yb + 78);
+  }
+});
+/* teclado físico e colar na tela de código (antes do motor: as letras W/A/S/D não podem mover o foco dos botões) */
+document.addEventListener('keydown', e => {
+  if (K.sceneName !== 'mpjoin' || !K.scene || K.tr.on) return; const sc = K.scene, k = e.key || '';
+  if (/^[a-zA-Z0-9]$/.test(k)) { sc.key(k.toUpperCase()); e.preventDefault(); e.stopPropagation(); }
+  else if (k === 'Backspace') { sc.key('⌫'); e.preventDefault(); e.stopPropagation(); }
+  else if (k === 'Enter' && sc.code.length === 4) { sc.join(); e.preventDefault(); e.stopPropagation(); }
+}, true);
+document.addEventListener('paste', e => { if (K.sceneName !== 'mpjoin') return; let t = ''; try { t = e.clipboardData.getData('text') || ''; } catch (x) {} const m = /sala=([A-Za-z0-9]{4})/.exec(t); K.scene.code = K.net.cleanCode(m ? m[1] : t); e.preventDefault(); });
+
+/* ---------------------------------------------------------------- sala */
+K.defScene('mplobby', {
+  enter() { this.t = 0; this.msg = ''; this.copied = 0; K.music('titulo'); },
+  update(dt) { this.t += dt; this.copied = Math.max(0, this.copied - dt); if (!K.net.room) K.go('mpmenu', { msg: this.msg || 'A sala fechou.' }); K.net.tick(dt); },
+  back() { K.net.leave(); K.go('mpmenu', null, { kind: 'fade' }); },
+  draw(c) {
+    K.paperBg(c, this.t); const R = K.net.room; if (!R) return; const host = K.net.role === 'host', cx = VW / 2, w = Math.min(640, VW - 2 * Math.max(60, VIEW.safeL + 86)), x = cx - w / 2, T = K.net.TEAMS;   /* longe da margem vermelha do caderno */
+    /* código + link */
+    K.text(c, 'SALA', cx, sT2() + 34, { size: 22, align: 'center', color: PAL.ink2, font: 'hand', sw: 0 });
+    K.text(c, R.code.split('').join(' '), cx, sT2() + 86, { size: 60, align: 'center', color: PAL.blue, stroke: PAL.ink, sw: 10 });
+    const lw = 190, canShare = VIEW.touch && navigator.share; let lx = cx - (canShare ? lw + 6 : lw / 2);
+    K.ui.button(c, 'copy', lx, sT2() + 100, lw, 50, this.copied > 0 ? 'Link copiado!' : 'Copiar link', () => K.net.copy(K.net.inviteUrl(R.code)).then(ok => { this.copied = ok ? 2 : 0; if (!ok) this.msg = 'Não consegui copiar: mande o código ' + R.code; }), { kind: 'blue', size: 20 });
+    if (canShare) K.ui.button(c, 'share', cx + 6, sT2() + 100, lw, 50, 'Compartilhar', () => { try { navigator.share({ title: 'Pedrada de Palito', text: 'Bora uma pedrada? Sala ' + R.code, url: K.net.inviteUrl(R.code) }).catch(() => {}); } catch (e) {} }, { kind: 'blue', size: 20 });
+    /* jogadores */
+    const py = sT2() + 162, rh = 40, ph = 16 + R.max * rh; K.panel(c, x, py, w, ph, { r: 14, lip: 5 });
+    for (let i = 0; i < R.max; i++) { const p = R.players[i], y = py + 8 + i * rh + rh / 2;
+      if (!p) { K.text(c, 'Esperando jogador... mande o código ou o link', x + 30, y + 2, { size: 20, base: 'middle', color: PAL.ink2, font: 'hand', sw: 0, maxW: w - 40 }); continue; }
+      K.rr(c, x + 14, y - 13, 10, 26, 4); c.fillStyle = (T[p.team] || T[0]).cor; c.fill();
+      K.text(c, p.name + (p.id === K.net.me ? '  (você)' : '') + (p.host ? '  · anfitrião' : ''), x + 34, y + 2, { size: 22, base: 'middle', color: PAL.ink, font: 'hand', sw: 0, maxW: w - 200 });
+      K.text(c, p.ready ? '✓ pronto' : 'esperando...', x + w - 20, y + 2, { size: 21, align: 'right', base: 'middle', color: p.ready ? PAL.green : PAL.ink2, font: 'hand', sw: 0 }); }
+    /* fase e meta */
+    const ly = py + ph + 16, levels = ['sorteio'].concat(K.mp.levels().map(L => L.id)), Lname = id => id === 'sorteio' ? 'Sorteio (sem chefes)' : 'Fase ' + id + ' · ' + ((K.levelById(id) || {}).nome || ''), goals = [5, 10, 15, 20];
+    const row = (id, y, label, val, opts, set) => { K.text(c, label, x + 4, y + 30, { size: 21, color: PAL.ink2, font: 'hand', sw: 0 });
+      const vx = x + 70, vw = w - 70; if (host) { const i = Math.max(0, opts.indexOf(val)); K.ui.button(c, id + 'a', vx, y, 56, 50, '◀', () => set(opts[(i - 1 + opts.length) % opts.length]), { kind: 'ghost', size: 20 }); K.ui.button(c, id + 'b', vx + vw - 56, y, 56, 50, '▶', () => set(opts[(i + 1) % opts.length]), { kind: 'ghost', size: 20 }); }
+      K.text(c, id === 'lv' ? Lname(val) : val + ' abates', vx + vw / 2, y + 26, { size: 22, align: 'center', base: 'middle', color: PAL.ink, font: 'hand', sw: 0, maxW: vw - 110 }); };
+    row('lv', ly, 'Fase:', String(R.level), levels, v => { SAVE.mp.level = v; K.persist(); K.net.setRoom({ level: v }); });
+    row('gl', ly + 58, 'Meta:', R.goal, goals, v => { SAVE.mp.goal = v; K.persist(); K.net.setRoom({ goal: v }); });
+    /* ações */
+    const by = ly + 120, bw = Math.min(260, w / 2 - 8), me = R.players.find(p => p.id === K.net.me);
+    if (host) { const ok = K.net.allReady(); K.ui.button(c, 'start', cx - bw - 8, by, bw, 60, 'COMEÇAR', () => { if (K.net.allReady()) K.mp.netHostStart(); else this.msg = R.players.length < 2 ? 'Falta o outro jogador entrar.' : 'Espere o convidado ficar pronto.'; }, { kind: ok ? 'pri' : 'ghost', def: true, size: 28 }); }
+    else K.ui.button(c, 'ready', cx - bw - 8, by, bw, 60, me && me.ready ? 'Não estou pronto' : 'ESTOU PRONTO', () => K.net.setReady(!(me && me.ready)), { kind: me && me.ready ? 'ghost' : 'green', def: true, size: me && me.ready ? 22 : 26 });
+    K.ui.button(c, 'sair', cx + 8, by, bw, 60, 'Sair da sala', () => this.back(), { kind: 'ghost', back: true, size: 22 });
+    const info = this.msg || (host ? (R.players.length < 2 ? 'Mande o código ' + R.code + ' para um amigo.' : K.net.allReady() ? 'Tudo pronto: pode começar!' : 'Esperando o convidado ficar pronto.') : 'Ping: ' + Math.round(K.net.rtt(0) || 0) + ' ms · o anfitrião começa a partida.');
+    mpNote(c, info, by + 80, this.msg ? PAL.red2 : PAL.ink2);
+  }
+});
+
+/* ---------------------------------------------------------------- fluxo entre telas (eventos da rede) */
+K.net.on('lobby', () => { if (K.sceneName === 'mpresult' || K.sceneName === 'play') K.go('mplobby', null, { kind: 'fade' }); });
+K.net.on('hostLeft', () => { if (K.sceneName === 'mplobby') K.go('mpmenu', { msg: 'O anfitrião fechou a sala.' }); else if (K.sceneName === 'mpresult' && K.scene.r) K.scene.r.hostGone = true; });
+K.net.on('left', (id, why) => { if (K.sceneName === 'mplobby' && K.scene) K.scene.msg = ''; });
+/* convite por link: ?sala=K7QX abre a tela de entrar */
+try { const q = new URLSearchParams(location.search).get('sala'); if (q) { K.net.pendingCode = K.net.cleanCode(q); if (!K.debug.first) K.debug.first = 'mpjoin'; } } catch (e) {}
 
 {
 /* 10-looks.js — visual dos palitos (DONO: Animador de Palitos). 8 looks com silhueta própria.
@@ -3800,10 +4598,11 @@ K.defStory('fim', { pages: [
       { const s3 = sc * .8, x3 = px + 84 * sc + 6 - 12 * s3; if (x3 + 84 * s3 <= mx0) { shadow(c, x3 + 48 * s3, floor + 2, 52 * s3 * .8); K.palito(c, 'atirador', 'idle', x3, floor - 128 * s3 - 8, s3, t, false); } }
       /* botões */
       const bw = 300, x = cx - bw / 2;
-      arrow(c, x - 40, 330, x - 8, 300, -14, PAL.red, 5);
-      K.ui.button(c, 'jogar', x, 268, bw, 74, 'JOGAR', () => { if (!SAVE.intro) { SAVE.intro = 1; K.persist(); K.playStory('intro', () => K.go('select', null, { kind: 'bars' })); } else K.go('select', null, { kind: 'bars' }); }, { def: true, size: 40 });
-      K.ui.button(c, 'opc', x, 358, bw / 2 - 6, 58, 'Opções', () => K.go('options', null, { kind: 'fade' }), { kind: 'blue', size: 22 });
-      K.ui.button(c, 'cred', x + bw / 2 + 6, 358, bw / 2 - 6, 58, 'Créditos', () => K.go('credits', null, { kind: 'fade' }), { kind: 'blue', size: 22 });
+      arrow(c, x - 40, 322, x - 8, 294, -14, PAL.red, 5);
+      K.ui.button(c, 'jogar', x, 262, bw, 70, 'JOGAR', () => { if (!SAVE.intro) { SAVE.intro = 1; K.persist(); K.playStory('intro', () => K.go('select', null, { kind: 'bars' })); } else K.go('select', null, { kind: 'bars' }); }, { def: true, size: 40 });
+      K.ui.button(c, 'multi', x, 342, bw, 54, 'Multiplayer', () => K.go('mpmenu', null, { kind: 'fade' }), { kind: 'green', size: 26 });   /* 1.2.0: mata-mata online (motor: src/engine/12-mp-scenes.js) */
+      K.ui.button(c, 'opc', x, 408, bw / 2 - 6, 52, 'Opções', () => K.go('options', null, { kind: 'fade' }), { kind: 'blue', size: 22 });
+      K.ui.button(c, 'cred', x + bw / 2 + 6, 408, bw / 2 - 6, 52, 'Créditos', () => K.go('credits', null, { kind: 'fade' }), { kind: 'blue', size: 22 });
       if (!document.fullscreenElement) K.ui.button(c, 'fs', VW - sR() - 76, sT() + 14, 58, 58, '', () => K.fullscreen(), { kind: 'ghost', icon: (c, x, y) => { c.save(); c.strokeStyle = PAL.ink; c.lineWidth = 5; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { c.moveTo(x + sx * 7, y + sy * 18); c.lineTo(x + sx * 18, y + sy * 18); c.lineTo(x + sx * 18, y + sy * 7); } c.stroke(); c.restore(); } });
       pad(c, VW - sR() - 74, VH - sB() - 40, 62, 28, .04, PAL.yellow); K.text(c, 'v' + K.version, VW - sR() - 43, VH - sB() - 19, { size: 19, align: 'center', color: PAL.ink, font: 'hand', sw: 0 });
       K.text(c, VIEW.touch ? 'Lado direito da tela: toque atira · segure para puxar · arraste para mirar' : 'WASD anda · mouse mira · segure o clique para puxar, solte para atirar', cx, VH - sB() - 14, { size: 19, align: 'center', color: PAL.ink2, font: 'hand', sw: 0, maxW: VW - 190 });
@@ -3921,7 +4720,7 @@ K.defStory('fim', { pages: [
     const lw = Math.round(w * .5); K.optionRows(c, x + 38, y + 108, lw, true);
     const rx = x + 38 + lw + 28, rw = w - 38 - lw - 28 - 34;
     K.ui.button(c, 'res', rx, y + 112, rw, 74, 'CONTINUAR', () => sc.resume(), { def: true, back: true, size: 26 });
-    K.ui.button(c, 'sair', rx, y + 208, rw, 58, 'Sair da fase', () => K.go('select', null, { kind: 'bars' }), { kind: 'red', size: 22 });
+    K.ui.button(c, 'sair', rx, y + 208, rw, 58, K.G && K.G.mp ? 'Sair da partida' : 'Sair da fase', () => K.go('select', null, { kind: 'bars' }), { kind: 'red', size: 22 });
     toggles(c, rx, y + 290, rw, 50, 4);
     arsenal(c, x + 30, y + 428, w - 60);
     c.restore();
