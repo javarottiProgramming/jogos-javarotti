@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v2.0.1</title>
+<title>Sinuca Intergaláctica · v2.0.2</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '2.0.1', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '2.0.2', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -1098,7 +1098,7 @@ UI.draw = g => {
 /*==ENGINE:match==  A PARTIDA (cena 'partida'): desenho da mesa, bolas, taco, linha de mira, força, efeito, respiro, relógio de tacada, bola na mão,
  * vez da CPU (IA em pedaços), regras (com a foto de antes da tacada), falas do rival (só texto), pausa padrão JGK e fim de jogo.
  * Abrir: K.partida({ mesa: 'classica', rival: 'zorg', regra?, aposta?, depois(res) })  →  res = { venceu, mesa, rival, tacadas, faltas }
- * Controles (PC): mover o mouse mira · clicar e PUXAR para trás dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
+ * Controles (PC): mover o mouse mira · CLICAR TRAVA a mira (2.0.2) e arrastar dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
  *   teclado/gamepad: ←/→ mira (Shift fino) · segurar Espaço/A carrega, soltar tacada · E/X efeito · Q/Y respiro · P/Start pausa
  *   TOQUE (0.3.0, pedido do Pedro: "o taco tá duro, dois dedos não funcionam"): três zonas fixas, cada dedo faz uma coisa só, e dá para usar duas ao mesmo tempo:
  *     · mesa: arrastar GIRA o taco em volta da bola (o ângulo acompanha o dedo, 1:1 × sensibilidade: rápido perto da bola, fino longe dela); tocar e soltar aponta ali;
@@ -1216,7 +1216,7 @@ K.defScene('partida', {
       if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y, livre: true }; return; }   // 2º dedo na mesa: força (vai e volta)
       if (M.rot) return;
       const c = this.cueS(M); M.rot = { id: p.id, a: Math.atan2(p.y - c.y, p.x - c.x), x0: p.x, y0: p.y, t0: K.time, moved: 0 }; return; }
-    { const c = this.cueS(M); M.powDrag = { x0: p.x, y0: p.y, a: Math.atan2(p.y - c.y, p.x - c.x) }; }   // mouse: puxar para trás (e girar devagar, 0.2.1)
+    M.powDrag = { x0: p.x, y0: p.y, ang: M.ang };   // mouse: o clique TRAVA a mira onde está (2.0.2); arrastar só dá força
   },
   move(p) {
     const M = M0(); if (!M || M.pausa || !this.human(M)) return;
@@ -1232,9 +1232,9 @@ K.defScene('partida', {
     if (M.rot && M.rot.id === p.id) {   // GIRO 1:1: o taco acompanha o ângulo do dedo em volta da bola (perto = rápido, longe = fino)
       const R = M.rot, d = Math.hypot(p.x - c.x, p.y - c.y), a = Math.atan2(p.y - c.y, p.x - c.x); R.moved += Math.hypot(p.x - R.x0, p.y - R.y0) > 4 ? 1 : 0;
       if (d > 6) { M.ang += angDiff(R.a, a) * K.sens() * Math.min(1, d / 14) * (M.pow > .03 ? .3 : 1); R.a = a; } return; }   // com a força carregada a mira só afina (0.3.6)
-    if (M.powDrag) {   /* segurando o clique: o movimento lateral gira a mira em volta da bola, mais devagar (×0,35); puxar para trás dá força (pedido do Pedro, 0.2.1) */
-      const a = Math.atan2(p.y - c.y, p.x - c.x); if (Math.hypot(p.x - c.x, p.y - c.y) > 8) M.ang += angDiff(M.powDrag.a, a) * (K.input.down('fine') ? .1 : .35); M.powDrag.a = a;
-      const back = -((p.x - M.powDrag.x0) * Math.cos(M.ang) + (p.y - M.powDrag.y0) * Math.sin(M.ang)); M.pow = clamp(back / 70, 0, 1); return; }
+    if (M.powDrag) {   /* MIRA TRAVADA (2.0.2, pedido do Pedro): segurando o clique a mira NÃO mexe mais; o mouse só carrega a força. A força é a distância
+                        * do ponto do clique, em qualquer direção (puxar para cima, para baixo ou para o lado dá no mesmo); voltar ao ponto do clique zera e soltar ali cancela. */
+      M.ang = M.powDrag.ang; M.pow = clamp(Math.hypot(p.x - M.powDrag.x0, p.y - M.powDrag.y0) / PUXA, 0, 1); return; }
     if (p.type === 'mouse' && !M.barDrag) { const a = Math.atan2(p.y - c.y, p.x - c.x); M.ang = K.input.down('fine') ? M.ang + angDiff(M.ang, a) * .08 : a; }
   },
   release(p) {
@@ -1252,7 +1252,7 @@ K.defScene('partida', {
   noTaco(M, p) { const c = this.cueS(M), dx = Math.cos(M.ang), dy = Math.sin(M.ang), ux = p.x - c.x, uy = p.y - c.y, t = -(ux * dx + uy * dy), lat = Math.abs(ux * dy - uy * dx), r = M.rp, ini = r + 2 + M.pow * 22;
     return t >= ini - 2 && t <= ini + CUEL && lat <= GRAB; },
   handTo(M, p) { const t = toT(p.x, p.y); if (PL.freeSpot(M.S, M.T, t.x, t.y)) { const c = M.S.balls[0]; c.x = t.x; c.y = t.y; c.in = false; } },
-  wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M) && !M.pausa) M.ang += dy * .004; },
+  wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M) && !M.pausa && !M.powDrag) M.ang += dy * .004; },   // com o clique segurado a mira está travada (2.0.2)
   spinAt(M, p) { const cx = K.v.W / 2, cy = K.v.H / 2; M.fx.s = clamp((p.x - cx) / 26, -1, 1); M.fx.f = clamp(-(p.y - cy) / 26, -1, 1); if (Math.hypot(M.fx.s, M.fx.f) > 1) { const k = Math.hypot(M.fx.s, M.fx.f); M.fx.s /= k; M.fx.f /= k; } },
   placeCue(M) { const c = M.S.balls[0]; if (!PL.freeSpot(M.S, M.T, c.x, c.y)) { K.sfx('erro'); return; } c.in = false; M.fase = 'mira'; M.clock = M.tempoMax; K.sfx('ui_ok'); },
   /* RESPIRO (0.3.1, pedido do Pedro): a mira acompanha a respiração do personagem, devagar e pouco, em vez de balançar de um lado para o outro.
@@ -1308,7 +1308,7 @@ K.defScene('partida', {
     M.holding = hum && (K.input.down('calm') || this.touchHold(M)) && M.breath > 0; M.hk = (M.hk || 0) + ((M.holding ? 1 : 0) - (M.hk || 0)) * Math.min(1, dt * 6); M.breath = clamp(M.breath + (M.holding ? -.45 : .22) * dt * (M.holding ? 1 / (1 + (M.up.calma || 0) * .3) : 1), 0, 1);
     if (hum && M.fase === 'mira') {
       const sp = (K.input.down('fine') ? 6 : 50) * Math.PI / 180 * K.sens() * dt;
-      if (!M.spinOpen) { if (K.input.down('left')) M.ang -= sp; if (K.input.down('right')) M.ang += sp; if (K.input.stick && Math.abs(K.input.stick.x) > .2 && !K.input.down('left') && !K.input.down('right')) M.ang += K.input.stick.x * sp; }
+      if (!M.spinOpen && !M.powDrag) { if (K.input.down('left')) M.ang -= sp; if (K.input.down('right')) M.ang += sp; if (K.input.stick && Math.abs(K.input.stick.x) > .2 && !K.input.down('left') && !K.input.down('right')) M.ang += K.input.stick.x * sp; }
       if (M.okBloq && !K.input.down('ok')) M.okBloq = false;   /* a tecla que fechou a explicação não carrega nem dá tacada (achado do QA 2.0) */
       if (!M.spinOpen && !M.okBloq && K.input.down('ok')) { M.charging = true; M.pow = clamp(M.pow + M.cargaDir * dt / 1.1, 0, 1); if (M.pow >= 1 || M.pow <= 0) M.cargaDir *= -1; }
       else if (M.charging) { M.charging = false; M.cargaDir = 1; if (M.pow > .03) this.shootNow(M); }
@@ -1423,7 +1423,7 @@ K.defScene('partida', {
     K.rect(g, 0, H - 14, W, 14, P.ink); K.rect(g, 0, H - 14, W, 1, P.line2);
     if (M.falaT > 0 && M.fala) { const fr = K.sprFrames(M.rival.face); if (fr) g.imageSmoothingEnabled = true; g.drawImage(fr[(M.falaN | 0) < M.fala.length ? (K.time * 8 | 0) % fr.length : 0], 2, 2, 44, 44, 4 + DX(), H - 13, 12, 12); g.imageSmoothingEnabled = false;   // 0.3.5: rosto inteiro (antes era uma tira cortada ao meio)
       K.txt(g, M.rival.nome + ':', 20 + DX(), H - 12, { c: P.gold }); K.txt(g, M.fala, 26 + DX() + K.tw(M.rival.nome + ':'), H - 12, { n: M.falaN | 0, c: P.white }); }
-    else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'mesa: gira a mira · puxe o taco ou a barra F = força · direita: fino' : 'mouse mira · clique e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
+    else if (this.human(M) && M.fase === 'mira') K.txt(g, touch ? 'mesa: gira a mira · puxe o taco ou a barra F = força · direita: fino' : 'mouse mira · clique trava e puxe · E efeito · Q respiro · P pausa', W / 2, H - 12, { al: 'c', c: P.dim });
     else if (this.human(M) && M.fase === 'mao') K.txt(g, touch ? 'bola na mão: arraste a branca e solte' : 'bola na mão: mova a branca e clique (ou Enter)', W / 2, H - 12, { al: 'c', c: P.lime });
   },
   drawSpin(g, M) { const cx = K.v.W / 2, cy = K.v.H / 2; g.globalAlpha = .7; K.rect(g, 0, 0, K.v.W, K.v.H, P.ink); g.globalAlpha = 1; if (!M.spinArt) M.spinArt = K.ballArt(0, 26); g.drawImage(M.spinArt, cx - M.spinArt.width / 2 | 0, cy - M.spinArt.height / 2 | 0);
