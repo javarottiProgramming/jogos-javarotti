@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v2.0.4</title>
+<title>Sinuca Intergaláctica · v2.0.5</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '2.0.4', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '2.0.5', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -4106,8 +4106,8 @@ const sq = a => a.map(([m, l]) => (m === null ? '-' : typeof m === 'number' ? nn
       intro: 'x - - - - - - - - - - - - - - - | - - - - - - - - s? - s? - s? - s? - | s? - s? - s? - s? - s? s? s? s? s s s s | s s s s s s s s s! s! s! s! s! s! s! s!' } ]) });
 }
 
-/* ---------------------------------------------------------------- LUA · HISTÓRIA · 60 bpm · Fá# eólio · loop de 16 compassos (~64 s)
- * Pausa de câmera: cordas em acordes de 8 s, vibrafone em frases curtas com muito silêncio no meio, baixo de dedo na raiz, sinos raros no eco. Sem bateria, nada que dispute com o texto.
+/* ---------------------------------------------------------------- LUA · HISTÓRIA · 68 bpm (era 60 até a 2.0.4) · Fá# eólio · loop de 16 compassos (~64 s)
+ * Pausa de câmera: cordas em dois toques curtos por compasso, halo grave na 2ª metade, piano elétrico em semínimas ligando o acorde ao vibrafone, baixo de dedo andando, sinos raros no eco. Sem bateria, nada que dispute com o texto.
  * Os compassos 8 e 16 só têm o acorde respirando (o "plano aberto" antes de voltar ao começo). */
 {
   const CH = {   // r raiz grave · pad (cordas) · hi (dupla alta das cordas sintéticas, só na 2ª metade)
@@ -4116,11 +4116,15 @@ const sq = a => a.map(([m, l]) => (m === null ? '-' : typeof m === 'number' ? nn
   const SEQ = 'F D A E F D Bm Cm'.split(' ');
   const MEL = ['a4:4 -:4 c#5:4 e5:8 -:12', 'f#5:6 e5:2 d5:8 -:16', 'e5:4 -:4 a5:4 g#5:4 e5:8 -:8', 'b4:8 e5:8 g#5:6 f#5:2 -:8',
     'c#5:4 -:4 a4:4 f#4:8 -:12', 'd5:4 f#5:4 a5:8 f#5:4 -:12', 'b4:4 d5:4 f#5:8 d5:4 b4:4 -:8', 'g#4:8 c#5:8 e5:12 -:4'];
-  K.defSong('lua_historia', { bpm: 60, echo: { ms: 240, fb: .55, vol: .42, lp: 2200 }, tracks: mix(1.6, [
-    { inst: 'cordas', vol: .65, pan: -.15, gate: 1, echo: .3, pat: SEQ.map(c => CH[c].pad + ':32').join(' | ') },
-    { inst: 'cordas_syn', vol: .4, pan: .3, gate: 1, echo: .3, pat: SEQ.map((c, i) => i < 4 ? '-:32' : CH[c].hi + ':32').join(' | ') },
-    { inst: 'vibra', vol: .6, pan: .1, gate: .9, echo: .5, pat: MEL.join(' | ') },
-    { inst: 'baixo_dedo', vol: .18, gate: .95, pat: SEQ.map((c, i) => i === 7 ? sq([[CH[c].r, 8], [null, 24]]) : sq([[CH[c].r, 24], [null, 8]])).join(' | ') },
+  /* 2.0.5 (Pedro): o acorde de cordas segurava 8 s inteiros e a dupla aguda (cordas_syn) estridulava. Agora: 68 bpm (a 4 do 72 de outro jogo do time), o acorde respira em dois toques
+   * curtos por compasso (halo grave, sem o agudo), e um piano elétrico em semínimas costura o vibrafone ao acorde, sem buraco entre um elemento e outro. */
+  const ARP = c => { const n = CH[c].pad.split('+'), r = nn(CH[c].r + 12); return [r, n[0], n[1], n[2], n[1], n[0], n[1], n[2]].map(x => x + ':4').join(' '); };
+  K.defSong('lua_historia', { bpm: 68, echo: { ms: 208, fb: .42, vol: .34, lp: 2000 }, tracks: mix(1.6, [
+    { inst: 'cordas', vol: .4, pan: -.15, gate: 1, echo: .2, pat: SEQ.map(c => sq([[CH[c].pad, 10], [null, 6], [CH[c].pad, 10], [null, 6]])).join(' | ') },
+    { inst: 'halo_lua', vol: .35, pan: .3, gate: 1, echo: .2, pat: SEQ.map((c, i) => i < 4 ? '-:32' : sq([[CH[c].pad.split('+')[0], 14], [null, 2], [CH[c].pad.split('+')[0], 14], [null, 2]])).join(' | ') },
+    { inst: 'piano_el', vol: .3, pan: -.3, gate: .7, echo: .3, pat: SEQ.map(ARP).join(' | ') },
+    { inst: 'vibra', vol: .6, pan: .1, gate: .9, echo: .4, pat: MEL.join(' | ') },
+    { inst: 'baixo_dedo', vol: .18, gate: .9, pat: SEQ.map((c, i) => i === 7 ? sq([[CH[c].r, 8], [null, 24]]) : sq([[CH[c].r, 8], [null, 4], [CH[c].r, 4], [CH[c].r + 7, 8], [null, 4], [CH[c].r, 4]])).join(' | ') },
     { inst: 'sinos', vol: .35, pan: .4, gate: .6, echo: .8, pat: SEQ.map((c, i) => i === 3 ? 'e6:4 -:28' : i === 7 ? 'g#6:4 -:28' : '-:32').join(' | ') } ]) });
 }
 
@@ -4172,7 +4176,7 @@ S('martelo', G(2.4, (t, n, s) => { s('estalo', 'f4', .06, .95); n(.035, .8, 1900
 {
 /*==CONTENT:volume-musicas==  DONO: gerente. GERADO por `node tools/volume-musicas.js --gravar` (não edite à mão).
  * Ganho por música para todas tocarem no mesmo volume eficaz da trilha da partida (0.3.0). Compositor: mudou uma música? rode de novo. */
-K.ganhoMusica = {"abertura":0.838,"mapa":1.18,"partida":1,"final":0.803,"loja":1.032,"vitoria":0.859,"derrota":1.238,"creditos":0.918,"lua":1.701,"lado_b":1.044,"assembleia":1.697,"lua_historia":2.728};
+K.ganhoMusica = {"abertura":0.779,"mapa":1.067,"partida":1,"final":0.783,"loja":0.962,"vitoria":0.767,"derrota":0.972,"creditos":0.866,"lua":1.495,"lado_b":0.956,"assembleia":1.332,"lua_historia":2.737};
 
 }
 {
