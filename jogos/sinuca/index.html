@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v2.0.3</title>
+<title>Sinuca Intergaláctica · v2.0.4</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '2.0.3', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '2.0.4', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -360,11 +360,15 @@ IN.init = () => {
   addEventListener('keyup', e => IN.q.push(['ku', IN.map(e)]));
   const pt = e => { const p = K.toFB(e.clientX, e.clientY); return { id: e.pointerId, x: p.x, y: p.y, type: e.pointerType || 'mouse', btn: e.button, btns: e.buttons }; };   // btns: botões apertados agora (o 2º botão com o 1º segurado chega como pointermove com btn 2, não pointerdown)
   cv.addEventListener('pointerdown', e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (er) {} IN.q.push(['pd', pt(e)]); IN.last = e.pointerType === 'touch' ? 'touch' : 'mouse'; });
-  cv.addEventListener('pointermove', e => IN.q.push(['pm', pt(e)]));
+  cv.addEventListener('pointermove', e => { IN.q.push(['pm', pt(e)]); if (e.pointerType === 'mouse' && (e.buttons & 2)) IN.q.push(['rc', { type: 'mouse' }]); });   // movimento com o direito apertado também cancela (2.0.4)
   cv.addEventListener('pointerup', e => IN.q.push(['pu', pt(e)]));
   cv.addEventListener('pointercancel', e => IN.q.push(['pc', pt(e)]));
   cv.addEventListener('wheel', e => { e.preventDefault(); IN.q.push(['wh', { dy: sign(e.deltaY) }]); }, { passive: false });
-  cv.addEventListener('contextmenu', e => e.preventDefault());
+  /* CLIQUE DIREITO (2.0.4): o navegador pode mandar o direito de jeitos diferentes conforme o sistema e se o esquerdo está segurado (pointermove com button 2,
+   * mousedown/auxclick, ou só o contextmenu ao soltar, no Windows). Todos viram o mesmo evento 'rc' → cena.rclick(); repetir não faz mal (a cena ignora se não há o que cancelar). */
+  const rc = e => { if (e.button === 2 || e.type === 'contextmenu') IN.q.push(['rc', { type: 'mouse' }]); };
+  cv.addEventListener('contextmenu', e => { e.preventDefault(); rc(e); });
+  addEventListener('mousedown', rc, true); addEventListener('auxclick', rc, true);
   /* perder o foco descarta teclas e dedos (regra 22): ninguém fica "segurando" um botão fantasma */
   const drop = () => { IN.keys = {}; IN.ptr = {}; IN.ign = {}; IN.p.down = false; IN.p.id = null; const s = sc(); s.cancel && s.cancel(); };
   addEventListener('blur', drop); document.addEventListener('visibilitychange', () => { if (document.hidden) drop(); });
@@ -399,6 +403,7 @@ IN.poll = () => {
       const tap = st && Math.hypot(d.x - st.x0, d.y - st.y0) < 6 && K.time - st.t0 < .6;
       if (!K.ui.release(d, tap)) { const s = sc(); s.release && s.release(d, st); if (tap && s.tap) s.tap(d); }
     }
+    else if (t === 'rc') { const s = sc(); s.rclick && s.rclick(); }
     else if (t === 'wh') { const s = sc(); if (s.wheel) s.wheel(d.dy); else K.ui.navKey(d.dy > 0 ? 'down' : 'up'); }
   }
 };
@@ -1222,7 +1227,7 @@ K.defScene('partida', {
   },
   move(p) {
     const M = M0(); if (!M || M.pausa || !this.human(M)) return;
-    if (p.type === 'mouse' && p.btn === 2 && (p.btns & 2)) { this.cancelMouse(M); return; }   // clique direito com o esquerdo segurado (o navegador manda como movimento)
+    if (p.type === 'mouse' && (p.btns & 2)) { this.cancelMouse(M); return; }   // direito apertado (com o esquerdo segurado o navegador manda como movimento): cancela e não mira
     if (M.spinOpen && M.spinDrag) return this.spinAt(M, p);
     if (M.fase === 'mao') { if (M.handDrag === p.id || p.type === 'mouse') this.handTo(M, p); return; }
     if (M.fase !== 'mira') return; const c = this.cueS(M);
@@ -1251,6 +1256,7 @@ K.defScene('partida', {
   },
   /* CLIQUE DIREITO CANCELA (2.0.3, pedido do Pedro): solta a mira travada e a força do mouse (inclusive na barra F) sem tacar; a mira volta a seguir o mouse
    * e o próximo clique esquerdo trava de novo. Soltar o esquerdo depois não faz nada. */
+  rclick() { const M = M0(); if (M && !M.pausa && this.human(M)) this.cancelMouse(M); },   // 2.0.4: qualquer sinal de clique direito do 03-input (contextmenu, mousedown, auxclick)
   cancelMouse(M) { const b = M.barDrag && K.input.ptr[M.barDrag.id] && K.input.ptr[M.barDrag.id].type === 'mouse';
     if (!M.powDrag && !b) return; M.powDrag = null; if (b) M.barDrag = null; M.pow = 0; K.sfx('ui_volta'); },
   /* solta tudo (toque cancelado, janela sem foco, pausa): nenhum arrasto fica preso */
