@@ -27,7 +27,7 @@ Copie o novo HTML de release por cima de `jogos/<id>/index.html`, ajuste a vers�
 
 ## Como adicionar um jogo novo
 1. `jogos/<id>/index.html` com o HTML do jogo.
-2. `assets/<id>.jpg` com a capa (960×540).
+2. `assets/<id>.jpg` com a capa (960×540). **Sempre que o menu ou a tela inicial do jogo mudar, a capa é capturada de novo** na versão nova (e o `alt` da imagem acompanha).
 3. Um `<article class="game">` novo no `index.html` (copie um dos dois) e uma linha no objeto `GAMES` do script.
 
 ## Ligar e desligar o link
