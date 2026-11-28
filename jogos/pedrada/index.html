@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pedrada de Palito 1.2.0</title>
+<title>Pedrada de Palito 1.2.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#14142B;overflow:hidden;-webkit-user-s
 <script>
 /*==ENGINE:core==  núcleo: utilitários, canvas, loop de passo fixo, cenas, transições, save. (motor JGK-FPS — Javarotti Game Kit, módulos de gênero em primeira pessoa) */
 'use strict';
-const K = window.K = { id: 'pedrada' /* 1.2.0: identidade do jogo (sala online, save) */, version: '1.2.0', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { id: 'pedrada' /* 1.2.0: identidade do jogo (sala online, save) */, version: '1.2.1', /* suba a cada rodada de correções: título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const $ = id => document.getElementById(id);
 const TAU = Math.PI * 2, VH = 540, DT = 1 / 120;
 let VW = 960, PR = 1;
@@ -1619,6 +1619,8 @@ K.defScene('gallery', {
  * - Signaling: cliente MÍNIMO do protocolo do PeerJS (sem embutir a biblioteca). Produção: 0.peerjs.com (grátis, sem garantia). Testes: tools/sinal.js (mesmo protocolo).
  *   Trocar o servidor: K.net.cfg.server, ou na URL ?sinal=ws://127.0.0.1:9000
  * - Link = RTCPeerConnection com DOIS canais negociados: 'rel' (confiável, em ordem: sala, eventos, ping) e 'fast' (sem reenvio: comandos e retratos).
+ * - 1.2.1: o PeerJS Cloud DESCARTA EM SILÊNCIO mensagem fora do formato da biblioteca oficial (OFFER sem serialization, CANDIDATE sem type...).
+ *   Os payloads abaixo espelham a peerjs@1.5.4; não tire campo. tools/sinal.js recusa igual e tools/netreal.js testa no servidor de verdade.
  * - STUN do Google; SEM TURN: se o ICE não fecha em cfg.iceTimeout, o link falha com motivo 'rede' (o jogo avisa o jogador).
  * - Simulador: K.net.sim = {lat (ms), jit (ms), loss (0..1, só no 'fast')} aplicado no ENVIO (testes de latência/perda).
  * - Relógio em Worker: com a aba escondida o requestAnimationFrame para; durante uma sessão online o motor continua simulando (sem desenhar) — senão o anfitrião congelaria a partida de todos.
@@ -1667,9 +1669,9 @@ NET.link = (S, peer, initiator) => {
   L.ch = { rel, fast }; let nOpen = 0;
   const opened = () => { if (++nOpen === 2 && !L.open) { L.open = true; clearTimeout(L.to); NET.log('link aberto', peer); if (L.onopen) L.onopen(); } };
   for (const ch of [rel, fast]) { ch.onopen = opened; ch.onclose = () => L.close('fechou'); ch.onmessage = ev => { NET.stats.recv++; NET.stats.bytesIn += ev.data.length || 0; let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === 'ping') { L.send({ t: 'pong', k: m.k }, true); return; } if (m.t === 'pong') { L.rtt = L.rtt ? L.rtt * .7 + (performance.now() - m.k) * .3 : performance.now() - m.k; return; } if (L.onmsg) L.onmsg(m, ch === rel); }; }
-  pc.onicecandidate = ev => { if (ev.candidate) S.send('CANDIDATE', peer, { candidate: ev.candidate.toJSON ? ev.candidate.toJSON() : ev.candidate, connectionId: L.cid }); };
+  pc.onicecandidate = ev => { if (ev.candidate) S.send('CANDIDATE', peer, { candidate: ev.candidate.toJSON ? ev.candidate.toJSON() : ev.candidate, type: 'data', connectionId: L.cid }); };
   pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') L.close('rede'); else if (pc.connectionState === 'disconnected') { L.dT = setTimeout(() => { if (pc.connectionState !== 'connected') L.close('caiu'); }, 4000); } else if (pc.connectionState === 'connected') clearTimeout(L.dT); };
-  L.to = setTimeout(() => { if (!L.open) L.close('rede'); }, NET.cfg.iceTimeout);
+  L.to = setTimeout(() => { if (!L.open) L.close(initiator && !L.answered ? 'mudo' : 'rede'); }, NET.cfg.iceTimeout);   /* 1.2.1: 'mudo' = o anfitrião nem respondeu pelo signaling (não é culpa da rede) */
   L.sendNow = (obj, r) => { const ch = r ? rel : fast; if (ch.readyState !== 'open') return; const s = JSON.stringify(obj); try { ch.send(s); NET.stats.sent++; NET.stats.bytesOut += s.length; } catch (e) {} };
   L.send = (obj, r) => { const sm = NET.sim; if (!r && sm.loss && Math.random() < sm.loss) { NET.stats.dropped++; return; }
     if (sm.lat || sm.jit) { const s = JSON.stringify(obj), d = Math.max(0, sm.lat + (Math.random() * 2 - 1) * sm.jit); /* 'rel' em ordem mesmo com jitter */ if (r) { L.relT = Math.max(L.relT || 0, performance.now() + d); setTimeout(() => L.sendNow(JSON.parse(s), true), L.relT - performance.now()); } else setTimeout(() => L.sendNow(JSON.parse(s), false), d); return; }
@@ -1679,13 +1681,13 @@ NET.link = (S, peer, initiator) => {
   /* troca de SDP/ICE pelo signaling */
   L.signal = async m => {
     try {
-      if (m.type === 'OFFER') { L.cid = m.payload.connectionId; await pc.setRemoteDescription(m.payload.sdp); const a = await pc.createAnswer(); await pc.setLocalDescription(a); S.send('ANSWER', peer, { sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, connectionId: L.cid }); for (const c of L.pend) await pc.addIceCandidate(c).catch(() => {}); L.pend = []; }
-      else if (m.type === 'ANSWER') { await pc.setRemoteDescription(m.payload.sdp); for (const c of L.pend) await pc.addIceCandidate(c).catch(() => {}); L.pend = []; }
+      if (m.type === 'OFFER') { L.cid = m.payload.connectionId; await pc.setRemoteDescription(m.payload.sdp); const a = await pc.createAnswer(); await pc.setLocalDescription(a); S.send('ANSWER', peer, { sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, type: 'data', connectionId: L.cid }); for (const c of L.pend) await pc.addIceCandidate(c).catch(() => {}); L.pend = []; }
+      else if (m.type === 'ANSWER') { L.answered = true; await pc.setRemoteDescription(m.payload.sdp); for (const c of L.pend) await pc.addIceCandidate(c).catch(() => {}); L.pend = []; }
       else if (m.type === 'CANDIDATE') { const c = m.payload.candidate; if (pc.remoteDescription) await pc.addIceCandidate(c).catch(() => {}); else L.pend.push(c); }
       else if (m.type === 'LEAVE') L.close('saiu');
     } catch (e) { NET.log('erro de signaling', e); L.close('rede'); }
   };
-  if (initiator) (async () => { try { const o = await pc.createOffer(); await pc.setLocalDescription(o); S.send('OFFER', peer, { sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, connectionId: cid, type: 'data' }); } catch (e) { L.close('rede'); } })();
+  if (initiator) (async () => { try { const o = await pc.createOffer(); await pc.setLocalDescription(o); S.send('OFFER', peer, { sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, type: 'data', connectionId: cid, label: cid, reliable: false, serialization: 'binary' }); } catch (e) { L.close('rede'); } })();
   return L;
 };
 NET.supported = () => typeof RTCPeerConnection === 'function' && typeof WebSocket === 'function';
@@ -1777,10 +1779,10 @@ NET.join = (code, name) => new Promise(async (res, rej) => {
   let S; try { S = await NET.signal('g' + NET.rid(12)); } catch (e) { rej(e); return; }
   const peer = NET.peerId(code), L = NET.link(S, peer, true); NR.S = S; NR.host = L; NET.role = 'guest'; NET.active = true; let done = false;
   const fail = e => { if (done) return; done = true; clearTimeout(to); NET.leave(true); rej(e); };
-  const to = setTimeout(() => fail({ why: L.open ? 'sem_resposta' : 'rede' }), NET.cfg.joinTimeout);
+  const to = setTimeout(() => fail({ why: L.open ? 'sem_resposta' : L.answered ? 'rede' : 'mudo' }), NET.cfg.joinTimeout);
   S.on(m => { if (m.type === 'EXPIRE' && m.src === peer && !L.open) fail({ why: 'sala' }); else if (m.src === peer) L.signal(m); });
   L.onopen = () => L.send({ t: 'hello', app: NET.app.id, v: NET.app.v, proto: NET.app.proto, name: name || 'Convidado' }, true);
-  L.onclose = why => { if (!done) fail({ why: why === 'rede' ? 'rede' : 'sala' }); else { NET.emit('hostLeft', why); } };
+  L.onclose = why => { if (!done) fail({ why: why === 'rede' || why === 'mudo' ? why : 'sala' }); else { NET.emit('hostLeft', why); } };
   L.onmsg = (m, rel) => {
     if (m.t === 'welcome') { done = true; clearTimeout(to); NET.me = m.you; NET.room = m.room; try { S.close(); } catch (e) {} NET.emit('room', NET.room); res(NET.room); return; }
     if (m.t === 'deny') { fail({ why: m.why }); return; }
@@ -2220,7 +2222,7 @@ const NET_ERR = {
   sala: 'Sala não encontrada. Confira o código (ou a sala já fechou).', cheia: 'Essa sala já está cheia.', em_jogo: 'A partida dessa sala já começou.',
   versao: 'Versões diferentes do jogo: os dois precisam da mesma versão (esta é a v' + K.version + ').', codigo: 'O código tem 4 letras.',
   rede: 'Não deu para conectar direto com o outro jogador. Algumas redes (4G, Wi-Fi de empresa ou de escola) bloqueiam a conexão direta: tente outra rede.',
-  sinal: 'Sem conexão com o servidor de salas. Confira a internet e tente de novo.', sem_resposta: 'O anfitrião não respondeu. Tente de novo.', suporte: 'Este navegador não tem conexão direta (WebRTC).'
+  sinal: 'Sem conexão com o servidor de salas. Confira a internet e tente de novo.', sem_resposta: 'O anfitrião não respondeu. Tente de novo.', mudo: 'A sala não respondeu. Confira o código e peça para quem criou a sala deixar a tela da sala aberta. Depois tente de novo.', suporte: 'Este navegador não tem conexão direta (WebRTC).'
 };
 K.net.errMsg = e => (e && NET_ERR[e.why]) || (e && e.msg) || 'Algo deu errado na conexão.';
 K.net.inviteUrl = code => { try { return location.origin + location.pathname + '?sala=' + code; } catch (e) { return '?sala=' + code; } };
