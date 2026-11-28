@@ -15,6 +15,7 @@ Este é o portfólio dos jogos (GitHub Pages). Leia o `README.md` antes de mexer
 1. Copie o HTML de release para `jogos/<id>/index.html`.
 2. Atualize o selo (`badge`) no `index.html`, o campo `v` no objeto `GAMES` e a tabela do `README.md`.
 3. Acrescente uma linha **no topo** da lista do jogo em `HIST`, com o horário de Brasília.
+4. **Mudou o menu/tela inicial do jogo? Atualize a capa** `assets/<id>.jpg` (960×540, captura da tela de título da versão nova) e o `alt` dela no `index.html` (regra do Pedro, 2026-11-28: a capa do Pedrada ficou sem o botão Multiplayer da 1.2.0).
 
 ## Pull Request: SEMPRE pela skill `PullRequest_Description` (regra do Pedro, reforçada em 2026-11-28)
 - Para **escrever, descrever ou abrir** qualquer PR (jogo, portfólio, Persona, qualquer repositório), seguir a skill `PullRequest_Description`: `perfil/skills/PullRequest_Description/SKILL.md` no repositório `claude-code-persona`. **Em sessão em nuvem a skill pode não aparecer na lista: leia o arquivo antes de escrever o corpo.** Nunca inventar formato próprio.
