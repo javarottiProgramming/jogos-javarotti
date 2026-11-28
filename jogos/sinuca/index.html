@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Sinuca Intergaláctica · v2.0.1</title>
+<title>Sinuca Intergaláctica · v2.0.2</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
@@ -20,7 +20,7 @@
  * Motor JGK-16 — Javarotti Game Kit, família 16-bit (pixel art 2D, Mode 7, sampler estilo SNES). Nasceu na Sinuca Intergaláctica (2026-11-21).
  * O JGK é o coração do time de agentes Javarotti: aprende jogo após jogo e melhora o jeito de construir. */
 'use strict';
-const K = window.K = { version: '2.0.1', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
+const K = window.K = { version: '2.0.2', /* ÚNICO lugar da versão (regra 14): título, créditos e <title> leem daqui */ debug: window.__KDBG || {} };
 const TAU = Math.PI * 2, DT = 1 / 60;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -983,7 +983,7 @@ K.rivalNivel = (rv, cfg) => { const n = rv.nivel || { erro: .4, pensa: 5 }; if (
 const UI = K.ui = { btns: [], focus: -1, toasts: [], modal: null, st: null, hot: null, drag: null };
 UI.init = () => {};
 UI.clear = () => { UI.btns = []; UI.focus = -1; UI.modal = null; UI.hot = null; UI.drag = null; };
-/* K.ui.button({ x, y, w, h, label, on(), dis: 'motivo' | fn → motivo, hidden: fn, small, c, id, hit: {x,y,w,h} (zona de toque maior que o desenho), noTip (não escreve o motivo embaixo do botão trancado: botão colado na borda de baixo) }) — fica até a cena trocar */
+/* K.ui.button({ x, y, w, h, label, on(), dis: 'motivo' | fn → motivo, hidden: fn, small, c, id, hit: {x,y,w,h} (zona de toque maior que o desenho), noTip (obsoleto: o motivo nunca é escrito embaixo do botão), noToast (botão trancado só toca o som de erro, sem aviso: o motivo já está escrito no próprio cartão) }) — fica até a cena trocar */
 UI.button = o => { const b = Object.assign({ w: 120, h: 18, kind: 'btn' }, o); UI.btns.push(b); return b; };
 /* K.ui.slider({ x, y, w, label, get(), set(v), min, max, step, fmt(v) }) — arrastar com mouse/toque (captura do ponteiro) ou ←/→ com foco */
 UI.slider = o => UI.button(Object.assign({ kind: 'slider', h: 18, min: 0, max: 100, step: 10 }, o));
@@ -994,7 +994,7 @@ const disOf = b => typeof b.dis === 'function' ? b.dis() : b.dis;
 /* `hit` (opcional, 0.4.0): zona de toque maior que o desenho (lição 82); no desenho e no foco vale sempre x/y/w/h */
 const inside = (b, p) => { const r = b.hit || b; return p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h; };
 UI.list = () => UI.modal ? UI.modal.btns : UI.btns.filter(b => vis(b) && !b.nonav);
-function act(b) { if (!b) return; const d = disOf(b); if (d) { K.sfx('erro'); UI.toast(d, P.pink, 1.6); return; } if (b.kind === 'slider') return; K.sfx(b.snd || 'ui_ok'); try { b.on && b.on(); } catch (e) { console.error(e); K._err = K._err || e; } }
+function act(b) { if (!b) return; const d = disOf(b); if (d) { K.sfx('erro'); if (!b.noToast) UI.toast(d, P.pink, 1.6); return; }   /* noToast: o próprio botão/cartão já diz o motivo (ex.: "VENÇA ZYX PARA LIBERAR"), então só toca o som de erro */ if (b.kind === 'slider') return; K.sfx(b.snd || 'ui_ok'); try { b.on && b.on(); } catch (e) { console.error(e); K._err = K._err || e; } }
 /* foco pela POSIÇÃO na tela: procura o botão mais próximo na direção */
 function moveFocus(dir) {
   const L = UI.list(); if (!L.length) return false; const cur = L[UI.focus];
@@ -1036,7 +1036,7 @@ function slideTo(b, p) { const t = clamp((p.x - (b.x + 4)) / (b.w - 8), 0, 1); c
  * texto igual ao que já está na tela só RENOVA o tempo; um aviso por vez; desenhado numa faixa embaixo, longe do conteúdo. */
 /* faixa do aviso: de baixo para cima, a primeira altura onde o aviso não encosta em nenhum botão visível da tela (nunca cobre conteúdo clicável) */
 UI.toastY = w => { const x0 = (K.v.W - w) / 2, x1 = x0 + w, B = UI.btns.filter(b => !(b.hidden && b.hidden()));
-  for (let y = K.v.H - 34; y > 20; y -= 2) if (!B.some(b => b.x < x1 && b.x + b.w > x0 && b.y < y + 16 && b.y + b.h > y - 2)) return y; return K.v.H - 34; };
+  for (let y = K.v.H - 18; y > 20; y -= 2) if (!B.some(b => b.x < x1 && b.x + b.w > x0 && b.y < y + 16 && b.y + b.h > y - 2)) return y; return K.v.H - 34; };
 UI.toast = (s, c, secs) => { const t = secs || 1.8, cur = UI.toasts[0]; if (cur && cur.s === s) { cur.t = Math.max(cur.t, t); cur.c = c || cur.c; return; } UI.toasts = [{ s, c: c || P.white, t, t0: t }]; };
 /* janela de confirmação (lição 24): foco inicial em CANCELAR, o botão de ação ignora os primeiros 250 ms e tem trava de reentrada */
 UI.confirm = o => {
@@ -1077,7 +1077,7 @@ function drawBtn(g, b, foc) {
   K.panel(g, b.x, b.y + (pr ? 1 : 0), b.w, b.h, { bg: foc ? P.panel2 : P.panel, line: d ? P.dim : foc ? P.lime : P.line, line2: d ? P.ink : foc ? P.lime2 : P.line2 });
   K.txt(g, b.label, b.x + b.w / 2, b.y + (b.h - 10) / 2 + (pr ? 1 : 0) + 1, { al: 'c', c: d ? P.dim : foc ? P.white : (b.c || P.chrome), s: b.s || 1 });
   if (foc && !UI.modal) { const a = (K.time * 4 | 0) % 2; if (!b.noArrow) K.txt(g, '→', Math.max(1, b.x - 8 - a), b.y + (b.h - 10) / 2 + 1, { c: P.lime });   // 0.3.5: a seta nunca sai da tela (botão encostado na borda)
-    if (d && !b.noTip) { const w = K.tw(d), cx = clamp(b.x + b.w / 2, w / 2 + 3, K.v.W - w / 2 - 3); K.txt(g, d, cx, b.y + b.h + 2, { al: 'c', c: P.pink }); } }   // e o motivo do botão trancado também não (ex.: "Última página" no canto direito)
+    /* 2.0 (achado do Pedro): o motivo do botão trancado NÃO é mais escrito embaixo do botão (duplicava com o aviso e passava por cima de botões e cartões); ele sai UMA vez, como aviso (UI.toast) na faixa de baixo, ao ativar o botão. noTip segue aceito e não faz nada. */ }
 }
 UI.draw = g => {
   const L = UI.list(); for (const b of UI.btns) if (vis(b)) drawBtn(g, b, !UI.modal && L[UI.focus] === b);
@@ -1098,7 +1098,7 @@ UI.draw = g => {
 /*==ENGINE:match==  A PARTIDA (cena 'partida'): desenho da mesa, bolas, taco, linha de mira, força, efeito, respiro, relógio de tacada, bola na mão,
  * vez da CPU (IA em pedaços), regras (com a foto de antes da tacada), falas do rival (só texto), pausa padrão JGK e fim de jogo.
  * Abrir: K.partida({ mesa: 'classica', rival: 'zorg', regra?, aposta?, depois(res) })  →  res = { venceu, mesa, rival, tacadas, faltas }
- * Controles (PC): mover o mouse mira · CLICAR TRAVA a mira (2.0.1) e arrastar dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
+ * Controles (PC): mover o mouse mira · CLICAR TRAVA a mira (2.0.2) e arrastar dá força, soltar tacada · Shift/roda = mira fina · E efeito · segurar Q respiro · P pausa
  *   teclado/gamepad: ←/→ mira (Shift fino) · segurar Espaço/A carrega, soltar tacada · E/X efeito · Q/Y respiro · P/Start pausa
  *   TOQUE (0.3.0, pedido do Pedro: "o taco tá duro, dois dedos não funcionam"): três zonas fixas, cada dedo faz uma coisa só, e dá para usar duas ao mesmo tempo:
  *     · mesa: arrastar GIRA o taco em volta da bola (o ângulo acompanha o dedo, 1:1 × sensibilidade: rápido perto da bola, fino longe dela); tocar e soltar aponta ali;
@@ -1216,7 +1216,7 @@ K.defScene('partida', {
       if (M.rot && M.rot.id !== p.id) { if (!M.barDrag) M.barDrag = { id: p.id, y0: p.y, livre: true }; return; }   // 2º dedo na mesa: força (vai e volta)
       if (M.rot) return;
       const c = this.cueS(M); M.rot = { id: p.id, a: Math.atan2(p.y - c.y, p.x - c.x), x0: p.x, y0: p.y, t0: K.time, moved: 0 }; return; }
-    M.powDrag = { x0: p.x, y0: p.y, ang: M.ang };   // mouse: o clique TRAVA a mira onde está (2.0.1); arrastar só dá força
+    M.powDrag = { x0: p.x, y0: p.y, ang: M.ang };   // mouse: o clique TRAVA a mira onde está (2.0.2); arrastar só dá força
   },
   move(p) {
     const M = M0(); if (!M || M.pausa || !this.human(M)) return;
@@ -1232,7 +1232,7 @@ K.defScene('partida', {
     if (M.rot && M.rot.id === p.id) {   // GIRO 1:1: o taco acompanha o ângulo do dedo em volta da bola (perto = rápido, longe = fino)
       const R = M.rot, d = Math.hypot(p.x - c.x, p.y - c.y), a = Math.atan2(p.y - c.y, p.x - c.x); R.moved += Math.hypot(p.x - R.x0, p.y - R.y0) > 4 ? 1 : 0;
       if (d > 6) { M.ang += angDiff(R.a, a) * K.sens() * Math.min(1, d / 14) * (M.pow > .03 ? .3 : 1); R.a = a; } return; }   // com a força carregada a mira só afina (0.3.6)
-    if (M.powDrag) {   /* MIRA TRAVADA (2.0.1, pedido do Pedro): segurando o clique a mira NÃO mexe mais; o mouse só carrega a força. A força é a distância
+    if (M.powDrag) {   /* MIRA TRAVADA (2.0.2, pedido do Pedro): segurando o clique a mira NÃO mexe mais; o mouse só carrega a força. A força é a distância
                         * do ponto do clique, em qualquer direção (puxar para cima, para baixo ou para o lado dá no mesmo); voltar ao ponto do clique zera e soltar ali cancela. */
       M.ang = M.powDrag.ang; M.pow = clamp(Math.hypot(p.x - M.powDrag.x0, p.y - M.powDrag.y0) / PUXA, 0, 1); return; }
     if (p.type === 'mouse' && !M.barDrag) { const a = Math.atan2(p.y - c.y, p.x - c.x); M.ang = K.input.down('fine') ? M.ang + angDiff(M.ang, a) * .08 : a; }
@@ -1252,7 +1252,7 @@ K.defScene('partida', {
   noTaco(M, p) { const c = this.cueS(M), dx = Math.cos(M.ang), dy = Math.sin(M.ang), ux = p.x - c.x, uy = p.y - c.y, t = -(ux * dx + uy * dy), lat = Math.abs(ux * dy - uy * dx), r = M.rp, ini = r + 2 + M.pow * 22;
     return t >= ini - 2 && t <= ini + CUEL && lat <= GRAB; },
   handTo(M, p) { const t = toT(p.x, p.y); if (PL.freeSpot(M.S, M.T, t.x, t.y)) { const c = M.S.balls[0]; c.x = t.x; c.y = t.y; c.in = false; } },
-  wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M) && !M.pausa && !M.powDrag) M.ang += dy * .004; },   // com o clique segurado a mira está travada (2.0.1)
+  wheel(dy) { const M = M0(); if (M && M.fase === 'mira' && this.human(M) && !M.pausa && !M.powDrag) M.ang += dy * .004; },   // com o clique segurado a mira está travada (2.0.2)
   spinAt(M, p) { const cx = K.v.W / 2, cy = K.v.H / 2; M.fx.s = clamp((p.x - cx) / 26, -1, 1); M.fx.f = clamp(-(p.y - cy) / 26, -1, 1); if (Math.hypot(M.fx.s, M.fx.f) > 1) { const k = Math.hypot(M.fx.s, M.fx.f); M.fx.s /= k; M.fx.f /= k; } },
   placeCue(M) { const c = M.S.balls[0]; if (!PL.freeSpot(M.S, M.T, c.x, c.y)) { K.sfx('erro'); return; } c.in = false; M.fase = 'mira'; M.clock = M.tempoMax; K.sfx('ui_ok'); },
   /* RESPIRO (0.3.1, pedido do Pedro): a mira acompanha a respiração do personagem, devagar e pouco, em vez de balançar de um lado para o outro.
@@ -3695,7 +3695,7 @@ K.defScene('loja', {
         on: () => UI.confirm({ titulo: u.nome + ' NÍVEL ' + (lv + 1), texto: u.desc + ' Custa ' + preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < preco ? 'Faltam ' + (preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= preco; G.up[u.id] = lv + 1; K.persist(); K.sfx('comprar'); rebuild('u:' + u.id); } }) })); });
     /* ---- TACOS: uma linha por taco da coleção, 3 por página ---- */
     this.rows.forEach((c, i) => { const lib = K.cueLiberado(c), tem = G.tacos[c.id] || c.preco === 0, eq = G.taco === c.id, y = ZLJ.ry + i * ZLJ.rp, bx = ZLJ.x + ZLJ.w - ZLJ.bw - 6;   // taco de preço 0 (o de bar) já é seu: trocar para ele não pede compra
-      this.bt.push(UI.button({ key: 'c:' + c.id, x: bx, y: y + (ZLJ.rh - ZLJ.bh) / 2, w: ZLJ.bw, h: ZLJ.bh, hit: { x: ZLJ.x, y, w: ZLJ.w, h: ZLJ.rh }, noArrow: true, label: !lib ? 'TRANCADO' : eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: !lib ? P.dim : eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome, dis: !lib ? Zmotivo(c) : null,
+      this.bt.push(UI.button({ key: 'c:' + c.id, x: bx, y: y + (ZLJ.rh - ZLJ.bh) / 2, w: ZLJ.bw, h: ZLJ.bh, hit: { x: ZLJ.x, y, w: ZLJ.w, h: ZLJ.rh }, noArrow: true, noToast: !lib, label: !lib ? 'TRANCADO' : eq ? 'EQUIPADO' : tem ? 'EQUIPAR' : '◆ ' + c.preco, c: !lib ? P.dim : eq ? P.lime : tem ? P.white : G.creditos >= c.preco ? P.lime : P.chrome, dis: !lib ? Zmotivo(c) : null,
         on: () => tem ? (G.taco = c.id, K.persist(), K.sfx('ui_ok'), rebuild('c:' + c.id)) : UI.confirm({ titulo: c.nome, texto: (c.desc || '') + (c.preco ? ' ' + Zfx(c).join(', ') + '.' : '') + ' Custa ' + c.preco + ' ' + K.game.moeda + '.', ok: 'COMPRAR', dis: G.creditos < c.preco ? 'Faltam ' + (c.preco - G.creditos) + ' ' + K.game.moeda : null, on: () => { G.creditos -= c.preco; G.tacos[c.id] = 1; G.taco = c.id; K.persist(); K.sfx('comprar'); rebuild('c:' + c.id); } }) })); });
     /* ---- páginas (só se a coleção tem mais de 3): embaixo à direita, ao lado do VOLTAR ---- */
     if (np > 1) { const y = Zh() - 24;
